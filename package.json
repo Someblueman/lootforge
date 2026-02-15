@@ -1,10 +1,30 @@
 {
-  "name": "game-asset-pipeline",
-  "private": true,
+  "name": "lootforge",
+  "private": false,
   "version": "0.1.0",
   "type": "module",
-  "description": "Runtime-oriented image asset pipeline CLI for game projects",
+  "description": "LootForge CLI for manifest-driven game asset packs",
   "bin": {
-    "game-asset-pipeline": "./bin/game-asset-pipeline.mjs"
+    "lootforge": "./bin/lootforge.js"
+  },
+  "scripts": {
+    "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
+    "build": "npm run clean && tsc -p tsconfig.json",
+    "dev": "tsx src/cli/index.ts",
+    "test": "vitest run --passWithNoTests",
+    "test:unit": "vitest run test/unit --passWithNoTests",
+    "test:integration": "vitest run test/integration --passWithNoTests",
+    "lint": "node -e \"console.log('lint placeholder: ok')\"",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "demo:dev": "npm --prefix examples/starter-phaser run dev"
+  },
+  "dependencies": {
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.1",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3",
+    "vitest": "^2.1.8"
   }
 }

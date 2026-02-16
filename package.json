@@ -16,15 +16,24 @@
     "test:integration": "vitest run test/integration --passWithNoTests",
     "lint": "node -e \"console.log('lint placeholder: ok')\"",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "demo:dev": "npm --prefix examples/starter-phaser run dev"
+    "demo:dev": "vite --config examples/phaser-demo/vite.config.ts",
+    "demo:build": "vite build --config examples/phaser-demo/vite.config.ts",
+    "demo:test": "vitest run test/demo --passWithNoTests",
+    "demo:assets:plan": "tsx src/cli/index.ts plan --manifest examples/phaser-demo/assets/manifest.demo.json --out examples/phaser-demo/public",
+    "demo:assets:generate": "tsx src/cli/index.ts generate --manifest examples/phaser-demo/assets/manifest.demo.json --out examples/phaser-demo/public --provider openai",
+    "demo:assets:atlas": "tsx src/cli/index.ts atlas --out examples/phaser-demo/public",
+    "demo:assets:postprocess": "node examples/phaser-demo/scripts/postprocess-assets.mjs"
   },
   "dependencies": {
+    "sharp": "^0.34.5",
     "zod": "^3.25.76"
   },
   "devDependencies": {
     "@types/node": "^22.13.1",
+    "phaser": "^3.90.0",
     "tsx": "^4.19.2",
     "typescript": "^5.7.3",
+    "vite": "^7.1.5",
     "vitest": "^2.1.8"
   }
 }

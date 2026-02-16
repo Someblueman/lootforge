@@ -2,14 +2,22 @@ import { createHash } from "node:crypto";
 import path from "node:path";
 
 export const PROVIDER_NAMES = ["openai", "nano"] as const;
+export const KNOWN_STYLE_PRESETS = [
+  "pixel-art-16bit",
+  "topdown-painterly-sci-fi",
+] as const;
+export const POST_PROCESS_ALGORITHMS = ["nearest", "lanczos3"] as const;
 
 export type ProviderName = (typeof PROVIDER_NAMES)[number];
 export type ProviderSelection = ProviderName | "auto";
 export type ProviderFeature = "image-generation" | "transparent-background";
+export type KnownStylePreset = (typeof KNOWN_STYLE_PRESETS)[number];
+export type PostProcessAlgorithm = (typeof POST_PROCESS_ALGORITHMS)[number];
 
 export interface PromptSpec {
   primary: string;
   useCase?: string;
+  stylePreset?: string;
   scene?: string;
   subject?: string;
   style?: string;
@@ -28,11 +36,34 @@ export interface GenerationPolicy {
   quality?: string;
 }
 
+export interface PostProcessPolicy {
+  resizeTo?: {
+    width: number;
+    height: number;
+  };
+  algorithm?: PostProcessAlgorithm;
+  stripMetadata?: boolean;
+  pngPaletteColors?: number;
+}
+
 export interface PlannedTarget {
   id: string;
+  kind?: string;
   out: string;
+  atlasGroup?: string | null;
+  acceptance?: {
+    size?: string;
+    alpha?: boolean;
+    maxFileSizeKB?: number;
+  };
+  runtimeSpec?: {
+    alphaRequired?: boolean;
+    previewWidth?: number;
+    previewHeight?: number;
+  };
   promptSpec: PromptSpec;
   generationPolicy?: GenerationPolicy;
+  postProcess?: PostProcessPolicy;
   provider?: ProviderName;
   model?: string;
 }
@@ -124,11 +155,27 @@ const DEFAULT_SIZE = "1024x1024";
 const DEFAULT_QUALITY = "high";
 const DEFAULT_BACKGROUND = "opaque";
 const DEFAULT_OUTPUT_FORMAT = "png";
+const DEFAULT_POST_PROCESS_ALGORITHM: PostProcessAlgorithm = "lanczos3";
+
+const STYLE_PRESET_LINES: Record<KnownStylePreset, string[]> = {
+  "pixel-art-16bit": [
+    "Visual direction: classic 16-bit top-down RPG spritework.",
+    "Pixel treatment: strict pixel grid, no anti-aliasing, no sub-pixel rendering.",
+    "Shading: flat cel shading with limited color palette and clean dark outlines.",
+    "Composition constraints: centered subject, gameplay-ready silhouette, minimal empty margins.",
+  ],
+  "topdown-painterly-sci-fi": [
+    "Visual direction: stylized painterly top-down sci-fi game asset.",
+    "Readability: clear silhouette and value separation at gameplay scale.",
+    "Detail level: medium detail, avoid noisy microtexture.",
+  ],
+};
 
 export function normalizePromptSpec(spec: PromptSpec): PromptSpec {
   return {
     primary: spec.primary?.trim() ?? "",
     useCase: spec.useCase?.trim() || DEFAULT_PROMPT_USE_CASE,
+    stylePreset: spec.stylePreset?.trim() || "",
     scene: spec.scene?.trim() || "",
     subject: spec.subject?.trim() || "",
     style: spec.style?.trim() || "",
@@ -147,9 +194,12 @@ export function buildStructuredPrompt(promptSpec: PromptSpec): string {
     throw new Error("promptSpec.primary is required for generation");
   }
 
+  const presetLines = getStylePresetLines(prompt.stylePreset);
   const lines = [
     `Use case: ${prompt.useCase}`,
     `Primary request: ${prompt.primary}`,
+    prompt.stylePreset ? `Style preset: ${prompt.stylePreset}` : "",
+    ...presetLines,
     prompt.scene ? `Scene: ${prompt.scene}` : "",
     prompt.subject ? `Subject: ${prompt.subject}` : "",
     prompt.style ? `Style: ${prompt.style}` : "",
@@ -171,6 +221,16 @@ export function getTargetGenerationPolicy(target: PlannedTarget) {
     quality: policy.quality?.trim() || DEFAULT_QUALITY,
     background: policy.background?.trim() || DEFAULT_BACKGROUND,
     outputFormat: policy.outputFormat?.trim() || DEFAULT_OUTPUT_FORMAT,
+  };
+}
+
+export function getTargetPostProcessPolicy(target: PlannedTarget): PostProcessPolicy {
+  const policy = target.postProcess ?? {};
+  return {
+    resizeTo: policy.resizeTo,
+    algorithm: policy.algorithm ?? DEFAULT_POST_PROCESS_ALGORITHM,
+    stripMetadata: policy.stripMetadata ?? true,
+    pngPaletteColors: policy.pngPaletteColors,
   };
 }
 
@@ -267,3 +327,14 @@ export function nowIso(now?: () => Date): string {
   return (now ?? (() => new Date()))().toISOString();
 }
 
+function getStylePresetLines(stylePreset: string | undefined): string[] {
+  if (!stylePreset) {
+    return [];
+  }
+
+  if (stylePreset in STYLE_PRESET_LINES) {
+    return STYLE_PRESET_LINES[stylePreset as KnownStylePreset];
+  }
+
+  return [];
+}

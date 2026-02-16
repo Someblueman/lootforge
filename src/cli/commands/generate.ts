@@ -1,6 +1,7 @@
 import path from "node:path";
 
 import {
+  GenerateProgressEvent,
   parseGenerateProviderFlag,
   runGeneratePipeline,
 } from "../../pipeline/generate.js";
@@ -53,6 +54,7 @@ export async function runGenerateCommand(
     targetsIndexPath: args.targetsIndexPath,
     provider: args.provider,
     ids: args.ids,
+    onProgress: writeGenerateProgressLog,
   });
 
   return {
@@ -61,6 +63,36 @@ export async function runGenerateCommand(
     imagesDir: pipelineResult.imagesDir,
     provenancePath: pipelineResult.provenancePath,
   };
+}
+
+function writeGenerateProgressLog(event: GenerateProgressEvent): void {
+  if (event.type === "prepare") {
+    process.stdout.write(`Preparing ${event.totalJobs} generation job(s)...\n`);
+    return;
+  }
+
+  const printableIndex =
+    typeof event.jobIndex === "number" ? event.jobIndex + 1 : undefined;
+  const total = event.totalJobs;
+  const slot =
+    typeof printableIndex === "number" ? `[${printableIndex}/${total}] ` : "";
+  const target = event.targetId ? `${event.targetId}` : "unknown-target";
+
+  if (event.type === "job_start") {
+    process.stdout.write(
+      `${slot}starting ${target} via ${event.provider ?? "provider"} (${event.model ?? "model"})\n`,
+    );
+    return;
+  }
+
+  if (event.type === "job_finish") {
+    process.stdout.write(
+      `${slot}finished ${target} -> ${event.outputPath ?? "unknown-output"} (${event.bytesWritten ?? 0} bytes)\n`,
+    );
+    return;
+  }
+
+  process.stdout.write(`${slot}failed ${target}: ${event.message ?? "unknown error"}\n`);
 }
 
 function readArgValue(argv: string[], name: string): string | undefined {

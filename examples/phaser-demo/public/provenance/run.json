@@ -1,0 +1,99 @@
+{
+  "runId": "fe4df50d9e52423a",
+  "inputHash": "ee55262e9a2853250fb244cc8403474e32dddf07f4fa2be50365991a06060ffa",
+  "startedAt": "2026-02-16T00:31:48.073Z",
+  "finishedAt": "2026-02-16T00:37:56.250Z",
+  "generatedAt": "2026-02-16T00:37:56.250Z",
+  "jobs": [
+    {
+      "jobId": "098a4d409d6bc99f5fb0a22e2b84eea49f2fe8b55f00fbd171ec1a77de34aeba",
+      "provider": "openai",
+      "model": "gpt-image-1",
+      "targetId": "projectile.plasma_bolt",
+      "inputHash": "5775f8fab2b7019529db6a2a7e16bb22350d5d6ee0663599e4518f670199e618",
+      "startedAt": "2026-02-16T00:31:48.079Z",
+      "finishedAt": "2026-02-16T00:32:25.404Z",
+      "outputPath": "/Users/sws/Code/lootforge/examples/phaser-demo/public/assets/images/projectile_plasma_bolt.png"
+    },
+    {
+      "jobId": "12f0ac6deb0bd16efa20f79a783ae801af53cd1e333cf4dfc34b6384e04ca734",
+      "provider": "openai",
+      "model": "gpt-image-1",
+      "targetId": "enemy.scrap_rat",
+      "inputHash": "b5dfb4689b8582c3f4ea9319127799c063a3bb0dc219b994cae0ef768fea5bb5",
+      "startedAt": "2026-02-16T00:32:25.456Z",
+      "finishedAt": "2026-02-16T00:33:13.793Z",
+      "outputPath": "/Users/sws/Code/lootforge/examples/phaser-demo/public/assets/images/enemy_scrap_rat.png"
+    },
+    {
+      "jobId": "26920c91979a1891feba1f55f56d0618dd9df13a1bd575adda437b287ab661f4",
+      "provider": "openai",
+      "model": "gpt-image-1",
+      "targetId": "ui.icon.wave",
+      "inputHash": "2798a170ae30bc8cec2f28ebf5472fa261af3c25df34856802a12af744441904",
+      "startedAt": "2026-02-16T00:33:13.864Z",
+      "finishedAt": "2026-02-16T00:33:56.362Z",
+      "outputPath": "/Users/sws/Code/lootforge/examples/phaser-demo/public/assets/images/ui_icon_wave.png"
+    },
+    {
+      "jobId": "317110c6c7b7b00a9acccde1201492d8f700b63bd13551ca34dc11422f952cbc",
+      "provider": "openai",
+      "model": "gpt-image-1",
+      "targetId": "player.scavenger",
+      "inputHash": "7ab2d046097d31bbbcd1dca70b92df1e488c9073a3d629f2ff367792eb7eb1d7",
+      "startedAt": "2026-02-16T00:33:56.399Z",
+      "finishedAt": "2026-02-16T00:34:34.412Z",
+      "outputPath": "/Users/sws/Code/lootforge/examples/phaser-demo/public/assets/images/player_scavenger.png"
+    },
+    {
+      "jobId": "8cba2602bb6b12c82dd2881c89d907e4da78ab503b91aafeb697fb763d8ce64a",
+      "provider": "openai",
+      "model": "gpt-image-1",
+      "targetId": "ui.icon.score",
+      "inputHash": "4c54e519ffd52b241db0413b8c7ca5be56520090724c948f4cb87847363623ee",
+      "startedAt": "2026-02-16T00:34:34.505Z",
+      "finishedAt": "2026-02-16T00:35:11.950Z",
+      "outputPath": "/Users/sws/Code/lootforge/examples/phaser-demo/public/assets/images/ui_icon_score.png"
+    },
+    {
+      "jobId": "d73db92cb53b92a50cce6b9d8de86218bbb77331226f8dc4098a34e98509de71",
+      "provider": "openai",
+      "model": "gpt-image-1",
+      "targetId": "ui.icon.health",
+      "inputHash": "b67636bdeb65c4bf4c8106f3beb63cda9cf01242864150163dc10aebba3debc2",
+      "startedAt": "2026-02-16T00:35:11.994Z",
+      "finishedAt": "2026-02-16T00:35:49.068Z",
+      "outputPath": "/Users/sws/Code/lootforge/examples/phaser-demo/public/assets/images/ui_icon_health.png"
+    },
+    {
+      "jobId": "f0d79f35514b9699d418f7e4ca8e9655822135df12a643e07d1cc3e64283d590",
+      "provider": "openai",
+      "model": "gpt-image-1",
+      "targetId": "effect.hit_spark",
+      "inputHash": "4d9728d70f1bcb575dfdc50c124e63a6aa6eead58ff2d425e879b5b1b7241890",
+      "startedAt": "2026-02-16T00:35:49.108Z",
+      "finishedAt": "2026-02-16T00:36:27.956Z",
+      "outputPath": "/Users/sws/Code/lootforge/examples/phaser-demo/public/assets/images/effect_hit_spark.png"
+    },
+    {
+      "jobId": "f4a1513446ac3ba5884515ea8607b2f88f15148504efcc3027eaef116964a3f9",
+      "provider": "openai",
+      "model": "gpt-image-1",
+      "targetId": "arena.background.scrapyard",
+      "inputHash": "00ec336360a7266829ec8f633c06085953ff525bd4bd26189e5fd1487d5bd9d8",
+      "startedAt": "2026-02-16T00:36:28.005Z",
+      "finishedAt": "2026-02-16T00:37:11.900Z",
+      "outputPath": "/Users/sws/Code/lootforge/examples/phaser-demo/public/assets/images/arena_background_scrapyard.png"
+    },
+    {
+      "jobId": "fa89ad24a4fe485bb5507d07f59e446db63297b4f4018683e74f28253e768bde",
+      "provider": "openai",
+      "model": "gpt-image-1",
+      "targetId": "enemy.rust_drone",
+      "inputHash": "41e3fe53389fe1ffa79ab51a39de4f881e8d3b1dd3575fbad35757689937485a",
+      "startedAt": "2026-02-16T00:37:12.026Z",
+      "finishedAt": "2026-02-16T00:37:56.183Z",
+      "outputPath": "/Users/sws/Code/lootforge/examples/phaser-demo/public/assets/images/enemy_rust_drone.png"
+    }
+  ]
+}

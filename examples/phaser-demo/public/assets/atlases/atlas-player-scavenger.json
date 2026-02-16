@@ -1,0 +1,30 @@
+{
+  "frames": {
+    "player.scavenger": {
+      "frame": {
+        "x": 0,
+        "y": 0,
+        "w": 512,
+        "h": 512
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 512,
+        "h": 512
+      },
+      "sourceSize": {
+        "w": 512,
+        "h": 512
+      }
+    }
+  },
+  "meta": {
+    "app": "lootforge",
+    "format": "RGBA8888",
+    "image": "player_scavenger.png",
+    "scale": "1"
+  }
+}

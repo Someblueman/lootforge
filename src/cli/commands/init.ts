@@ -68,7 +68,7 @@ function createDefaultManifest(): ManifestV2 {
         model: "gpt-image-1",
       },
       nano: {
-        model: "gemini-2.0-flash-preview-image-generation",
+        model: "gemini-2.5-flash-image",
       },
     },
     targets: [
@@ -76,10 +76,24 @@ function createDefaultManifest(): ManifestV2 {
         id: "example-hero",
         kind: "sprite",
         out: "hero.png",
-        prompt:
-          "Fantasy hero character sprite, front-facing idle pose, clean silhouette.",
-        acceptance: {
+        prompt: {
+          primary:
+            "Fantasy hero character sprite, front-facing idle pose, clean silhouette.",
+          stylePreset: "topdown-painterly-sci-fi",
+        },
+        generationPolicy: {
           size: "1024x1024",
+          outputFormat: "png",
+          quality: "high",
+          background: "transparent",
+        },
+        postProcess: {
+          resizeTo: "512x512",
+          algorithm: "lanczos3",
+          stripMetadata: true,
+        },
+        acceptance: {
+          size: "512x512",
           alpha: true,
           maxFileSizeKB: 512,
         },

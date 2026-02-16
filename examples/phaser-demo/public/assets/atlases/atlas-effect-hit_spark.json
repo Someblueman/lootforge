@@ -1,0 +1,30 @@
+{
+  "frames": {
+    "effect.hit_spark": {
+      "frame": {
+        "x": 0,
+        "y": 0,
+        "w": 384,
+        "h": 384
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 384,
+        "h": 384
+      },
+      "sourceSize": {
+        "w": 384,
+        "h": 384
+      }
+    }
+  },
+  "meta": {
+    "app": "lootforge",
+    "format": "RGBA8888",
+    "image": "effect_hit_spark.png",
+    "scale": "1"
+  }
+}

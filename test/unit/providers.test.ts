@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  buildStructuredPrompt,
   createDeterministicJobId,
+  getTargetPostProcessPolicy,
   parseProviderSelection,
   type PlannedTarget,
 } from "../../src/providers/types.ts";
@@ -73,5 +75,25 @@ describe("providers helpers", () => {
     const withoutOverride: PlannedTarget = { ...baseTarget };
     expect(resolveTargetProviderName(withoutOverride, "openai")).toBe("openai");
     expect(resolveTargetProviderName(withoutOverride, "nano")).toBe("nano");
+  });
+
+  it("buildStructuredPrompt injects known style preset instructions", () => {
+    const prompt = buildStructuredPrompt({
+      primary: "A farmer character sprite",
+      stylePreset: "pixel-art-16bit",
+    });
+
+    expect(prompt).toContain("Style preset: pixel-art-16bit");
+    expect(prompt).toContain("strict pixel grid");
+    expect(prompt).toContain("no anti-aliasing");
+  });
+
+  it("getTargetPostProcessPolicy applies safe defaults", () => {
+    const policy = getTargetPostProcessPolicy({
+      ...baseTarget,
+    });
+
+    expect(policy.algorithm).toBe("lanczos3");
+    expect(policy.stripMetadata).toBe(true);
   });
 });

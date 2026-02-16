@@ -1,0 +1,30 @@
+{
+  "frames": {
+    "ui.icon.health": {
+      "frame": {
+        "x": 0,
+        "y": 0,
+        "w": 256,
+        "h": 256
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 256,
+        "h": 256
+      },
+      "sourceSize": {
+        "w": 256,
+        "h": 256
+      }
+    }
+  },
+  "meta": {
+    "app": "lootforge",
+    "format": "RGBA8888",
+    "image": "ui_icon_health.png",
+    "scale": "1"
+  }
+}

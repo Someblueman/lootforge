@@ -1,0 +1,95 @@
+{
+  "generatedAt": "2026-02-16T00:38:08.138Z",
+  "items": [
+    {
+      "id": "arena.background.scrapyard",
+      "kind": "background",
+      "out": "arena_background_scrapyard.png",
+      "url": "/assets/images/arena_background_scrapyard.png",
+      "atlasGroup": "arena",
+      "alphaRequired": false,
+      "previewWidth": 1024,
+      "previewHeight": 576
+    },
+    {
+      "id": "player.scavenger",
+      "kind": "sprite",
+      "out": "player_scavenger.png",
+      "url": "/assets/images/player_scavenger.png",
+      "atlasGroup": "actors",
+      "alphaRequired": true,
+      "previewWidth": 256,
+      "previewHeight": 256
+    },
+    {
+      "id": "enemy.scrap_rat",
+      "kind": "sprite",
+      "out": "enemy_scrap_rat.png",
+      "url": "/assets/images/enemy_scrap_rat.png",
+      "atlasGroup": "actors",
+      "alphaRequired": true,
+      "previewWidth": 256,
+      "previewHeight": 256
+    },
+    {
+      "id": "enemy.rust_drone",
+      "kind": "sprite",
+      "out": "enemy_rust_drone.png",
+      "url": "/assets/images/enemy_rust_drone.png",
+      "atlasGroup": "actors",
+      "alphaRequired": true,
+      "previewWidth": 256,
+      "previewHeight": 256
+    },
+    {
+      "id": "projectile.plasma_bolt",
+      "kind": "projectile",
+      "out": "projectile_plasma_bolt.png",
+      "url": "/assets/images/projectile_plasma_bolt.png",
+      "atlasGroup": "effects",
+      "alphaRequired": true,
+      "previewWidth": 192,
+      "previewHeight": 192
+    },
+    {
+      "id": "effect.hit_spark",
+      "kind": "effect",
+      "out": "effect_hit_spark.png",
+      "url": "/assets/images/effect_hit_spark.png",
+      "atlasGroup": "effects",
+      "alphaRequired": true,
+      "previewWidth": 192,
+      "previewHeight": 192
+    },
+    {
+      "id": "ui.icon.health",
+      "kind": "ui",
+      "out": "ui_icon_health.png",
+      "url": "/assets/images/ui_icon_health.png",
+      "atlasGroup": "ui",
+      "alphaRequired": true,
+      "previewWidth": 128,
+      "previewHeight": 128
+    },
+    {
+      "id": "ui.icon.score",
+      "kind": "ui",
+      "out": "ui_icon_score.png",
+      "url": "/assets/images/ui_icon_score.png",
+      "atlasGroup": "ui",
+      "alphaRequired": true,
+      "previewWidth": 128,
+      "previewHeight": 128
+    },
+    {
+      "id": "ui.icon.wave",
+      "kind": "ui",
+      "out": "ui_icon_wave.png",
+      "url": "/assets/images/ui_icon_wave.png",
+      "atlasGroup": "ui",
+      "alphaRequired": true,
+      "previewWidth": 128,
+      "previewHeight": 128
+    }
+  ]
+}

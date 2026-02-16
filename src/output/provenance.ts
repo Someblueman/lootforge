@@ -10,6 +10,21 @@ export interface ProvenanceJobRecord {
   startedAt: string;
   finishedAt: string;
   outputPath: string;
+  bytesWritten?: number;
+  skipped?: boolean;
+  candidateOutputs?: Array<{
+    outputPath: string;
+    bytesWritten: number;
+  }>;
+  candidateScores?: Array<{
+    outputPath: string;
+    score: number;
+    passedAcceptance: boolean;
+    reasons: string[];
+    components?: Record<string, number>;
+    metrics?: Record<string, number>;
+    selected?: boolean;
+  }>;
 }
 
 export interface RunProvenance {

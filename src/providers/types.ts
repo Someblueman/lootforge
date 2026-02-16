@@ -7,6 +7,13 @@ export const KNOWN_STYLE_PRESETS = [
   "topdown-painterly-sci-fi",
 ] as const;
 export const POST_PROCESS_ALGORITHMS = ["nearest", "lanczos3"] as const;
+export const TARGET_KINDS = [
+  "sprite",
+  "tile",
+  "background",
+  "effect",
+  "spritesheet",
+] as const;
 
 export type ProviderName = (typeof PROVIDER_NAMES)[number];
 export type ProviderSelection = ProviderName | "auto";
@@ -19,6 +26,9 @@ export type ProviderFeature =
 export type KnownStylePreset = (typeof KNOWN_STYLE_PRESETS)[number];
 export type PostProcessAlgorithm = (typeof POST_PROCESS_ALGORITHMS)[number];
 export type NormalizedOutputFormat = "png" | "jpeg" | "webp";
+export type TargetKind = (typeof TARGET_KINDS)[number];
+export type GenerationMode = "text" | "edit-first";
+export type PaletteMode = "exact" | "max-colors";
 
 export interface ProviderCapabilities {
   readonly name: ProviderName;
@@ -87,6 +97,13 @@ export interface PromptSpec {
   materials?: string;
   constraints?: string;
   negative?: string;
+}
+
+export interface PalettePolicy {
+  mode: PaletteMode;
+  colors?: string[];
+  maxColors?: number;
+  dither?: number;
 }
 
 export interface GenerationPolicy {
@@ -176,6 +193,40 @@ export interface PlannedTarget {
   kind?: string;
   out: string;
   atlasGroup?: string | null;
+  styleKitId?: string;
+  consistencyGroup?: string;
+  generationMode?: GenerationMode;
+  evaluationProfileId?: string;
+  scoringProfile?: string;
+  tileable?: boolean;
+  seamThreshold?: number;
+  seamStripPx?: number;
+  palette?: PalettePolicy;
+  generationDisabled?: boolean;
+  catalogDisabled?: boolean;
+  spritesheet?: {
+    sheetTargetId: string;
+    isSheet?: boolean;
+    animations?: Array<{
+      name: string;
+      count: number;
+      fps?: number;
+      loop?: boolean;
+      pivot?: {
+        x: number;
+        y: number;
+      };
+    }>;
+    animationName?: string;
+    frameIndex?: number;
+    frameCount?: number;
+    fps?: number;
+    loop?: boolean;
+    pivot?: {
+      x: number;
+      y: number;
+    };
+  };
   acceptance?: {
     size?: string;
     alpha?: boolean;
@@ -255,6 +306,9 @@ export interface CandidateScoreRecord {
   score: number;
   passedAcceptance: boolean;
   reasons: string[];
+  components?: Record<string, number>;
+  metrics?: Record<string, number>;
+  selected?: boolean;
 }
 
 export interface ProviderRunResult {
@@ -267,6 +321,7 @@ export interface ProviderRunResult {
   inputHash: string;
   startedAt: string;
   finishedAt: string;
+  skipped?: boolean;
   candidateOutputs?: ProviderCandidateOutput[];
   candidateScores?: CandidateScoreRecord[];
   warnings?: string[];
@@ -343,6 +398,7 @@ const DEFAULT_OUTPUT_FORMAT: NormalizedOutputFormat = "png";
 const DEFAULT_POST_PROCESS_ALGORITHM: PostProcessAlgorithm = "lanczos3";
 const DEFAULT_CANDIDATE_COUNT = 1;
 const DEFAULT_MAX_RETRIES = 1;
+const DEFAULT_GENERATION_MODE: GenerationMode = "text";
 
 const STYLE_PRESET_LINES: Record<KnownStylePreset, string[]> = {
   "pixel-art-16bit": [
@@ -447,6 +503,13 @@ export function getTargetGenerationPolicy(target: PlannedTarget): NormalizedGene
         ? Math.round(policy.rateLimitPerMinute)
         : undefined,
   };
+}
+
+export function getTargetGenerationMode(target: PlannedTarget): GenerationMode {
+  if (target.generationMode === "edit-first") {
+    return "edit-first";
+  }
+  return DEFAULT_GENERATION_MODE;
 }
 
 export function normalizeGenerationPolicyForProvider(

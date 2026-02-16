@@ -5,6 +5,7 @@ export interface CatalogTarget {
   id: string;
   kind?: string;
   out: string;
+  catalogDisabled?: boolean;
   atlasGroup?: string | null;
   acceptance?: {
     size?: string;
@@ -67,6 +68,10 @@ export async function buildCatalog(
   const items: CatalogItem[] = [];
 
   for (const target of targets) {
+    if (target.catalogDisabled) {
+      continue;
+    }
+
     const filePath = path.join(imagesDir, target.out);
     const expectedSize = parseSize(target.acceptance?.size);
     let exists = false;

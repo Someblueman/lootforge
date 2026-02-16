@@ -13,6 +13,8 @@ export interface GenerateCommandArgs {
   targetsIndexPath?: string;
   provider: ProviderSelection;
   ids: string[];
+  selectionLockPath?: string;
+  skipLocked: boolean;
 }
 
 export interface GenerateCommandResult {
@@ -28,6 +30,8 @@ export function parseGenerateCommandArgs(argv: string[]): GenerateCommandArgs {
   const indexFlag = readArgValue(argv, "index");
   const providerFlag = readArgValue(argv, "provider");
   const idsFlag = readArgValue(argv, "ids");
+  const lockFlag = readArgValue(argv, "lock");
+  const skipLockedFlag = readArgValue(argv, "skip-locked");
   const manifestPath = manifestFlag ? path.resolve(manifestFlag) : undefined;
   const defaultOutDir = manifestPath ? path.dirname(manifestPath) : process.cwd();
 
@@ -36,6 +40,8 @@ export function parseGenerateCommandArgs(argv: string[]): GenerateCommandArgs {
     outDir: path.resolve(outFlag || defaultOutDir),
     targetsIndexPath: indexFlag ? path.resolve(indexFlag) : undefined,
     provider: parseGenerateProviderFlag(providerFlag),
+    selectionLockPath: lockFlag ? path.resolve(lockFlag) : undefined,
+    skipLocked: parseBooleanArg(skipLockedFlag ?? "true"),
     ids: idsFlag
       ? idsFlag
           .split(",")
@@ -54,6 +60,8 @@ export async function runGenerateCommand(
     targetsIndexPath: args.targetsIndexPath,
     provider: args.provider,
     ids: args.ids,
+    selectionLockPath: args.selectionLockPath,
+    skipLocked: args.skipLocked,
     onProgress: writeGenerateProgressLog,
   });
 
@@ -110,4 +118,15 @@ function readArgValue(argv: string[], name: string): string | undefined {
   }
 
   return undefined;
+}
+
+function parseBooleanArg(value: string): boolean {
+  const normalized = value.trim().toLowerCase();
+  if (["true", "1", "yes", "y"].includes(normalized)) {
+    return true;
+  }
+  if (["false", "0", "no", "n"].includes(normalized)) {
+    return false;
+  }
+  throw new Error(`Invalid boolean value \"${value}\" for --skip-locked. Use true or false.`);
 }

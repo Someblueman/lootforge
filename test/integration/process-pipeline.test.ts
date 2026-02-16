@@ -36,7 +36,7 @@ describe("process -> atlas -> package integration", () => {
       manifestPath,
       `${JSON.stringify(
         {
-          version: "2",
+          version: "next",
           pack: {
             id: "test-pack",
             version: "0.1.0",
@@ -133,6 +133,7 @@ describe("process -> atlas -> package integration", () => {
       outDir,
       manifestPath,
       targetsIndexPath: indexPath,
+      strict: false,
     });
 
     expect(await exists(packageResult.zipPath)).toBe(true);

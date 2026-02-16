@@ -40,7 +40,7 @@ describe("atlas config artifacts", () => {
       manifestPath,
       `${JSON.stringify(
         {
-          version: "2",
+          version: "next",
           pack: { id: "test", version: "0.1.0", license: "MIT", author: "x" },
           providers: { default: "openai" },
           atlas: {

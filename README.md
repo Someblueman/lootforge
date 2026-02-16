@@ -4,17 +4,17 @@ LootForge is a manifest-driven CLI for generating and packaging runtime-ready ga
 
 Current version: `0.1.0`
 
-## Try the Playable Demo in 2 Minutes
+## Quickstart in 2 Minutes
 
 ```bash
 npm install --cache .npm-cache
-npm run demo:dev
+npm run build
+node bin/lootforge.js init --out .
+node bin/lootforge.js plan --manifest assets/imagegen/manifest.json --out assets/imagegen
+node bin/lootforge.js validate --manifest assets/imagegen/manifest.json --out assets/imagegen
 ```
 
-Open `http://localhost:5173` and play immediately (no API keys required).
-
-Gameplay screenshot:
-![LootForge Phaser demo gameplay](examples/phaser-demo/docs/gameplay.png)
+This exercises the planning + validation pipeline locally with no provider API keys.
 
 It is designed to:
 - plan generation jobs from a single manifest
@@ -36,7 +36,7 @@ That means it produces:
 
 ## Features
 
-- Manifest v2 schema with semantic validation
+- `next` manifest schema with style kits, evaluation profiles, and spritesheet planning
 - Provider selection: `openai`, `nano`, `local`, or `auto`
 - Provider-aware normalization (`jpg -> jpeg`, transparent/background compatibility checks)
 - Deterministic job IDs keyed to normalized generation policy
@@ -46,7 +46,6 @@ That means it produces:
 - Pixel-level acceptance checks with JSON report output
 - Atlas stage with optional TexturePacker integration plus reproducibility artifacts
 - Pack assembly with runtime manifests and review artifacts
-- Playable Phaser arena shooter demo using committed generated assets
 
 ## Requirements
 
@@ -103,8 +102,11 @@ node dist/cli/index.js generate \
 # 5) Process raw assets into runtime-ready outputs
 node dist/cli/index.js process --out assets/imagegen
 
-# 6) Build atlases and package artifact bundle
+# 6) Build atlases, evaluate/select, then package artifact bundle
 node dist/cli/index.js atlas --out assets/imagegen
+node dist/cli/index.js eval --out assets/imagegen --strict true
+node dist/cli/index.js review --out assets/imagegen
+node dist/cli/index.js select --out assets/imagegen
 node dist/cli/index.js package \
   --manifest assets/imagegen/manifest.json \
   --out assets/imagegen
@@ -194,31 +196,46 @@ Assembles shareable outputs under:
 - `<out>/dist/packs/<pack-id>/...`
 - `<out>/dist/packs/game-asset-pack-<pack-id>.zip`
 
-### `lootforge preview`
+### `lootforge eval`
 
-Launches the starter Phaser preview app from:
-- `examples/starter-phaser`
+Runs hard/soft quality scoring and writes:
+- `<out>/checks/eval-report.json`
 
-## Manifest v2
+### `lootforge review`
+
+Builds a review artifact from eval data:
+- `<out>/review/review.html`
+
+### `lootforge select`
+
+Builds lockfile selections from provenance + eval:
+- `<out>/locks/selection-lock.json`
+
+## Manifest (`version: "next"`)
 
 Top-level fields:
+- `version`: must be `next`
 - `pack`: `{ id, version, license, author }` (required)
 - `providers`: `{ default, openai?, nano?, local? }` (required)
+- `styleKits[]` (required)
+- `evaluationProfiles[]` (required)
 - `atlas` options for packing defaults and per-group overrides
 - `targets[]` (required)
 
 Per target:
-- `id`, `kind`, `out`, `atlasGroup?`
-- `prompt` (string or structured object, supports `stylePreset`)
+- `id`, `kind`, `out`, `atlasGroup?`, `styleKitId`, `consistencyGroup`, `evaluationProfileId`
+- `generationMode`: `text|edit-first`
+- `prompt` (string or structured object) for non-spritesheet targets
 - `provider?` (`openai|nano|local`)
 - `acceptance`: `{ size, alpha, maxFileSizeKB }`
-- optional generation/runtime fields (`generationPolicy`, `postProcess`, `runtimeSpec`, `model`, `edit`, `auxiliaryMaps`)
+- optional generation/runtime fields (`generationPolicy`, `postProcess`, `runtimeSpec`, `model`, `edit`, `auxiliaryMaps`, `palette`, `tileable`, `seamThreshold`)
+- `kind: "spritesheet"` targets define `animations` and are expanded/assembled by the pipeline
 
 Minimal example:
 
 ```json
 {
-  "version": "2",
+  "version": "next",
   "pack": {
     "id": "my-pack",
     "version": "0.1.0",
@@ -231,12 +248,31 @@ Minimal example:
     "nano": { "model": "gemini-2.5-flash-image" },
     "local": { "model": "sdxl-controlnet", "baseUrl": "http://127.0.0.1:8188" }
   },
+  "styleKits": [
+    {
+      "id": "fantasy-topdown",
+      "rulesPath": "style/fantasy/style.md",
+      "palettePath": "style/fantasy/palette.txt",
+      "referenceImages": [],
+      "lightingModel": "top-left key with warm fill"
+    }
+  ],
+  "evaluationProfiles": [
+    {
+      "id": "sprite-quality",
+      "hardGates": { "requireAlpha": true, "maxFileSizeKB": 512 }
+    }
+  ],
   "targets": [
     {
       "id": "player-idle",
       "kind": "sprite",
       "out": "player-idle.png",
       "atlasGroup": "actors",
+      "styleKitId": "fantasy-topdown",
+      "consistencyGroup": "player-family",
+      "evaluationProfileId": "sprite-quality",
+      "generationMode": "text",
       "prompt": "Top-down sci-fi pilot idle sprite with clear silhouette.",
       "postProcess": {
         "resizeTo": "512x512",
@@ -267,6 +303,9 @@ See also: `docs/manifest-schema.md`
 - `dist/packs/<pack-id>/provenance/run.json`
 - `dist/packs/<pack-id>/checks/validation-report.json`
 - `dist/packs/<pack-id>/checks/image-acceptance-report.json`
+- `dist/packs/<pack-id>/checks/eval-report.json` (when available)
+- `dist/packs/<pack-id>/provenance/selection-lock.json` (when available)
+- `dist/packs/<pack-id>/review/review.html` (when available)
 - `dist/packs/game-asset-pack-<pack-id>.zip`
 
 Stage outputs during generation flow:
@@ -283,21 +322,6 @@ Stage outputs during generation flow:
 
 No network keys are required for `init`, `plan`, `validate`, `atlas`, or `package`.
 
-## Legacy Starter Template
-
-Location:
-- `examples/starter-phaser`
-
-Run:
-```bash
-npm --prefix examples/starter-phaser install
-npm --prefix examples/starter-phaser run dev
-```
-
-The app attempts to load `/manifest/phaser.json` and render available assets.
-
-For the canonical generated-assets showcase, use `examples/phaser-demo` instead.
-
 ## Development
 
 Scripts:
@@ -306,34 +330,6 @@ Scripts:
 - `npm test`
 - `npm run test:unit`
 - `npm run test:integration`
-- `npm run demo:dev`
-- `npm run demo:build`
-- `npm run demo:test`
-
-## Playable Demo
-
-Location:
-- `examples/phaser-demo`
-
-Run:
-```bash
-npm run demo:dev
-```
-
-Asset regeneration (requires `OPENAI_API_KEY`):
-```bash
-npm run demo:assets:plan
-npm run demo:assets:generate
-npm run demo:assets:process
-npm run demo:assets:atlas
-npm run demo:assets:postprocess
-```
-
-Contract consumed by the demo runtime:
-- `examples/phaser-demo/public/assets/atlases/manifest.json`
-- `examples/phaser-demo/public/assets/atlases/*.json`
-- `examples/phaser-demo/public/assets/images/*.png`
-- `examples/phaser-demo/public/assets/imagegen/processed/catalog.json`
 
 ## Status / Roadmap
 

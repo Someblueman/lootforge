@@ -29,12 +29,6 @@ export interface ProcessPipelineResult {
   variantCount: number;
 }
 
-interface ProcessedVariant {
-  outPath: string;
-  width: number;
-  height: number;
-}
-
 function parseTargetsIndex(raw: string, filePath: string): TargetsIndexShape {
   try {
     return JSON.parse(raw) as TargetsIndexShape;
@@ -121,6 +115,84 @@ function withVariantSuffix(filePath: string, variantName: string): string {
   return `${base}__${safeName}${ext}`;
 }
 
+function parsePaletteColors(colors: string[] | undefined): Array<{ r: number; g: number; b: number }> {
+  if (!colors || colors.length === 0) {
+    return [];
+  }
+
+  return colors
+    .map((input) => {
+      const value = input.trim().toLowerCase();
+      const raw = value.startsWith("#") ? value.slice(1) : value;
+      if (!/^[0-9a-f]{6}$/i.test(raw)) {
+        return null;
+      }
+
+      return {
+        r: Number.parseInt(raw.slice(0, 2), 16),
+        g: Number.parseInt(raw.slice(2, 4), 16),
+        b: Number.parseInt(raw.slice(4, 6), 16),
+      };
+    })
+    .filter((color): color is { r: number; g: number; b: number } => color !== null);
+}
+
+function nearestPaletteColor(
+  source: { r: number; g: number; b: number },
+  palette: Array<{ r: number; g: number; b: number }>,
+): { r: number; g: number; b: number } {
+  let best = palette[0];
+  let bestDistance = Number.POSITIVE_INFINITY;
+
+  for (const candidate of palette) {
+    const dr = source.r - candidate.r;
+    const dg = source.g - candidate.g;
+    const db = source.b - candidate.b;
+    const distance = dr * dr + dg * dg + db * db;
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      best = candidate;
+    }
+  }
+
+  return best;
+}
+
+async function quantizeToExactPalette(
+  imageBuffer: Buffer,
+  paletteColors: string[],
+): Promise<Buffer> {
+  const palette = parsePaletteColors(paletteColors);
+  if (palette.length === 0) {
+    return imageBuffer;
+  }
+
+  const rawResult = await sharp(imageBuffer)
+    .ensureAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  const data = rawResult.data;
+  const channels = rawResult.info.channels;
+  const width = rawResult.info.width;
+  const height = rawResult.info.height;
+
+  for (let i = 0; i < data.length; i += channels) {
+    const alpha = channels >= 4 ? data[i + 3] : 255;
+    if (alpha === 0) {
+      continue;
+    }
+    const nearest = nearestPaletteColor(
+      { r: data[i], g: data[i + 1], b: data[i + 2] },
+      palette,
+    );
+    data[i] = nearest.r;
+    data[i + 1] = nearest.g;
+    data[i + 2] = nearest.b;
+  }
+
+  return sharp(data, { raw: { width, height, channels } }).png().toBuffer();
+}
+
 async function processSingleTarget(params: {
   target: PlannedTarget;
   rawImagePath: string;
@@ -176,6 +248,9 @@ async function processSingleTarget(params: {
 
   const quantizeConfig = postProcess.operations?.quantize;
   const paletteColors = quantizeConfig?.colors ?? postProcess.pngPaletteColors;
+  if (params.target.palette?.mode === "exact" && params.target.palette.colors?.length) {
+    outputBuffer = await quantizeToExactPalette(outputBuffer, params.target.palette.colors);
+  }
 
   if (postProcess.stripMetadata === false) {
     // Intentionally no-op: sharp preserves no metadata by default, and this pipeline
@@ -187,11 +262,8 @@ async function processSingleTarget(params: {
       compressionLevel: 9,
       palette: typeof paletteColors === "number",
       colours: paletteColors,
+      dither: quantizeConfig?.dither,
       effort: 8,
-      quality:
-        typeof quantizeConfig?.dither === "number"
-          ? Math.max(1, Math.min(100, Math.round(quantizeConfig.dither * 100)))
-          : undefined,
     })
     .toBuffer();
 
@@ -280,6 +352,166 @@ async function processSingleTarget(params: {
   return { variantCount };
 }
 
+function animationMetadataPath(filePath: string): string {
+  const ext = path.extname(filePath);
+  const base = filePath.slice(0, filePath.length - ext.length);
+  return `${base}.anim.json`;
+}
+
+async function assembleSpritesheetTarget(params: {
+  sheetTarget: PlannedTarget;
+  frameTargets: PlannedTarget[];
+  processedImagesDir: string;
+  legacyImagesDir: string;
+  mirrorLegacy: boolean;
+}): Promise<void> {
+  if (params.frameTargets.length === 0) {
+    return;
+  }
+
+  const orderedAnimations =
+    params.sheetTarget.spritesheet?.animations?.map((animation) => animation.name) ?? [];
+  const animationOrder = new Map(orderedAnimations.map((name, index) => [name, index]));
+
+  const orderedFrames = [...params.frameTargets].sort((left, right) => {
+    const leftAnimation = left.spritesheet?.animationName ?? "";
+    const rightAnimation = right.spritesheet?.animationName ?? "";
+    const leftOrder = animationOrder.get(leftAnimation) ?? Number.MAX_SAFE_INTEGER;
+    const rightOrder = animationOrder.get(rightAnimation) ?? Number.MAX_SAFE_INTEGER;
+    if (leftOrder !== rightOrder) {
+      return leftOrder - rightOrder;
+    }
+    if (leftAnimation !== rightAnimation) {
+      return leftAnimation.localeCompare(rightAnimation);
+    }
+    return (left.spritesheet?.frameIndex ?? 0) - (right.spritesheet?.frameIndex ?? 0);
+  });
+
+  const frameBuffers: Array<{
+    target: PlannedTarget;
+    buffer: Buffer;
+    width: number;
+    height: number;
+  }> = [];
+
+  for (const frameTarget of orderedFrames) {
+    const framePath = path.join(params.processedImagesDir, frameTarget.out);
+    const image = sharp(framePath, { failOn: "none" });
+    const metadata = await image.metadata();
+    if (!metadata.width || !metadata.height) {
+      continue;
+    }
+    const buffer = await image.png().toBuffer();
+    frameBuffers.push({
+      target: frameTarget,
+      buffer,
+      width: metadata.width,
+      height: metadata.height,
+    });
+  }
+
+  if (frameBuffers.length === 0) {
+    return;
+  }
+
+  const frameWidth = Math.max(...frameBuffers.map((frame) => frame.width));
+  const frameHeight = Math.max(...frameBuffers.map((frame) => frame.height));
+
+  const framesByAnimation = new Map<string, typeof frameBuffers>();
+  for (const frame of frameBuffers) {
+    const animation = frame.target.spritesheet?.animationName ?? "default";
+    const list = framesByAnimation.get(animation) ?? [];
+    list.push(frame);
+    framesByAnimation.set(animation, list);
+  }
+
+  const animationNames = Array.from(framesByAnimation.keys()).sort((left, right) => {
+    const leftOrder = animationOrder.get(left) ?? Number.MAX_SAFE_INTEGER;
+    const rightOrder = animationOrder.get(right) ?? Number.MAX_SAFE_INTEGER;
+    if (leftOrder !== rightOrder) {
+      return leftOrder - rightOrder;
+    }
+    return left.localeCompare(right);
+  });
+  const maxFramesPerAnimation = Math.max(
+    ...Array.from(framesByAnimation.values()).map((frames) => frames.length),
+  );
+
+  const sheetWidth = Math.max(1, maxFramesPerAnimation) * frameWidth;
+  const sheetHeight = Math.max(1, animationNames.length) * frameHeight;
+
+  const composites: sharp.OverlayOptions[] = [];
+  const framesMeta: Record<string, unknown> = {};
+
+  for (const [animationIndex, animationName] of animationNames.entries()) {
+    const frames = (framesByAnimation.get(animationName) ?? []).sort(
+      (left, right) =>
+        (left.target.spritesheet?.frameIndex ?? 0) - (right.target.spritesheet?.frameIndex ?? 0),
+    );
+
+    for (const [frameOffset, frame] of frames.entries()) {
+      const frameIndex = frame.target.spritesheet?.frameIndex ?? frameOffset;
+      const x = frameIndex * frameWidth;
+      const y = animationIndex * frameHeight;
+      composites.push({
+        input: frame.buffer,
+        left: x,
+        top: y,
+      });
+
+      framesMeta[`${params.sheetTarget.id}.${animationName}.${frameIndex}`] = {
+        frame: { x, y, w: frame.width, h: frame.height },
+        animation: {
+          name: animationName,
+          fps: frame.target.spritesheet?.fps ?? 8,
+          loop: frame.target.spritesheet?.loop ?? true,
+          pivot: frame.target.spritesheet?.pivot ?? { x: 0.5, y: 0.85 },
+        },
+      };
+    }
+  }
+
+  const sheetBuffer = await sharp({
+    create: {
+      width: sheetWidth,
+      height: sheetHeight,
+      channels: 4,
+      background: { r: 0, g: 0, b: 0, alpha: 0 },
+    },
+  })
+    .composite(composites)
+    .png({ compressionLevel: 9 })
+    .toBuffer();
+
+  const processedSheetPath = path.join(params.processedImagesDir, params.sheetTarget.out);
+  const legacySheetPath = path.join(params.legacyImagesDir, params.sheetTarget.out);
+  await mkdir(path.dirname(processedSheetPath), { recursive: true });
+  await writeFile(processedSheetPath, sheetBuffer);
+  if (params.mirrorLegacy) {
+    await mkdir(path.dirname(legacySheetPath), { recursive: true });
+    await writeFile(legacySheetPath, sheetBuffer);
+  }
+
+  const metadata = {
+    generatedAt: new Date().toISOString(),
+    sheetTargetId: params.sheetTarget.id,
+    frameWidth,
+    frameHeight,
+    animations: animationNames.map((name) => ({
+      name,
+      frameCount: framesByAnimation.get(name)?.length ?? 0,
+    })),
+    frames: framesMeta,
+  };
+
+  const processedMetaPath = animationMetadataPath(processedSheetPath);
+  await writeFile(processedMetaPath, `${JSON.stringify(metadata, null, 2)}\n`, "utf8");
+  if (params.mirrorLegacy) {
+    const legacyMetaPath = animationMetadataPath(legacySheetPath);
+    await writeFile(legacyMetaPath, `${JSON.stringify(metadata, null, 2)}\n`, "utf8");
+  }
+}
+
 export async function runProcessPipeline(
   options: ProcessPipelineOptions,
 ): Promise<ProcessPipelineResult> {
@@ -293,6 +525,8 @@ export async function runProcessPipeline(
   const rawIndex = await readFile(targetsIndexPath, "utf8");
   const index = parseTargetsIndex(rawIndex, targetsIndexPath);
   const targets = Array.isArray(index.targets) ? index.targets : [];
+  const generationTargets = targets.filter((target) => target.generationDisabled !== true);
+  const spritesheetSheetTargets = targets.filter((target) => target.spritesheet?.isSheet === true);
 
   await mkdir(layout.processedImagesDir, { recursive: true });
   if (mirrorLegacy) {
@@ -300,7 +534,7 @@ export async function runProcessPipeline(
   }
 
   let variantCount = 0;
-  for (const target of targets) {
+  for (const target of generationTargets) {
     const rawImagePath = path.join(layout.rawDir, target.out);
     const processedImagePath = path.join(layout.processedImagesDir, target.out);
     const legacyImagePath = path.join(layout.legacyImagesDir, target.out);
@@ -314,6 +548,23 @@ export async function runProcessPipeline(
       legacyImagePath,
     });
     variantCount += result.variantCount;
+  }
+
+  for (const sheetTarget of spritesheetSheetTargets) {
+    const frameTargets = generationTargets.filter(
+      (target) =>
+        target.spritesheet?.sheetTargetId === sheetTarget.id &&
+        target.spritesheet?.isSheet !== true,
+    );
+
+    // eslint-disable-next-line no-await-in-loop
+    await assembleSpritesheetTarget({
+      sheetTarget,
+      frameTargets,
+      processedImagesDir: layout.processedImagesDir,
+      legacyImagesDir: layout.legacyImagesDir,
+      mirrorLegacy,
+    });
   }
 
   const acceptanceReport = await runImageAcceptanceChecks({
@@ -336,7 +587,7 @@ export async function runProcessPipeline(
     legacyImagesDir: layout.legacyImagesDir,
     catalogPath,
     acceptanceReportPath,
-    processedCount: targets.length,
+    processedCount: targets.filter((target) => !target.catalogDisabled).length,
     variantCount,
   };
 }

@@ -1,77 +1,125 @@
-# Manifest Schema (v2)
+# Manifest Schema (`version: "next"`)
 
-Top-level fields:
+`next` is the only supported manifest contract in this rewrite.
 
-- `version` (`2`, `2.0`, `2.0.0`, or `v2`; optional)
-- `pack` (required)
-  - `id` (string, non-empty)
-  - `version` (string, non-empty)
-  - `license` (string, non-empty)
-  - `author` (string, non-empty)
-- `providers` (required)
-  - `default` (`openai|nano|local`)
-  - `openai` (optional)
-  - `nano` (optional)
-  - `local` (optional)
-    - `model`, `endpoint`, `baseUrl`, `timeoutMs`, `maxRetries`, `minDelayMs`, `defaultConcurrency`
-- `styleGuide` (optional object)
-  - `preset` (optional string; applied as default `prompt.stylePreset`)
-- `atlas` (optional)
-  - `padding`, `trim`, `bleed`, `multipack`, `maxWidth`, `maxHeight`
-  - `groups` (optional map of per-atlas-group overrides)
-- `targets[]` (required, at least one)
+## Top-level fields
 
-Per target:
+- `version`: must be `"next"`
+- `pack`: `{ id, version, license?, author? }`
+- `providers`: `{ default, openai?, nano?, local? }`
+- `styleKits[]` (required, at least one)
+  - `id`
+  - `rulesPath`
+  - `palettePath?`
+  - `referenceImages[]`
+  - `lightingModel`
+  - `negativeRulesPath?`
+- `evaluationProfiles[]` (required, at least one)
+  - `id`
+  - `hardGates?`: `{ requireAlpha?, maxFileSizeKB?, seamThreshold?, seamStripPx?, paletteComplianceMin? }`
+  - `scoreWeights?`: `{ readability?, fileSize?, consistency?, clip?, lpips?, ssim? }`
+- `atlas?`: atlas defaults + optional per-group overrides
+- `targets[]` (required)
 
-- `id` (string, non-empty)
-- `kind` (string, non-empty)
-- `out` (string, non-empty filename/path)
-- `atlasGroup` (optional string)
-- `prompt` (string) or structured object with:
-  - `primary` (required string)
-  - optional: `useCase`, `stylePreset`, `scene`, `subject`, `style`, `composition`,
-    `lighting`, `palette`, `materials`, `constraints`, `negative`
-- `provider` (optional `openai|nano|local`)
-- `model` (optional string override)
-- `generationPolicy` (optional)
-  - `size`, `background`, `outputFormat`, `quality`, `draftQuality`, `finalQuality`
-  - `candidates` (int >= 1)
-  - `maxRetries` (int >= 0)
-  - `fallbackProviders` (array of provider names)
-  - `providerConcurrency` (int > 0)
-  - `rateLimitPerMinute` (int > 0)
-- `postProcess` (optional)
-  - legacy compatible:
-    - `resizeTo` (`WIDTHxHEIGHT` or positive integer)
-    - `algorithm` (`nearest|lanczos3`)
-    - `stripMetadata` (boolean)
-    - `pngPaletteColors` (2..256)
-  - `operations` (optional)
-    - `trim`: `{ enabled?, threshold? }`
-    - `pad`: `{ pixels, extrude?, background? }`
-    - `quantize`: `{ colors, dither? }`
-    - `outline`: `{ size, color? }`
-    - `resizeVariants`: `[{ name, size, algorithm? }]`
-- `acceptance` (optional)
-  - `size` (`WIDTHxHEIGHT`)
-  - `alpha` (boolean)
-  - `maxFileSizeKB` (positive integer)
-- `runtimeSpec` (optional)
-  - `alphaRequired` (boolean)
-  - `previewWidth` (positive integer)
-  - `previewHeight` (positive integer)
-- `edit` (optional; P2 schema support)
-  - `mode` (`edit|iterate`)
-  - `instruction`
-  - `inputs`: `[{ path, role?, fidelity? }]`
-  - `preserveComposition`
-- `auxiliaryMaps` (optional; P2 schema support)
-  - `normalFromHeight`
-  - `specularFromLuma`
-  - `aoFromLuma`
+## Target contract
 
-Notes:
+Required on every target:
 
-- `jpg` is normalized to `jpeg` during provider policy normalization.
-- Alpha-required targets should use alpha-capable formats (`png`/`webp`).
-- `generate` writes `raw/`; `process` writes `processed/images/` and compatibility mirror assets.
+- `id`
+- `kind`
+- `out`
+- `styleKitId`
+- `consistencyGroup`
+- `evaluationProfileId`
+- `generationMode` (`text|edit-first`) recommended
+
+Optional quality controls:
+
+- `palette`: `{ mode: exact|max-colors, colors?, maxColors?, dither? }`
+- `tileable`, `seamThreshold`, `seamStripPx`
+
+Generation + processing:
+
+- `prompt` or `promptSpec` (required for non-`spritesheet` targets)
+- `generationPolicy`
+- `postProcess`
+- `acceptance`
+- `runtimeSpec`
+- `provider`, `model`, `edit`, `auxiliaryMaps`
+
+## Spritesheet targets
+
+For `kind: "spritesheet"`, define:
+
+- `animations`: record keyed by animation name
+  - `count` (required)
+  - `prompt` (required)
+  - `fps?`, `loop?`, `pivot?`
+
+Planner behavior:
+
+- expands each animation frame into internal frame targets under `__frames/...`
+- emits a generation-disabled sheet target that process stage assembles
+
+## Example (minimal sprite)
+
+```json
+{
+  "version": "next",
+  "pack": {
+    "id": "my-pack",
+    "version": "0.1.0"
+  },
+  "providers": {
+    "default": "openai",
+    "openai": { "model": "gpt-image-1" }
+  },
+  "styleKits": [
+    {
+      "id": "fantasy-topdown",
+      "rulesPath": "style/fantasy/style.md",
+      "palettePath": "style/fantasy/palette.txt",
+      "referenceImages": [],
+      "lightingModel": "top-left key with warm fill"
+    }
+  ],
+  "evaluationProfiles": [
+    {
+      "id": "sprite-quality",
+      "hardGates": {
+        "requireAlpha": true,
+        "maxFileSizeKB": 512
+      }
+    }
+  ],
+  "targets": [
+    {
+      "id": "player.hero",
+      "kind": "sprite",
+      "out": "player_hero.png",
+      "styleKitId": "fantasy-topdown",
+      "consistencyGroup": "player-family",
+      "evaluationProfileId": "sprite-quality",
+      "generationMode": "text",
+      "prompt": "Top-down hero sprite with clear readable silhouette.",
+      "generationPolicy": {
+        "size": "1024x1024",
+        "background": "transparent",
+        "outputFormat": "png",
+        "quality": "high",
+        "candidates": 4
+      },
+      "postProcess": {
+        "resizeTo": "512x512",
+        "algorithm": "lanczos3",
+        "stripMetadata": true
+      },
+      "acceptance": {
+        "size": "512x512",
+        "alpha": true,
+        "maxFileSizeKB": 512
+      }
+    }
+  ]
+}
+```

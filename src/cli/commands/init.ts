@@ -63,7 +63,7 @@ export async function runInitCommand(argv: string[]): Promise<InitCommandResult>
 
 function createDefaultManifest(): ManifestV2 {
   return {
-    version: "2",
+    version: "next",
     pack: {
       id: "example-pack",
       version: "0.1.0",
@@ -83,6 +83,32 @@ function createDefaultManifest(): ManifestV2 {
         baseUrl: "http://127.0.0.1:8188",
       },
     },
+    styleKits: [
+      {
+        id: "default-topdown",
+        rulesPath: "assets/style/default-topdown/style.md",
+        palettePath: "assets/style/default-topdown/palette.txt",
+        referenceImages: [],
+        lightingModel: "top-left key light with soft ambient fill",
+      },
+    ],
+    evaluationProfiles: [
+      {
+        id: "default-sprite-quality",
+        hardGates: {
+          requireAlpha: true,
+          maxFileSizeKB: 512,
+          seamThreshold: 12,
+          seamStripPx: 4,
+          paletteComplianceMin: 0.98,
+        },
+        scoreWeights: {
+          readability: 1.0,
+          fileSize: 0.3,
+          consistency: 0.7,
+        },
+      },
+    ],
     atlas: {
       padding: 2,
       trim: true,
@@ -96,6 +122,10 @@ function createDefaultManifest(): ManifestV2 {
         id: "example-hero",
         kind: "sprite",
         out: "hero.png",
+        styleKitId: "default-topdown",
+        consistencyGroup: "heroes",
+        evaluationProfileId: "default-sprite-quality",
+        generationMode: "text",
         prompt: {
           primary:
             "Fantasy hero character sprite, front-facing idle pose, clean silhouette.",

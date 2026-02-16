@@ -26,11 +26,13 @@ export async function runPackageCommand(argv: string[]): Promise<PackageCommandR
     readArgValue(argv, "manifest") ?? path.join(process.cwd(), "assets/imagegen/manifest.json"),
   );
   const indexPath = readArgValue(argv, "index");
+  const strict = parseBooleanArg(readArgValue(argv, "strict") ?? "true");
 
   const result = await runPackagePipeline({
     outDir,
     manifestPath,
     targetsIndexPath: indexPath ? path.resolve(indexPath) : undefined,
+    strict,
   });
 
   return {
@@ -40,3 +42,13 @@ export async function runPackageCommand(argv: string[]): Promise<PackageCommandR
   };
 }
 
+function parseBooleanArg(value: string): boolean {
+  const normalized = value.trim().toLowerCase();
+  if (["true", "1", "yes", "y"].includes(normalized)) {
+    return true;
+  }
+  if (["false", "0", "no", "n"].includes(normalized)) {
+    return false;
+  }
+  throw new Error(`Invalid boolean value \"${value}\" for --strict. Use true or false.`);
+}

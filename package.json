@@ -15,22 +15,7 @@
     "test:unit": "vitest run test/unit --passWithNoTests",
     "test:integration": "vitest run test/integration --passWithNoTests",
     "lint": "node -e \"console.log('lint placeholder: ok')\"",
-    "typecheck": "tsc --noEmit -p tsconfig.json",
-    "demo:dev": "vite --config examples/phaser-demo/vite.config.ts",
-    "demo:build": "vite build --config examples/phaser-demo/vite.config.ts",
-    "demo:test": "vitest run test/demo --passWithNoTests",
-    "demo:assets:plan": "tsx src/cli/index.ts plan --manifest examples/phaser-demo/assets/manifest.demo.json --out examples/phaser-demo/public",
-    "demo:assets:generate": "tsx src/cli/index.ts generate --manifest examples/phaser-demo/assets/manifest.demo.json --out examples/phaser-demo/public --provider openai",
-    "demo:assets:process": "tsx src/cli/index.ts process --out examples/phaser-demo/public",
-    "demo:assets:atlas": "tsx src/cli/index.ts atlas --out examples/phaser-demo/public",
-    "demo:assets:postprocess": "npm run demo:assets:process",
-    "demo:dungeon:dev": "vite --config examples/phaser-demo/vite.config.ts",
-    "demo:dungeon:build": "vite build --config examples/phaser-demo/vite.config.ts",
-    "demo:dungeon:assets:plan": "tsx src/cli/index.ts plan --manifest examples/phaser-demo/assets/manifest.dungeon.json --out examples/phaser-demo/public",
-    "demo:dungeon:assets:generate": "tsx src/cli/index.ts generate --manifest examples/phaser-demo/assets/manifest.dungeon.json --out examples/phaser-demo/public --provider openai",
-    "demo:dungeon:assets:process": "tsx src/cli/index.ts process --out examples/phaser-demo/public",
-    "demo:dungeon:assets:atlas": "tsx src/cli/index.ts atlas --out examples/phaser-demo/public",
-    "test:playwright": "npx playwright test"
+    "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
     "sharp": "^0.34.5",
@@ -38,14 +23,11 @@
     "zod": "^3.25.76"
   },
   "devDependencies": {
-    "@playwright/test": "^1.58.2",
     "@types/node": "^22.13.1",
     "@types/yauzl": "^2.10.3",
     "@types/yazl": "^2.4.5",
-    "phaser": "^3.90.0",
     "tsx": "^4.19.2",
     "typescript": "^5.7.3",
-    "vite": "^7.1.5",
     "vitest": "^2.1.8",
     "yauzl": "^3.2.0"
   }

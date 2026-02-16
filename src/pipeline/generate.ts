@@ -1,4 +1,4 @@
-import { cp, mkdir, readFile, stat } from "node:fs/promises";
+import { access, cp, mkdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
 
 import { scoreCandidateImages } from "../checks/candidateScore.js";
@@ -26,6 +26,8 @@ export interface GeneratePipelineOptions {
   targetsIndexPath?: string;
   provider?: ProviderSelection;
   ids?: string[];
+  selectionLockPath?: string;
+  skipLocked?: boolean;
   now?: () => Date;
   fetchImpl?: typeof fetch;
   registry?: ProviderRegistry;
@@ -79,6 +81,21 @@ interface TargetTask {
   fallbackProviders: ProviderName[];
 }
 
+interface SelectionLockItem {
+  targetId: string;
+  inputHash: string;
+  selectedOutputPath: string;
+  provider?: string;
+  model?: string;
+  approved?: boolean;
+  score?: number;
+}
+
+interface SelectionLockFile {
+  generatedAt?: string;
+  targets?: SelectionLockItem[];
+}
+
 export async function runGeneratePipeline(
   options: GeneratePipelineOptions,
 ): Promise<GeneratePipelineResult> {
@@ -89,11 +106,19 @@ export async function runGeneratePipeline(
   const providerSelection = options.provider ?? "auto";
   const registry = options.registry ?? createProviderRegistry();
   const imagesDir = layout.rawDir;
+  const skipLocked = options.skipLocked ?? true;
 
   const indexRaw = await readFile(targetsIndexPath, "utf8");
   const index = parseTargetsIndex(indexRaw, targetsIndexPath);
   const targets = normalizeTargets(index, targetsIndexPath);
-  const filteredTargets = filterTargetsByIds(targets, options.ids);
+  const filteredTargets = filterTargetsByIds(
+    targets.filter((target) => target.generationDisabled !== true),
+    options.ids,
+  );
+  const lock = await readSelectionLock(
+    path.resolve(options.selectionLockPath ?? path.join(layout.outDir, "locks", "selection-lock.json")),
+  );
+  const lockByTargetId = new Map((lock.targets ?? []).map((item) => [item.targetId, item]));
   const inputHash = sha256Hex(indexRaw);
   const startedAt = nowIso(options.now);
   const runId =
@@ -180,6 +205,8 @@ export async function runGeneratePipeline(
                   now: options.now,
                   fetchImpl: options.fetchImpl,
                   registry,
+                  lockByTargetId,
+                  skipLocked,
                 });
                 results.push(result);
 
@@ -240,6 +267,10 @@ export async function runGeneratePipeline(
       startedAt: result.startedAt,
       finishedAt: result.finishedAt,
       outputPath: result.outputPath,
+      bytesWritten: result.bytesWritten,
+      skipped: result.skipped,
+      candidateOutputs: result.candidateOutputs,
+      candidateScores: result.candidateScores,
     })),
     failures,
   });
@@ -331,6 +362,8 @@ async function runTaskWithFallback(params: {
   now?: () => Date;
   fetchImpl?: typeof fetch;
   registry: ProviderRegistry;
+  lockByTargetId: Map<string, SelectionLockItem>;
+  skipLocked: boolean;
 }): Promise<ProviderRunResult> {
   const providerChain = [params.task.primaryProvider, ...params.task.fallbackProviders];
   let lastError: unknown;
@@ -349,6 +382,32 @@ async function runTaskWithFallback(params: {
     }
 
     const job = preparedJobs[0];
+    const lockEntry = params.lockByTargetId.get(params.task.target.id);
+    if (params.skipLocked && lockEntry?.approved && lockEntry.inputHash === job.inputHash) {
+      const lockedPath = path.resolve(lockEntry.selectedOutputPath);
+      if (await fileExists(lockedPath)) {
+        if (lockedPath !== job.outPath) {
+          await cp(lockedPath, job.outPath, { force: true });
+        }
+        const fileStat = await stat(job.outPath);
+        return {
+          jobId: job.id,
+          provider: providerName,
+          model: job.model,
+          targetId: job.targetId,
+          outputPath: job.outPath,
+          bytesWritten: fileStat.size,
+          inputHash: job.inputHash,
+          startedAt: nowIso(params.now),
+          finishedAt: nowIso(params.now),
+          skipped: true,
+          warnings: [
+            `Skipped generation for ${job.targetId}; approved lock matched input hash.`,
+          ],
+        };
+      }
+    }
+
     const attempts = Math.max(1, job.maxRetries + 1);
 
     for (let attempt = 1; attempt <= attempts; attempt += 1) {
@@ -412,4 +471,23 @@ function computeProviderDelayMs(task: TargetTask, fallbackDelay: number): number
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function readSelectionLock(filePath: string): Promise<SelectionLockFile> {
+  try {
+    const raw = await readFile(filePath, "utf8");
+    const parsed = JSON.parse(raw) as SelectionLockFile;
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+async function fileExists(filePath: string): Promise<boolean> {
+  try {
+    await access(filePath);
+    return true;
+  } catch {
+    return false;
+  }
 }

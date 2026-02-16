@@ -7,6 +7,7 @@ import type { PlannedTarget } from "../providers/types.js";
 import { normalizeOutputFormatAlias } from "../providers/types.js";
 
 const SIZE_PATTERN = /^(\d+)x(\d+)$/i;
+const DEFAULT_PALETTE_COMPLIANCE_MIN = 0.98;
 
 export interface ImageAcceptanceIssue {
   level: "error" | "warning";
@@ -14,6 +15,13 @@ export interface ImageAcceptanceIssue {
   targetId: string;
   imagePath: string;
   message: string;
+}
+
+export interface ImageAcceptanceMetrics {
+  seamScore?: number;
+  seamStripPx?: number;
+  paletteCompliance?: number;
+  distinctColors?: number;
 }
 
 export interface ImageAcceptanceItemReport {
@@ -27,6 +35,7 @@ export interface ImageAcceptanceItemReport {
   sizeBytes?: number;
   hasAlphaChannel?: boolean;
   hasTransparentPixels?: boolean;
+  metrics?: ImageAcceptanceMetrics;
   issues: ImageAcceptanceIssue[];
 }
 
@@ -49,6 +58,8 @@ interface InspectedImage {
   sizeBytes: number;
   hasAlphaChannel: boolean;
   hasTransparentPixels: boolean;
+  raw: Buffer;
+  channels: number;
 }
 
 function parseSize(size: string | undefined): { width: number; height: number } | undefined {
@@ -85,13 +96,11 @@ async function inspectImage(imagePath: string): Promise<InspectedImage> {
 
   const format = metadata.format ?? "unknown";
   const hasAlphaChannel = metadata.hasAlpha === true;
-  let hasTransparentPixels = false;
 
-  if (hasAlphaChannel) {
-    const stats = await image.stats();
-    const alphaChannel = stats.channels[stats.channels.length - 1];
-    hasTransparentPixels = alphaChannel.min < 255;
-  }
+  const rawResult = await image.ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+  const channels = rawResult.info.channels;
+  const raw = rawResult.data;
+  const hasTransparentPixels = channels >= 4 ? hasAnyTransparentPixels(raw, channels) : false;
 
   const fileStat = await stat(imagePath);
   return {
@@ -101,7 +110,23 @@ async function inspectImage(imagePath: string): Promise<InspectedImage> {
     sizeBytes: fileStat.size,
     hasAlphaChannel,
     hasTransparentPixels,
+    raw,
+    channels,
   };
+}
+
+function hasAnyTransparentPixels(raw: Buffer, channels: number): boolean {
+  if (channels < 4) {
+    return false;
+  }
+
+  for (let index = 3; index < raw.length; index += channels) {
+    if (raw[index] < 255) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 function targetRequiresAlpha(target: PlannedTarget): boolean {
@@ -115,6 +140,112 @@ function outputFormatSupportsAlpha(format: string): boolean {
   return format === "png" || format === "webp";
 }
 
+function computeSeamScore(
+  inspected: InspectedImage,
+  stripPx: number,
+): number {
+  const channels = inspected.channels;
+  const width = inspected.width;
+  const height = inspected.height;
+  const strip = Math.max(1, Math.min(stripPx, Math.floor(Math.min(width, height) / 2)));
+
+  const mad = (a: number, b: number): number => Math.abs(a - b);
+  let total = 0;
+  let count = 0;
+
+  // Left vs right strips.
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < strip; x += 1) {
+      const leftIndex = (y * width + x) * channels;
+      const rightIndex = (y * width + (width - strip + x)) * channels;
+      total += mad(inspected.raw[leftIndex], inspected.raw[rightIndex]);
+      total += mad(inspected.raw[leftIndex + 1], inspected.raw[rightIndex + 1]);
+      total += mad(inspected.raw[leftIndex + 2], inspected.raw[rightIndex + 2]);
+      count += 3;
+    }
+  }
+
+  // Top vs bottom strips.
+  for (let y = 0; y < strip; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const topIndex = (y * width + x) * channels;
+      const bottomIndex = ((height - strip + y) * width + x) * channels;
+      total += mad(inspected.raw[topIndex], inspected.raw[bottomIndex]);
+      total += mad(inspected.raw[topIndex + 1], inspected.raw[bottomIndex + 1]);
+      total += mad(inspected.raw[topIndex + 2], inspected.raw[bottomIndex + 2]);
+      count += 3;
+    }
+  }
+
+  if (count === 0) {
+    return 0;
+  }
+
+  return total / count;
+}
+
+function collectDistinctColors(inspected: InspectedImage): Set<number> {
+  const colors = new Set<number>();
+
+  for (let i = 0; i < inspected.raw.length; i += inspected.channels) {
+    const alpha = inspected.channels >= 4 ? inspected.raw[i + 3] : 255;
+    if (alpha === 0) {
+      continue;
+    }
+    const packed =
+      (inspected.raw[i] << 16) | (inspected.raw[i + 1] << 8) | inspected.raw[i + 2];
+    colors.add(packed >>> 0);
+  }
+
+  return colors;
+}
+
+function hexToPackedColor(input: string): number {
+  const normalized = input.trim().replace(/^#/, "");
+  const value = Number.parseInt(normalized, 16);
+  if (!Number.isFinite(value)) {
+    return 0;
+  }
+  return value >>> 0;
+}
+
+function computeExactPaletteCompliance(
+  inspected: InspectedImage,
+  allowedColors: Set<number>,
+): { compliance: number; distinctColors: number } {
+  if (allowedColors.size === 0) {
+    return { compliance: 0, distinctColors: 0 };
+  }
+
+  let matches = 0;
+  let counted = 0;
+  const distinctColors = new Set<number>();
+
+  for (let i = 0; i < inspected.raw.length; i += inspected.channels) {
+    const alpha = inspected.channels >= 4 ? inspected.raw[i + 3] : 255;
+    if (alpha === 0) {
+      continue;
+    }
+
+    const packed =
+      (inspected.raw[i] << 16) | (inspected.raw[i + 1] << 8) | inspected.raw[i + 2];
+    distinctColors.add(packed >>> 0);
+    counted += 1;
+    if (allowedColors.has(packed >>> 0)) {
+      matches += 1;
+    }
+  }
+
+  if (counted === 0) {
+    return { compliance: 1, distinctColors: 0 };
+  }
+
+  return {
+    compliance: matches / counted,
+    distinctColors: distinctColors.size,
+  };
+}
+
 export async function evaluateImageAcceptance(
   target: PlannedTarget,
   imagesDir: string,
@@ -126,6 +257,7 @@ export async function evaluateImageAcceptance(
     imagePath,
     exists: false,
     issues: [],
+    metrics: {},
   };
 
   let inspected: InspectedImage;
@@ -141,7 +273,7 @@ export async function evaluateImageAcceptance(
       message:
         error instanceof Error
           ? error.message
-          : `Missing or unreadable image for target \"${target.id}\".`,
+          : `Missing or unreadable image for target "${target.id}".`,
     });
     return report;
   }
@@ -214,6 +346,65 @@ export async function evaluateImageAcceptance(
     }
   }
 
+  if (target.tileable || typeof target.seamThreshold === "number") {
+    const seamStripPx = target.seamStripPx ?? 4;
+    const seamScore = computeSeamScore(inspected, seamStripPx);
+    report.metrics = {
+      ...report.metrics,
+      seamScore,
+      seamStripPx,
+    };
+
+    const threshold = target.seamThreshold ?? 12;
+    if (seamScore > threshold) {
+      report.issues.push({
+        level: "error",
+        code: "tile_seam_exceeded",
+        targetId: target.id,
+        imagePath,
+        message: `Seam score ${seamScore.toFixed(2)} exceeds threshold ${threshold.toFixed(2)}.`,
+      });
+    }
+  }
+
+  if (target.palette?.mode === "max-colors") {
+    const colors = collectDistinctColors(inspected);
+    report.metrics = {
+      ...report.metrics,
+      distinctColors: colors.size,
+    };
+    const maxColors = target.palette.maxColors ?? 256;
+    if (colors.size > maxColors) {
+      report.issues.push({
+        level: "error",
+        code: "palette_max_colors_exceeded",
+        targetId: target.id,
+        imagePath,
+        message: `Distinct colors ${colors.size} exceeds max ${maxColors}.`,
+      });
+    }
+  }
+
+  if (target.palette?.mode === "exact") {
+    const allowed = new Set((target.palette.colors ?? []).map((color) => hexToPackedColor(color)));
+    const compliance = computeExactPaletteCompliance(inspected, allowed);
+    report.metrics = {
+      ...report.metrics,
+      paletteCompliance: compliance.compliance,
+      distinctColors: compliance.distinctColors,
+    };
+
+    if (compliance.compliance < DEFAULT_PALETTE_COMPLIANCE_MIN) {
+      report.issues.push({
+        level: "error",
+        code: "palette_compliance_too_low",
+        targetId: target.id,
+        imagePath,
+        message: `Palette compliance ${(compliance.compliance * 100).toFixed(1)}% is below required ${(DEFAULT_PALETTE_COMPLIANCE_MIN * 100).toFixed(0)}%.`,
+      });
+    }
+  }
+
   return report;
 }
 
@@ -224,7 +415,9 @@ export async function runImageAcceptanceChecks(params: {
 }): Promise<ImageAcceptanceReport> {
   const strict = params.strict ?? true;
   const items = await Promise.all(
-    params.targets.map((target) => evaluateImageAcceptance(target, params.imagesDir)),
+    params.targets
+      .filter((target) => !target.catalogDisabled)
+      .map((target) => evaluateImageAcceptance(target, params.imagesDir)),
   );
 
   const errors = items.reduce(

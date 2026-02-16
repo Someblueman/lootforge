@@ -11,6 +11,7 @@ interface PlannedTarget {
   id: string;
   kind: string;
   out: string;
+  catalogDisabled?: boolean;
   atlasGroup?: string | null;
   acceptance?: {
     alpha?: boolean;
@@ -108,6 +109,27 @@ function buildSingleFrameAtlasData(
   };
 }
 
+function animationMetadataPathForOut(out: string): string {
+  const ext = path.extname(out);
+  const base = out.slice(0, out.length - ext.length);
+  return `${base}.anim.json`;
+}
+
+function buildAtlasDataFromSheetMetadata(params: {
+  imageName: string;
+  metadataFrames: Record<string, unknown>;
+}): Record<string, unknown> {
+  return {
+    frames: params.metadataFrames,
+    meta: {
+      app: "lootforge",
+      format: "RGBA8888",
+      image: params.imageName,
+      scale: "1",
+    },
+  };
+}
+
 async function fileExists(filePath: string): Promise<boolean> {
   try {
     await access(filePath);
@@ -190,11 +212,13 @@ export async function runAtlasPipeline(
   const targets = Array.isArray(index.targets) ? index.targets : [];
   const atlasConfig = await readManifestAtlasOptions(manifestPath);
 
-  const manifestItems: AtlasManifestItem[] = targets.map((target) => {
-    const expectedSize = parseSize(target.acceptance?.size);
-    return {
-      id: target.id,
-      kind: target.kind || "asset",
+  const manifestItems: AtlasManifestItem[] = targets
+    .filter((target) => !target.catalogDisabled)
+    .map((target) => {
+      const expectedSize = parseSize(target.acceptance?.size);
+      return {
+        id: target.id,
+        kind: target.kind || "asset",
       // Runtime compatibility mirror remains /assets/images in this release.
       url: `/assets/images/${target.out}`,
       atlasGroup: target.atlasGroup ?? null,
@@ -202,11 +226,12 @@ export async function runAtlasPipeline(
         target.runtimeSpec?.alphaRequired ?? target.acceptance?.alpha === true,
       previewWidth: target.runtimeSpec?.previewWidth ?? expectedSize.width,
       previewHeight: target.runtimeSpec?.previewHeight ?? expectedSize.height,
-    };
-  });
+      };
+    });
 
   const groups = new Map<string, PlannedTarget[]>();
   for (const target of targets) {
+    if (target.catalogDisabled) continue;
     if (!target.atlasGroup) continue;
     const list = groups.get(target.atlasGroup) ?? [];
     list.push(target);
@@ -308,17 +333,32 @@ export async function runAtlasPipeline(
         const imagePath = path.join(imagesDir, target.out);
         if (!(await fileExists(imagePath))) continue;
 
-        const measured = await detectImageSize(imagePath);
-        const frameWidth = measured.width;
-        const frameHeight = measured.height;
         const bundleId = sanitizeBundleId(target.id);
         const atlasJsonPath = path.join(atlasDir, `${bundleId}.json`);
-        const atlasData = buildSingleFrameAtlasData(
-          target.id,
-          target.out,
-          frameWidth,
-          frameHeight,
-        );
+        let atlasData: Record<string, unknown>;
+        let bundleTargets = [target.id];
+
+        const sheetMetaPath = path.join(imagesDir, animationMetadataPathForOut(target.out));
+        if (target.kind === "spritesheet" && (await fileExists(sheetMetaPath))) {
+          const raw = await readFile(sheetMetaPath, "utf8");
+          const parsed = JSON.parse(raw) as {
+            frames?: Record<string, unknown>;
+          };
+          const metadataFrames = parsed.frames ?? {};
+          atlasData = buildAtlasDataFromSheetMetadata({
+            imageName: target.out,
+            metadataFrames,
+          });
+          bundleTargets = [target.id, ...Object.keys(metadataFrames)];
+        } else {
+          const measured = await detectImageSize(imagePath);
+          atlasData = buildSingleFrameAtlasData(
+            target.id,
+            target.out,
+            measured.width,
+            measured.height,
+          );
+        }
 
         await writeFile(atlasJsonPath, `${JSON.stringify(atlasData, null, 2)}\n`, "utf8");
 
@@ -326,7 +366,7 @@ export async function runAtlasPipeline(
           id: bundleId,
           imageUrl: `/assets/images/${target.out}`,
           jsonUrl: `/assets/atlases/${bundleId}.json`,
-          targets: [target.id],
+          targets: bundleTargets,
         });
       }
     }

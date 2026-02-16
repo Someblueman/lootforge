@@ -19,6 +19,8 @@ export const PromptSpecSchema = z.object({
   negative: nonEmptyString.optional(),
 });
 
+export const ManifestGenerationModeSchema = z.enum(["text", "edit-first"]);
+
 export const ManifestGenerationPolicySchema = z.object({
   size: nonEmptyString.optional(),
   background: nonEmptyString.optional(),
@@ -43,6 +45,8 @@ export const ManifestRuntimeSpecSchema = z.object({
   alphaRequired: z.boolean().optional(),
   previewWidth: z.number().int().positive().optional(),
   previewHeight: z.number().int().positive().optional(),
+  anchorX: z.number().min(0).max(1).optional(),
+  anchorY: z.number().min(0).max(1).optional(),
 });
 
 export const ManifestPostProcessOperationTrimSchema = z.object({
@@ -107,12 +111,59 @@ export const ManifestAuxiliaryMapsSchema = z.object({
   aoFromLuma: z.boolean().optional(),
 });
 
+export const ManifestPalettePolicySchema = z
+  .object({
+    mode: z.enum(["exact", "max-colors"]),
+    colors: z.array(nonEmptyString).optional(),
+    maxColors: z.number().int().min(2).max(256).optional(),
+    dither: z.number().min(0).max(1).optional(),
+  })
+  .superRefine((palette, ctx) => {
+    if (palette.mode === "exact" && (!palette.colors || palette.colors.length === 0)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["colors"],
+        message: "Exact palette mode requires at least one color.",
+      });
+    }
+
+    if (palette.mode === "max-colors" && typeof palette.maxColors !== "number") {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["maxColors"],
+        message: "max-colors mode requires maxColors.",
+      });
+    }
+  });
+
+const animationPivotSchema = z.object({
+  x: z.number().min(0).max(1),
+  y: z.number().min(0).max(1),
+});
+
+export const ManifestSpriteAnimationSchema = z.object({
+  count: z.number().int().min(1).max(64),
+  prompt: z.union([nonEmptyString, PromptSpecSchema]),
+  fps: z.number().min(1).max(60).optional(),
+  loop: z.boolean().optional(),
+  pivot: animationPivotSchema.optional(),
+});
+
 export const ManifestTargetSchema = z
   .object({
     id: nonEmptyString,
     kind: nonEmptyString,
     out: nonEmptyString,
     atlasGroup: nonEmptyString.optional(),
+    styleKitId: nonEmptyString,
+    consistencyGroup: nonEmptyString,
+    evaluationProfileId: nonEmptyString,
+    generationMode: ManifestGenerationModeSchema.optional(),
+    scoringProfile: nonEmptyString.optional(),
+    tileable: z.boolean().optional(),
+    seamThreshold: z.number().min(0).max(255).optional(),
+    seamStripPx: z.number().int().min(1).max(64).optional(),
+    palette: ManifestPalettePolicySchema.optional(),
     prompt: z.union([nonEmptyString, PromptSpecSchema]).optional(),
     promptSpec: PromptSpecSchema.optional(),
     generationPolicy: ManifestGenerationPolicySchema.optional(),
@@ -123,13 +174,25 @@ export const ManifestTargetSchema = z
     model: nonEmptyString.optional(),
     edit: ManifestEditSchema.optional(),
     auxiliaryMaps: ManifestAuxiliaryMapsSchema.optional(),
+    animations: z.record(ManifestSpriteAnimationSchema).optional(),
   })
   .superRefine((target, ctx) => {
+    if (target.kind === "spritesheet") {
+      if (!target.animations || Object.keys(target.animations).length === 0) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["animations"],
+          message: "spritesheet targets require at least one animation.",
+        });
+      }
+      return;
+    }
+
     if (target.prompt === undefined && target.promptSpec === undefined) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["prompt"],
-        message: "Each target requires `prompt` or `promptSpec`.",
+        message: "Each non-spritesheet target requires `prompt` or `promptSpec`.",
       });
     }
   });
@@ -161,6 +224,38 @@ export const ManifestProvidersSchema = z.object({
     .optional(),
 });
 
+export const ManifestStyleKitSchema = z.object({
+  id: nonEmptyString,
+  rulesPath: nonEmptyString,
+  palettePath: nonEmptyString.optional(),
+  referenceImages: z.array(nonEmptyString).default([]),
+  lightingModel: nonEmptyString,
+  negativeRulesPath: nonEmptyString.optional(),
+});
+
+export const ManifestEvaluationProfileSchema = z.object({
+  id: nonEmptyString,
+  hardGates: z
+    .object({
+      requireAlpha: z.boolean().optional(),
+      maxFileSizeKB: z.number().int().positive().optional(),
+      seamThreshold: z.number().min(0).max(255).optional(),
+      seamStripPx: z.number().int().min(1).max(64).optional(),
+      paletteComplianceMin: z.number().min(0).max(1).optional(),
+    })
+    .optional(),
+  scoreWeights: z
+    .object({
+      readability: z.number().optional(),
+      fileSize: z.number().optional(),
+      consistency: z.number().optional(),
+      clip: z.number().optional(),
+      lpips: z.number().optional(),
+      ssim: z.number().optional(),
+    })
+    .optional(),
+});
+
 export const ManifestAtlasGroupSchema = z.object({
   padding: z.number().int().min(0).optional(),
   trim: z.boolean().optional(),
@@ -175,18 +270,11 @@ export const ManifestAtlasSchema = ManifestAtlasGroupSchema.extend({
 });
 
 export const ManifestV2Schema = z.object({
-  version: z
-    .union([
-      z.literal(2),
-      z.literal("2"),
-      z.literal("2.0"),
-      z.literal("2.0.0"),
-      z.literal("v2"),
-    ])
-    .optional(),
+  version: z.literal("next"),
   pack: ManifestPackSchema,
   providers: ManifestProvidersSchema,
-  styleGuide: z.record(z.unknown()).optional(),
+  styleKits: z.array(ManifestStyleKitSchema).min(1),
+  evaluationProfiles: z.array(ManifestEvaluationProfileSchema).min(1),
   atlas: ManifestAtlasSchema.optional(),
   targets: z.array(ManifestTargetSchema).min(1),
 });

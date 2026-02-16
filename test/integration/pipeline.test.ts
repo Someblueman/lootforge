@@ -101,6 +101,7 @@ describe("pipeline package integration", () => {
       outDir,
       manifestPath,
       targetsIndexPath: indexPath,
+      strict: false,
     });
 
     const requiredFiles = [

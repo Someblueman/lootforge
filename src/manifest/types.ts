@@ -1,6 +1,8 @@
 import type {
   AuxiliaryMapPolicy,
+  GenerationMode,
   GenerationPolicy,
+  PalettePolicy,
   PlannedTarget,
   PlannedTargetsIndex,
   PostProcessPolicy,
@@ -8,6 +10,8 @@ import type {
   ProviderName,
   TargetEditSpec,
 } from "../providers/types.js";
+
+export type ManifestVersion = "next";
 
 export interface ManifestPack {
   id: string;
@@ -36,6 +40,34 @@ export interface ManifestProviders {
   local?: ManifestLocalProviderConfig;
 }
 
+export interface ManifestStyleKit {
+  id: string;
+  rulesPath: string;
+  palettePath?: string;
+  referenceImages: string[];
+  lightingModel: string;
+  negativeRulesPath?: string;
+}
+
+export interface ManifestEvaluationProfile {
+  id: string;
+  hardGates?: {
+    requireAlpha?: boolean;
+    maxFileSizeKB?: number;
+    seamThreshold?: number;
+    seamStripPx?: number;
+    paletteComplianceMin?: number;
+  };
+  scoreWeights?: {
+    readability?: number;
+    fileSize?: number;
+    consistency?: number;
+    clip?: number;
+    lpips?: number;
+    ssim?: number;
+  };
+}
+
 export interface ManifestAcceptance {
   size?: string;
   alpha?: boolean;
@@ -46,6 +78,8 @@ export interface ManifestRuntimeSpec {
   alphaRequired?: boolean;
   previewWidth?: number;
   previewHeight?: number;
+  anchorX?: number;
+  anchorY?: number;
 }
 
 export interface ManifestGenerationPolicy extends GenerationPolicy {
@@ -101,11 +135,31 @@ export interface ManifestAtlasOptions extends ManifestAtlasGroupOptions {
 
 export type ManifestPrompt = string | PromptSpec;
 
+export interface ManifestSpriteAnimation {
+  count: number;
+  prompt: ManifestPrompt;
+  fps?: number;
+  loop?: boolean;
+  pivot?: {
+    x: number;
+    y: number;
+  };
+}
+
 export interface ManifestTarget {
   id: string;
   kind: string;
   out: string;
   atlasGroup?: string;
+  styleKitId: string;
+  consistencyGroup: string;
+  evaluationProfileId: string;
+  generationMode?: GenerationMode;
+  scoringProfile?: string;
+  tileable?: boolean;
+  seamThreshold?: number;
+  seamStripPx?: number;
+  palette?: PalettePolicy;
   prompt?: ManifestPrompt;
   promptSpec?: PromptSpec;
   generationPolicy?: ManifestGenerationPolicy;
@@ -116,13 +170,15 @@ export interface ManifestTarget {
   model?: string;
   edit?: TargetEditSpec;
   auxiliaryMaps?: AuxiliaryMapPolicy;
+  animations?: Record<string, ManifestSpriteAnimation>;
 }
 
 export interface ManifestV2 {
-  version?: string | number;
+  version: ManifestVersion;
   pack: ManifestPack;
   providers: ManifestProviders;
-  styleGuide?: Record<string, unknown>;
+  styleKits: ManifestStyleKit[];
+  evaluationProfiles: ManifestEvaluationProfile[];
   atlas?: ManifestAtlasOptions;
   targets: ManifestTarget[];
 }
@@ -170,6 +226,9 @@ export interface PlannedProviderJobSpec {
   promptSpec: PromptSpec;
   generationPolicy: GenerationPolicy;
   postProcess?: PostProcessPolicy;
+  styleKitId?: string;
+  consistencyGroup?: string;
+  evaluationProfileId?: string;
 }
 
 export interface PlanArtifacts {

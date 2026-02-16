@@ -3,12 +3,14 @@ import process from "node:process";
 import { pathToFileURL } from "node:url";
 
 import { runAtlasCommand } from "./commands/atlas.js";
+import { runEvalCommand } from "./commands/eval.js";
 import { runGenerateCommand } from "./commands/generate.js";
 import { runInitCommand } from "./commands/init.js";
 import { runPackageCommand } from "./commands/package.js";
 import { runPlanCommand } from "./commands/plan.js";
 import { runProcessCommand } from "./commands/process.js";
-import { runPreviewCommand } from "./commands/preview.js";
+import { runReviewCommand } from "./commands/review.js";
+import { runSelectCommand } from "./commands/select.js";
 import { runValidateCommand } from "./commands/validate.js";
 import { getErrorExitCode, getErrorMessage } from "../shared/errors.js";
 
@@ -61,6 +63,30 @@ export async function main(argv: string[]): Promise<number> {
       return 0;
     }
 
+    if (command === "eval") {
+      const result = await runEvalCommand(rest);
+      process.stdout.write(
+        `Evaluated ${result.targetCount} target(s), failed ${result.failed} -> ${result.reportPath}\n`,
+      );
+      return 0;
+    }
+
+    if (command === "review") {
+      const result = await runReviewCommand(rest);
+      process.stdout.write(
+        `Review HTML written for ${result.targetCount} target(s) -> ${result.reviewHtmlPath}\n`,
+      );
+      return 0;
+    }
+
+    if (command === "select") {
+      const result = await runSelectCommand(rest);
+      process.stdout.write(
+        `Selection lock written -> ${result.selectionLockPath} (${result.approvedTargets}/${result.totalTargets} approved)\n`,
+      );
+      return 0;
+    }
+
     if (command === "atlas") {
       const result = await runAtlasCommand(rest);
       process.stdout.write(
@@ -75,10 +101,6 @@ export async function main(argv: string[]): Promise<number> {
         `Packaged ${result.packId} -> ${result.packDir}\nArchive: ${result.zipPath}\n`,
       );
       return 0;
-    }
-
-    if (command === "preview") {
-      return runPreviewCommand(rest);
     }
 
     process.stderr.write(`lootforge: unknown command "${command}"\n`);
@@ -102,9 +124,11 @@ function writeUsage(stream: "stdout" | "stderr"): void {
       "  validate                     Validate manifest and write report",
       "  generate                     Execute generation pipeline from targets index",
       "  process                      Post-process raw assets into processed runtime outputs",
+      "  eval                         Run hard/soft quality evaluation over processed outputs",
+      "  review                       Build HTML review artifact from eval report",
+      "  select                       Build selection lockfile from eval + provenance",
       "  atlas                        Build atlas outputs and atlas manifest",
       "  package                      Assemble distributable asset-pack artifacts",
-      "  preview                      Launch starter app preview server",
       "",
       "Options:",
       "  --manifest <path>            Manifest path (default assets/imagegen/manifest.json)",
@@ -114,6 +138,13 @@ function writeUsage(stream: "stdout" | "stderr"): void {
       "  --check-images <true|false>  Validate processed image acceptance during validate",
       "  --provider <name>            Provider selection for generate (openai|nano|local|auto)",
       "  --ids <a,b,c>                Optional target id filter for generate",
+      "  --lock <path>                Selection lock file path (generate/select)",
+      "  --skip-locked <true|false>   Skip regeneration for approved locked targets",
+      "  --images-dir <path>          Processed images directory override for eval/validate",
+      "  --report <path>              Eval report output path override",
+      "  --eval <path>                Eval report path for review/select",
+      "  --provenance <path>          Provenance run path for select",
+      "  --html <path>                Review HTML output path override",
       "",
     ].join("\n"),
   );

@@ -30,10 +30,28 @@ interface TargetsIndex {
   targets?: PlannedTarget[];
 }
 
+interface EvalReport {
+  hardErrors?: number;
+  targets?: Array<{
+    targetId: string;
+    passedHardGates: boolean;
+  }>;
+}
+
+interface SelectionLockFile {
+  targets?: Array<{
+    targetId: string;
+    approved: boolean;
+    inputHash: string;
+    selectedOutputPath: string;
+  }>;
+}
+
 export interface PackagePipelineOptions {
   outDir: string;
   manifestPath: string;
   targetsIndexPath?: string;
+  strict?: boolean;
 }
 
 export interface PackagePipelineResult {
@@ -91,6 +109,7 @@ export async function runPackagePipeline(
   const targetsIndexPath = path.resolve(
     options.targetsIndexPath ?? path.join(layout.jobsDir, "targets-index.json"),
   );
+  const strict = options.strict ?? true;
 
   const manifestRaw = await readFile(manifestPath, "utf8");
   const manifest = parseJson<ManifestV2>(manifestRaw, manifestPath);
@@ -154,6 +173,54 @@ export async function runPackagePipeline(
   const acceptanceReportPath = path.join(layout.checksDir, "image-acceptance-report.json");
   await writeJsonFile(acceptanceReportPath, acceptanceReport);
 
+  const evalReportPath = path.join(layout.checksDir, "eval-report.json");
+  const selectionLockPath = path.join(layout.outDir, "locks", "selection-lock.json");
+  if (strict) {
+    if (!(await exists(evalReportPath))) {
+      throw new Error(
+        `Strict packaging requires ${evalReportPath}. Run \"lootforge eval\" first.`,
+      );
+    }
+    if (!(await exists(selectionLockPath))) {
+      throw new Error(
+        `Strict packaging requires ${selectionLockPath}. Run \"lootforge select\" first.`,
+      );
+    }
+  }
+
+  const evalReport = (await exists(evalReportPath))
+    ? parseJson<EvalReport>(await readFile(evalReportPath, "utf8"), evalReportPath)
+    : undefined;
+  const selectionLock = (await exists(selectionLockPath))
+    ? parseJson<SelectionLockFile>(
+        await readFile(selectionLockPath, "utf8"),
+        selectionLockPath,
+      )
+    : undefined;
+
+  if (strict && evalReport && (evalReport.hardErrors ?? 0) > 0) {
+    throw new Error(
+      `Strict packaging blocked: eval report has ${evalReport.hardErrors ?? 0} hard errors.`,
+    );
+  }
+  if (strict && selectionLock) {
+    const approvedIds = new Set(
+      (selectionLock.targets ?? [])
+        .filter((target) => target.approved)
+        .map((target) => target.targetId),
+    );
+    const missingApprovals = catalog.items
+      .map((item) => item.id)
+      .filter((id) => !approvedIds.has(id));
+    if (missingApprovals.length > 0) {
+      throw new Error(
+        `Strict packaging blocked: missing approved lock entries for ${missingApprovals
+          .slice(0, 8)
+          .join(", ")}${missingApprovals.length > 8 ? "..." : ""}`,
+      );
+    }
+  }
+
   const assetPackManifest = buildAssetPackManifest({
     pack: {
       id: manifest.pack?.id ?? packId,
@@ -211,6 +278,22 @@ export async function runPackagePipeline(
     path.join(packChecksDir, "image-acceptance-report.json"),
     { force: true },
   );
+  if (await exists(evalReportPath)) {
+    await cp(evalReportPath, path.join(packChecksDir, "eval-report.json"), {
+      force: true,
+    });
+  }
+  if (await exists(selectionLockPath)) {
+    await cp(selectionLockPath, path.join(packProvenanceDir, "selection-lock.json"), {
+      force: true,
+    });
+  }
+  const reviewHtmlSrc = path.join(layout.outDir, "review", "review.html");
+  if (await exists(reviewHtmlSrc)) {
+    await cp(reviewHtmlSrc, path.join(packReviewDir, "review.html"), {
+      force: true,
+    });
+  }
 
   const provenanceSrc = path.join(layout.provenanceDir, "run.json");
   if (await exists(provenanceSrc)) {

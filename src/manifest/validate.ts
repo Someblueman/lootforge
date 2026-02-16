@@ -4,36 +4,38 @@ import { ZodIssue } from "zod";
 
 import {
   buildStructuredPrompt,
-  getProviderCapabilities,
-  getTargetGenerationPolicy,
-  nowIso,
   normalizeGenerationPolicyForProvider,
   normalizeOutputFormatAlias,
-  POST_PROCESS_ALGORITHMS,
-} from "../providers/types.js";
-import type {
-  PostProcessAlgorithm,
-  PostProcessPolicy,
+  nowIso,
+  parseProviderSelection,
   PlannedTarget,
+  PostProcessPolicy,
+  POST_PROCESS_ALGORITHMS,
   PromptSpec,
   ProviderName,
+} from "../providers/types.js";
+import type {
+  NormalizedGenerationPolicy,
+  PalettePolicy,
   ResizeVariant,
 } from "../providers/types.js";
 import { safeParseManifestV2 } from "./schema.js";
 import type {
-  ManifestAtlasGroupOptions,
+  ManifestEvaluationProfile,
   ManifestPostProcess,
+  ManifestSource,
   ManifestTarget,
   ManifestV2,
   ManifestValidationResult,
   PlanArtifacts,
   PlannedProviderJobSpec,
   ValidationIssue,
-  ManifestSource,
 } from "./types.js";
 
-const SIZE_PATTERN = /^\d+x\d+$/i;
+const SIZE_PATTERN = /^(\d+)x(\d+)$/i;
+const HEX_COLOR_PATTERN = /^#?[0-9a-fA-F]{6}$/;
 const SUPPORTED_POST_PROCESS_ALGORITHMS = new Set(POST_PROCESS_ALGORITHMS);
+const DEFAULT_STYLE_USE_CASE = "game-asset";
 
 export interface ValidateManifestOptions {
   now?: () => Date;
@@ -73,10 +75,53 @@ export function validateManifestSource(
 
 export function normalizeManifestTargets(manifest: ManifestV2): PlannedTarget[] {
   const defaultProvider = manifest.providers?.default ?? "openai";
-
-  return manifest.targets.map((target) =>
-    normalizeTargetForGeneration(manifest, target, defaultProvider),
+  const styleKitById = new Map(manifest.styleKits.map((kit) => [kit.id, kit]));
+  const evaluationById = new Map(
+    manifest.evaluationProfiles.map((profile) => [profile.id, profile]),
   );
+
+  const targets: PlannedTarget[] = [];
+
+  for (const target of manifest.targets) {
+    const styleKit = styleKitById.get(target.styleKitId);
+    const evalProfile = evaluationById.get(target.evaluationProfileId);
+
+    if (!styleKit) {
+      throw new Error(
+        `Target "${target.id}" references missing styleKitId "${target.styleKitId}".`,
+      );
+    }
+
+    if (!evalProfile) {
+      throw new Error(
+        `Target "${target.id}" references missing evaluationProfileId "${target.evaluationProfileId}".`,
+      );
+    }
+
+    if (target.kind === "spritesheet") {
+      const expanded = expandSpritesheetTarget({
+        manifest,
+        target,
+        defaultProvider,
+        styleKit,
+        evalProfile,
+      });
+      targets.push(...expanded);
+      continue;
+    }
+
+    targets.push(
+      normalizeTargetForGeneration({
+        manifest,
+        target,
+        defaultProvider,
+        styleKit,
+        evalProfile,
+      }),
+    );
+  }
+
+  return targets;
 }
 
 export function createPlanArtifacts(
@@ -90,6 +135,10 @@ export function createPlanArtifacts(
   const localJobs: PlannedProviderJobSpec[] = [];
 
   for (const target of targets) {
+    if (target.generationDisabled) {
+      continue;
+    }
+
     const provider = target.provider ?? "openai";
     const row = toProviderJobSpec(target, provider);
     if (provider === "openai") {
@@ -116,25 +165,52 @@ export function createPlanArtifacts(
 
 function collectSemanticIssues(manifest: ManifestV2): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
-  const seenIds = new Set<string>();
+  const seenTargetIds = new Set<string>();
   const seenOutPaths = new Set<string>();
-  const defaultProvider = manifest.providers?.default ?? "openai";
 
-  validateAtlasOptions(manifest.atlas, issues);
+  const styleKitIds = new Set<string>();
+  manifest.styleKits.forEach((kit, index) => {
+    if (styleKitIds.has(kit.id)) {
+      issues.push({
+        level: "error",
+        code: "duplicate_style_kit_id",
+        path: `styleKits[${index}].id`,
+        message: `Duplicate style kit id "${kit.id}".`,
+      });
+    } else {
+      styleKitIds.add(kit.id);
+    }
+  });
+
+  const evaluationProfileIds = new Set<string>();
+  manifest.evaluationProfiles.forEach((profile, index) => {
+    if (evaluationProfileIds.has(profile.id)) {
+      issues.push({
+        level: "error",
+        code: "duplicate_evaluation_profile_id",
+        path: `evaluationProfiles[${index}].id`,
+        message: `Duplicate evaluation profile id "${profile.id}".`,
+      });
+    } else {
+      evaluationProfileIds.add(profile.id);
+    }
+  });
+
+  const defaultProvider = manifest.providers?.default ?? "openai";
 
   manifest.targets.forEach((target, index) => {
     const id = target.id.trim();
     const out = target.out.trim();
 
-    if (seenIds.has(id)) {
+    if (seenTargetIds.has(id)) {
       issues.push({
         level: "error",
         code: "duplicate_target_id",
         path: `targets[${index}].id`,
-        message: `Duplicate target id \"${id}\".`,
+        message: `Duplicate target id "${id}".`,
       });
     } else {
-      seenIds.add(id);
+      seenTargetIds.add(id);
     }
 
     if (seenOutPaths.has(out)) {
@@ -142,10 +218,28 @@ function collectSemanticIssues(manifest: ManifestV2): ValidationIssue[] {
         level: "error",
         code: "duplicate_target_out",
         path: `targets[${index}].out`,
-        message: `Duplicate output path \"${out}\".`,
+        message: `Duplicate output path "${out}".`,
       });
     } else {
       seenOutPaths.add(out);
+    }
+
+    if (!styleKitIds.has(target.styleKitId)) {
+      issues.push({
+        level: "error",
+        code: "missing_style_kit",
+        path: `targets[${index}].styleKitId`,
+        message: `Unknown style kit "${target.styleKitId}".`,
+      });
+    }
+
+    if (!evaluationProfileIds.has(target.evaluationProfileId)) {
+      issues.push({
+        level: "error",
+        code: "missing_evaluation_profile",
+        path: `targets[${index}].evaluationProfileId`,
+        message: `Unknown evaluation profile "${target.evaluationProfileId}".`,
+      });
     }
 
     const policySize = target.generationPolicy?.size ?? target.acceptance?.size;
@@ -154,39 +248,99 @@ function collectSemanticIssues(manifest: ManifestV2): ValidationIssue[] {
         level: "error",
         code: "invalid_size",
         path: `targets[${index}].generationPolicy.size`,
-        message: `Size \"${policySize}\" must match WIDTHxHEIGHT.`,
+        message: `Size "${policySize}" must match WIDTHxHEIGHT.`,
       });
     }
 
-    if (typeof target.postProcess?.resizeTo === "string") {
-      if (!SIZE_PATTERN.test(target.postProcess.resizeTo)) {
-        issues.push({
-          level: "error",
-          code: "invalid_postprocess_resize",
-          path: `targets[${index}].postProcess.resizeTo`,
-          message: `postProcess.resizeTo \"${target.postProcess.resizeTo}\" must match WIDTHxHEIGHT.`,
-        });
-      }
+    if (typeof target.postProcess?.resizeTo === "string" && !SIZE_PATTERN.test(target.postProcess.resizeTo)) {
+      issues.push({
+        level: "error",
+        code: "invalid_postprocess_resize",
+        path: `targets[${index}].postProcess.resizeTo`,
+        message: `postProcess.resizeTo "${target.postProcess.resizeTo}" must match WIDTHxHEIGHT.`,
+      });
     }
 
-    for (const [variantIndex, variant] of (target.postProcess?.operations?.resizeVariants ?? []).entries()) {
+    for (const [variantIndex, variant] of (
+      target.postProcess?.operations?.resizeVariants ?? []
+    ).entries()) {
       if (!SIZE_PATTERN.test(variant.size)) {
         issues.push({
           level: "error",
           code: "invalid_resize_variant_size",
           path: `targets[${index}].postProcess.operations.resizeVariants[${variantIndex}].size`,
-          message: `resize variant size \"${variant.size}\" must match WIDTHxHEIGHT.`,
+          message: `resize variant size "${variant.size}" must match WIDTHxHEIGHT.`,
         });
       }
     }
 
     const algorithm = target.postProcess?.algorithm?.trim().toLowerCase();
-    if (algorithm && !SUPPORTED_POST_PROCESS_ALGORITHMS.has(algorithm as PostProcessAlgorithm)) {
+    if (algorithm && !SUPPORTED_POST_PROCESS_ALGORITHMS.has(algorithm as "nearest" | "lanczos3")) {
       issues.push({
         level: "warning",
         code: "unusual_postprocess_algorithm",
         path: `targets[${index}].postProcess.algorithm`,
-        message: `postProcess.algorithm \"${target.postProcess?.algorithm}\" is not officially supported. Use nearest or lanczos3.`,
+        message: `postProcess.algorithm "${target.postProcess?.algorithm}" is not officially supported. Use nearest or lanczos3.`,
+      });
+    }
+
+    if (target.palette?.mode === "exact") {
+      for (const [colorIndex, color] of (target.palette.colors ?? []).entries()) {
+        if (!HEX_COLOR_PATTERN.test(color.trim())) {
+          issues.push({
+            level: "error",
+            code: "invalid_palette_color",
+            path: `targets[${index}].palette.colors[${colorIndex}]`,
+            message: `Palette color "${color}" must be a 6-digit hex string.`,
+          });
+        }
+      }
+    }
+
+    if (target.tileable && typeof target.seamThreshold !== "number") {
+      issues.push({
+        level: "warning",
+        code: "tile_without_seam_threshold",
+        path: `targets[${index}].seamThreshold`,
+        message: "Tileable targets should define seamThreshold for deterministic acceptance.",
+      });
+    }
+
+    if (target.generationMode === "edit-first" && (!target.edit || !target.edit.inputs?.length)) {
+      issues.push({
+        level: "warning",
+        code: "edit_mode_without_inputs",
+        path: `targets[${index}].edit`,
+        message: "generationMode=edit-first should include edit inputs for reliable consistency.",
+      });
+    }
+
+    if (target.kind === "spritesheet") {
+      const animationEntries = Object.entries(target.animations ?? {});
+      if (animationEntries.length === 0) {
+        issues.push({
+          level: "error",
+          code: "spritesheet_missing_animations",
+          path: `targets[${index}].animations`,
+          message: "spritesheet targets require animations.",
+        });
+      }
+      for (const [animationName, animation] of animationEntries) {
+        if (!animation.prompt) {
+          issues.push({
+            level: "error",
+            code: "spritesheet_animation_missing_prompt",
+            path: `targets[${index}].animations.${animationName}.prompt`,
+            message: "Each spritesheet animation requires a prompt.",
+          });
+        }
+      }
+    } else if (target.prompt === undefined && target.promptSpec === undefined) {
+      issues.push({
+        level: "error",
+        code: "missing_prompt",
+        path: `targets[${index}].prompt`,
+        message: "Each non-spritesheet target requires prompt or promptSpec.",
       });
     }
 
@@ -195,7 +349,6 @@ function collectSemanticIssues(manifest: ManifestV2): ValidationIssue[] {
       provider,
       toNormalizedGenerationPolicy(target),
     );
-
     for (const issue of normalized.issues) {
       issues.push({
         level: issue.level,
@@ -205,21 +358,10 @@ function collectSemanticIssues(manifest: ManifestV2): ValidationIssue[] {
       });
     }
 
-    const alphaRequired =
-      target.runtimeSpec?.alphaRequired === true || target.acceptance?.alpha === true;
-    const capabilities = getProviderCapabilities(provider);
-    if (alphaRequired && !capabilities.supportsTransparentBackground) {
-      issues.push({
-        level: "error",
-        code: "provider_alpha_incompatible",
-        path: `targets[${index}].provider`,
-        message: `Target requires alpha, but provider \"${provider}\" does not guarantee transparent output.`,
-      });
-    }
-
     const outputFormat = normalizeOutputFormatAlias(
       target.generationPolicy?.outputFormat ?? path.extname(target.out).replace(".", ""),
     );
+    const alphaRequired = target.runtimeSpec?.alphaRequired === true || target.acceptance?.alpha === true;
     if (alphaRequired && outputFormat === "jpeg") {
       issues.push({
         level: "error",
@@ -233,60 +375,87 @@ function collectSemanticIssues(manifest: ManifestV2): ValidationIssue[] {
   return issues;
 }
 
-function normalizeTargetForGeneration(
-  manifest: ManifestV2,
-  target: ManifestTarget,
-  defaultProvider: ProviderName,
-): PlannedTarget {
-  const provider = target.provider ?? defaultProvider;
-  const model = resolveTargetModel(manifest, target, provider);
-  const atlasGroup = target.atlasGroup?.trim() || null;
-  const defaultStylePreset = resolveManifestStylePreset(manifest);
+function normalizeTargetForGeneration(params: {
+  manifest: ManifestV2;
+  target: ManifestTarget;
+  defaultProvider: ProviderName;
+  styleKit: ManifestV2["styleKits"][number];
+  evalProfile: ManifestEvaluationProfile;
+  promptOverride?: PromptSpec;
+  idOverride?: string;
+  outOverride?: string;
+  spritesheet?: PlannedTarget["spritesheet"];
+  generationDisabled?: boolean;
+  catalogDisabled?: boolean;
+}): PlannedTarget {
+  const provider = params.target.provider ?? params.defaultProvider;
+  const model = resolveTargetModel(params.manifest, params.target, provider);
+  const atlasGroup = params.target.atlasGroup?.trim() || null;
+  const promptSpec =
+    params.promptOverride ??
+    mergeStyleKitPrompt({
+      promptSpec: normalizePromptSpecFromTarget(params.target),
+      styleKit: params.styleKit,
+      consistencyGroup: params.target.consistencyGroup,
+    });
 
-  const promptSpec = normalizePromptSpec(target, defaultStylePreset);
-  const rawPolicy = toNormalizedGenerationPolicy(target);
-  const normalizedPolicy = normalizeGenerationPolicyForProvider(provider, rawPolicy);
+  const normalizedPolicy = normalizeGenerationPolicyForProvider(
+    provider,
+    toNormalizedGenerationPolicy(params.target),
+  );
   const policyErrors = normalizedPolicy.issues.filter((issue) => issue.level === "error");
-
   if (policyErrors.length > 0) {
     throw new Error(
-      `Invalid generation policy for target \"${target.id}\": ${policyErrors
+      `Invalid generation policy for target "${params.target.id}": ${policyErrors
         .map((issue) => issue.message)
         .join(" ")}`,
     );
   }
 
+  const acceptance = {
+    ...(params.target.acceptance?.size ? { size: params.target.acceptance.size.trim() } : {}),
+    alpha:
+      params.target.acceptance?.alpha ?? params.evalProfile.hardGates?.requireAlpha ?? false,
+    maxFileSizeKB:
+      params.target.acceptance?.maxFileSizeKB ?? params.evalProfile.hardGates?.maxFileSizeKB,
+  };
+
   const normalized: PlannedTarget = {
-    id: target.id.trim(),
-    kind: target.kind.trim(),
-    out: target.out.trim(),
+    id: params.idOverride ?? params.target.id.trim(),
+    kind: params.target.kind.trim(),
+    out: params.outOverride ?? params.target.out.trim(),
     atlasGroup,
-    acceptance: {
-      ...(target.acceptance?.size ? { size: target.acceptance.size.trim() } : {}),
-      ...(typeof target.acceptance?.alpha === "boolean"
-        ? { alpha: target.acceptance.alpha }
-        : {}),
-      ...(typeof target.acceptance?.maxFileSizeKB === "number"
-        ? { maxFileSizeKB: target.acceptance.maxFileSizeKB }
-        : {}),
-    },
+    styleKitId: params.target.styleKitId,
+    consistencyGroup: params.target.consistencyGroup,
+    generationMode: params.target.generationMode ?? "text",
+    evaluationProfileId: params.target.evaluationProfileId,
+    scoringProfile: params.target.scoringProfile ?? params.target.evaluationProfileId,
+    tileable: params.target.tileable,
+    seamThreshold:
+      params.target.seamThreshold ?? params.evalProfile.hardGates?.seamThreshold,
+    seamStripPx: params.target.seamStripPx ?? params.evalProfile.hardGates?.seamStripPx,
+    palette: normalizePalettePolicy(params.target),
+    acceptance,
     runtimeSpec: {
-      ...(typeof target.runtimeSpec?.alphaRequired === "boolean"
-        ? { alphaRequired: target.runtimeSpec.alphaRequired }
+      ...(typeof params.target.runtimeSpec?.alphaRequired === "boolean"
+        ? { alphaRequired: params.target.runtimeSpec.alphaRequired }
         : {}),
-      ...(typeof target.runtimeSpec?.previewWidth === "number"
-        ? { previewWidth: target.runtimeSpec.previewWidth }
+      ...(typeof params.target.runtimeSpec?.previewWidth === "number"
+        ? { previewWidth: params.target.runtimeSpec.previewWidth }
         : {}),
-      ...(typeof target.runtimeSpec?.previewHeight === "number"
-        ? { previewHeight: target.runtimeSpec.previewHeight }
+      ...(typeof params.target.runtimeSpec?.previewHeight === "number"
+        ? { previewHeight: params.target.runtimeSpec.previewHeight }
         : {}),
     },
     provider,
     promptSpec,
     generationPolicy: normalizedPolicy.policy,
-    postProcess: resolvePostProcess(target),
-    ...(target.edit ? { edit: target.edit } : {}),
-    ...(target.auxiliaryMaps ? { auxiliaryMaps: target.auxiliaryMaps } : {}),
+    postProcess: resolvePostProcess(params.target),
+    ...(params.target.edit ? { edit: params.target.edit } : {}),
+    ...(params.target.auxiliaryMaps ? { auxiliaryMaps: params.target.auxiliaryMaps } : {}),
+    ...(params.spritesheet ? { spritesheet: params.spritesheet } : {}),
+    ...(params.generationDisabled ? { generationDisabled: true } : {}),
+    ...(params.catalogDisabled ? { catalogDisabled: true } : {}),
   };
 
   if (model) {
@@ -296,254 +465,340 @@ function normalizeTargetForGeneration(
   return normalized;
 }
 
-function normalizePromptSpec(
-  target: ManifestTarget,
-  defaultStylePreset: string | undefined,
-): PromptSpec {
-  if (target.promptSpec) {
-    return trimPromptSpec(target.promptSpec, defaultStylePreset);
+function expandSpritesheetTarget(params: {
+  manifest: ManifestV2;
+  target: ManifestTarget;
+  defaultProvider: ProviderName;
+  styleKit: ManifestV2["styleKits"][number];
+  evalProfile: ManifestEvaluationProfile;
+}): PlannedTarget[] {
+  const outExt = path.extname(params.target.out) || ".png";
+  const outBase = path.basename(params.target.out, outExt);
+  const frameTargets: PlannedTarget[] = [];
+  const animations: NonNullable<PlannedTarget["spritesheet"]>["animations"] = [];
+
+  const entries = Object.entries(params.target.animations ?? {}).sort((a, b) =>
+    a[0].localeCompare(b[0]),
+  );
+  const defaultSheetPrompt = mergeStyleKitPrompt({
+    promptSpec:
+      entries.length > 0
+        ? normalizePromptSpec(entries[0][1].prompt)
+        : {
+            primary: `Spritesheet base for ${params.target.id}`,
+            useCase: DEFAULT_STYLE_USE_CASE,
+          },
+    styleKit: params.styleKit,
+    consistencyGroup: params.target.consistencyGroup,
+  });
+
+  for (const [animationName, animation] of entries) {
+    animations?.push({
+      name: animationName,
+      count: animation.count,
+      fps: animation.fps,
+      loop: animation.loop,
+      pivot: animation.pivot,
+    });
+
+    for (let frameIndex = 0; frameIndex < animation.count; frameIndex += 1) {
+      const frameId = `${params.target.id}.${animationName}.${frameIndex}`;
+      const frameOut = path.join(
+        "__frames",
+        params.target.id,
+        `${outBase}__${animationName}_${String(frameIndex).padStart(2, "0")}${outExt}`,
+      );
+      const framePrompt = mergeStyleKitPrompt({
+        promptSpec: normalizePromptSpec(animation.prompt),
+        styleKit: params.styleKit,
+        consistencyGroup: params.target.consistencyGroup,
+      });
+      framePrompt.primary = [
+        framePrompt.primary,
+        `Animation frame ${frameIndex + 1} of ${animation.count} for ${animationName}.`,
+        "Maintain identical character proportions, camera angle, and lighting across all frames.",
+      ].join(" ");
+
+      frameTargets.push(
+        normalizeTargetForGeneration({
+          manifest: params.manifest,
+          target: params.target,
+          defaultProvider: params.defaultProvider,
+          styleKit: params.styleKit,
+          evalProfile: params.evalProfile,
+          promptOverride: framePrompt,
+          idOverride: frameId,
+          outOverride: frameOut,
+          spritesheet: {
+            sheetTargetId: params.target.id,
+            animationName,
+            frameIndex,
+            frameCount: animation.count,
+            fps: animation.fps,
+            loop: animation.loop,
+            pivot: animation.pivot,
+          },
+          catalogDisabled: true,
+        }),
+      );
+    }
   }
 
-  if (typeof target.prompt === "string") {
+  const sheetTarget = normalizeTargetForGeneration({
+    manifest: params.manifest,
+    target: params.target,
+    defaultProvider: params.defaultProvider,
+    styleKit: params.styleKit,
+    evalProfile: params.evalProfile,
+    promptOverride: defaultSheetPrompt,
+    generationDisabled: true,
+    spritesheet: {
+      sheetTargetId: params.target.id,
+      isSheet: true,
+      animations: animations ?? [],
+    },
+  });
+
+  return [...frameTargets, sheetTarget];
+}
+
+function normalizePromptSpecFromTarget(target: ManifestTarget): PromptSpec {
+  if (target.promptSpec) {
+    return normalizePromptSpec(target.promptSpec);
+  }
+  return normalizePromptSpec(target.prompt);
+}
+
+function normalizePromptSpec(prompt: ManifestTarget["prompt"]): PromptSpec {
+  if (typeof prompt === "string") {
     return {
-      primary: target.prompt.trim(),
-      ...(defaultStylePreset ? { stylePreset: defaultStylePreset } : {}),
+      primary: prompt.trim(),
+      useCase: DEFAULT_STYLE_USE_CASE,
     };
   }
 
-  if (target.prompt && typeof target.prompt === "object") {
-    return trimPromptSpec(target.prompt, defaultStylePreset);
+  if (prompt && typeof prompt === "object") {
+    return {
+      primary: prompt.primary.trim(),
+      useCase: prompt.useCase?.trim() || DEFAULT_STYLE_USE_CASE,
+      ...(prompt.stylePreset ? { stylePreset: prompt.stylePreset.trim() } : {}),
+      ...(prompt.scene ? { scene: prompt.scene.trim() } : {}),
+      ...(prompt.subject ? { subject: prompt.subject.trim() } : {}),
+      ...(prompt.style ? { style: prompt.style.trim() } : {}),
+      ...(prompt.composition ? { composition: prompt.composition.trim() } : {}),
+      ...(prompt.lighting ? { lighting: prompt.lighting.trim() } : {}),
+      ...(prompt.palette ? { palette: prompt.palette.trim() } : {}),
+      ...(prompt.materials ? { materials: prompt.materials.trim() } : {}),
+      ...(prompt.constraints ? { constraints: prompt.constraints.trim() } : {}),
+      ...(prompt.negative ? { negative: prompt.negative.trim() } : {}),
+    };
   }
 
-  throw new Error(`Target \"${target.id}\" has no prompt content.`);
+  throw new Error("Prompt is required.");
 }
 
-function trimPromptSpec(
-  promptSpec: PromptSpec,
-  defaultStylePreset: string | undefined,
-): PromptSpec {
+function mergeStyleKitPrompt(params: {
+  promptSpec: PromptSpec;
+  styleKit: ManifestV2["styleKits"][number];
+  consistencyGroup: string;
+}): PromptSpec {
+  const references = params.styleKit.referenceImages.length
+    ? `Reference images: ${params.styleKit.referenceImages.join(", ")}.`
+    : "";
+  const styleHint = `Apply style kit (${params.styleKit.id}) rules from ${params.styleKit.rulesPath}.`;
+  const lightingHint = `Lighting model: ${params.styleKit.lightingModel}.`;
+  const paletteHint = params.styleKit.palettePath
+    ? `Palette file: ${params.styleKit.palettePath}.`
+    : "";
+
   return {
-    primary: promptSpec.primary.trim(),
-    ...(promptSpec.useCase ? { useCase: promptSpec.useCase.trim() } : {}),
-    ...(promptSpec.stylePreset
-      ? { stylePreset: promptSpec.stylePreset.trim() }
-      : defaultStylePreset
-        ? { stylePreset: defaultStylePreset }
-        : {}),
-    ...(promptSpec.scene ? { scene: promptSpec.scene.trim() } : {}),
-    ...(promptSpec.subject ? { subject: promptSpec.subject.trim() } : {}),
-    ...(promptSpec.style ? { style: promptSpec.style.trim() } : {}),
-    ...(promptSpec.composition ? { composition: promptSpec.composition.trim() } : {}),
-    ...(promptSpec.lighting ? { lighting: promptSpec.lighting.trim() } : {}),
-    ...(promptSpec.palette ? { palette: promptSpec.palette.trim() } : {}),
-    ...(promptSpec.materials ? { materials: promptSpec.materials.trim() } : {}),
-    ...(promptSpec.constraints ? { constraints: promptSpec.constraints.trim() } : {}),
-    ...(promptSpec.negative ? { negative: promptSpec.negative.trim() } : {}),
+    ...params.promptSpec,
+    style: [params.promptSpec.style, styleHint].filter(Boolean).join(" "),
+    lighting: [params.promptSpec.lighting, lightingHint].filter(Boolean).join(" "),
+    constraints: [
+      params.promptSpec.constraints,
+      `Consistency group: ${params.consistencyGroup}.`,
+      references,
+      paletteHint,
+    ]
+      .filter(Boolean)
+      .join(" "),
+    negative: [
+      params.promptSpec.negative,
+      params.styleKit.negativeRulesPath
+        ? `Negative rules file: ${params.styleKit.negativeRulesPath}.`
+        : "",
+    ]
+      .filter(Boolean)
+      .join(" "),
   };
 }
 
-function resolveManifestStylePreset(manifest: ManifestV2): string | undefined {
-  const rawPreset = manifest.styleGuide?.preset;
-  if (typeof rawPreset !== "string") {
-    return undefined;
-  }
-  const trimmed = rawPreset.trim();
-  return trimmed.length > 0 ? trimmed : undefined;
+function toNormalizedGenerationPolicy(target: ManifestTarget): NormalizedGenerationPolicy {
+  const outputFormat = normalizeOutputFormatAlias(target.generationPolicy?.outputFormat);
+  const candidates =
+    typeof target.generationPolicy?.candidates === "number"
+      ? Math.max(1, Math.round(target.generationPolicy.candidates))
+      : 1;
+  const maxRetries =
+    typeof target.generationPolicy?.maxRetries === "number"
+      ? Math.max(0, Math.round(target.generationPolicy.maxRetries))
+      : 1;
+
+  return {
+    size: target.generationPolicy?.size?.trim() || target.acceptance?.size || "1024x1024",
+    quality: target.generationPolicy?.quality?.trim() || "high",
+    background: target.generationPolicy?.background?.trim() || "opaque",
+    outputFormat,
+    candidates,
+    maxRetries,
+    fallbackProviders: target.generationPolicy?.fallbackProviders ?? [],
+    providerConcurrency: target.generationPolicy?.providerConcurrency,
+    rateLimitPerMinute: target.generationPolicy?.rateLimitPerMinute,
+  };
 }
 
-function resolvePostProcess(target: ManifestTarget): PostProcessPolicy {
-  const explicitResize = normalizePostProcessResize(target.postProcess?.resizeTo);
-  const runtimeResize = deriveResizeFromRuntimeSpec(target);
-  const resizeTo = explicitResize ?? runtimeResize;
-  const algorithm = resolvePostProcessAlgorithm(target.postProcess?.algorithm, target);
-  const stripMetadata =
-    typeof target.postProcess?.stripMetadata === "boolean"
-      ? target.postProcess.stripMetadata
-      : true;
-  const pngPaletteColors =
-    typeof target.postProcess?.pngPaletteColors === "number"
-      ? target.postProcess.pngPaletteColors
-      : undefined;
+function resolvePostProcess(target: ManifestTarget): PostProcessPolicy | undefined {
+  const postProcess = target.postProcess;
+  if (!postProcess) {
+    return undefined;
+  }
 
-  const operations = normalizePostProcessOperations(target.postProcess);
+  const resizeTo = parseResizeTo(postProcess.resizeTo, target.acceptance?.size);
+  const operations = {
+    ...(postProcess.operations?.trim ? { trim: postProcess.operations.trim } : {}),
+    ...(postProcess.operations?.pad ? { pad: postProcess.operations.pad } : {}),
+    ...(postProcess.operations?.outline ? { outline: postProcess.operations.outline } : {}),
+    ...(postProcess.operations?.quantize ? { quantize: postProcess.operations.quantize } : {}),
+    ...(postProcess.operations?.resizeVariants
+      ? {
+          resizeVariants: {
+            variants: postProcess.operations.resizeVariants
+              .map((variant) => parseResizeVariant(variant))
+              .filter((variant): variant is ResizeVariant => variant !== null),
+          },
+        }
+      : {}),
+  };
+
+  const normalizedPalette = normalizePalettePolicy(target);
+  const paletteColors =
+    normalizedPalette?.mode === "max-colors"
+      ? normalizedPalette.maxColors
+      : normalizedPalette?.mode === "exact"
+        ? normalizedPalette.colors?.length
+        : undefined;
+
+  if (typeof paletteColors === "number" && !operations.quantize) {
+    operations.quantize = {
+      colors: Math.max(2, Math.min(256, Math.round(paletteColors))),
+      dither: normalizedPalette?.dither,
+    };
+  }
 
   return {
     ...(resizeTo ? { resizeTo } : {}),
-    algorithm,
-    stripMetadata,
-    ...(typeof pngPaletteColors === "number" ? { pngPaletteColors } : {}),
-    ...(operations ? { operations } : {}),
+    algorithm: resolvePostProcessAlgorithm(postProcess.algorithm),
+    stripMetadata: postProcess.stripMetadata ?? true,
+    pngPaletteColors: postProcess.pngPaletteColors,
+    ...(Object.keys(operations).length > 0 ? { operations } : {}),
   };
 }
 
-function normalizePostProcessOperations(
-  postProcess: ManifestPostProcess | undefined,
-): PostProcessPolicy["operations"] | undefined {
-  if (!postProcess?.operations && !postProcess?.pngPaletteColors) {
+function normalizePalettePolicy(target: ManifestTarget): PalettePolicy | undefined {
+  const palette = target.palette;
+  if (!palette) {
     return undefined;
   }
 
-  const operations: NonNullable<PostProcessPolicy["operations"]> = {};
-
-  if (postProcess.operations?.trim) {
-    operations.trim = {
-      enabled: postProcess.operations.trim.enabled,
-      threshold: postProcess.operations.trim.threshold,
+  if (palette.mode === "exact") {
+    return {
+      mode: "exact",
+      colors: (palette.colors ?? []).map((color) => normalizeHexColor(color)),
+      dither: palette.dither,
     };
   }
 
-  if (postProcess.operations?.pad) {
-    operations.pad = {
-      pixels: Math.max(0, Math.round(postProcess.operations.pad.pixels)),
-      extrude: postProcess.operations.pad.extrude,
-      background: postProcess.operations.pad.background,
-    };
-  }
-
-  const quantizeColors =
-    postProcess.operations?.quantize?.colors ?? postProcess.pngPaletteColors;
-  if (typeof quantizeColors === "number") {
-    operations.quantize = {
-      colors: Math.max(2, Math.min(256, Math.round(quantizeColors))),
-      dither: postProcess.operations?.quantize?.dither,
-    };
-  }
-
-  if (postProcess.operations?.outline) {
-    operations.outline = {
-      size: Math.max(1, Math.round(postProcess.operations.outline.size)),
-      color: postProcess.operations.outline.color,
-    };
-  }
-
-  const resizeVariants = (postProcess.operations?.resizeVariants ?? [])
-    .map(toResizeVariant)
-    .filter((variant): variant is ResizeVariant => variant !== undefined);
-  if (resizeVariants.length > 0) {
-    operations.resizeVariants = { variants: resizeVariants };
-  }
-
-  if (Object.keys(operations).length === 0) {
-    return undefined;
-  }
-
-  return operations;
+  return {
+    mode: "max-colors",
+    maxColors: palette.maxColors,
+    dither: palette.dither,
+  };
 }
 
-function toResizeVariant(variant: { name: string; size: string; algorithm?: string }): ResizeVariant | undefined {
-  const parsedSize = parseSizeLiteral(variant.size);
+function resolveTargetModel(
+  manifest: ManifestV2,
+  target: ManifestTarget,
+  provider: ProviderName,
+): string | undefined {
+  if (target.model?.trim()) {
+    return target.model.trim();
+  }
+
+  if (provider === "openai") {
+    return manifest.providers.openai?.model?.trim();
+  }
+  if (provider === "nano") {
+    return manifest.providers.nano?.model?.trim();
+  }
+  return manifest.providers.local?.model?.trim();
+}
+
+function resolvePostProcessAlgorithm(value: string | undefined): "nearest" | "lanczos3" {
+  const normalized = value?.trim().toLowerCase();
+  if (normalized === "nearest") {
+    return "nearest";
+  }
+  return "lanczos3";
+}
+
+function parseResizeVariant(variant: {
+  name: string;
+  size: string;
+  algorithm?: string;
+}): ResizeVariant | null {
+  const parsedSize = parseSize(variant.size);
   if (!parsedSize) {
-    return undefined;
+    return null;
   }
 
   return {
     name: variant.name.trim(),
     width: parsedSize.width,
     height: parsedSize.height,
-    algorithm: resolveResizeVariantAlgorithm(variant.algorithm),
+    algorithm: resolvePostProcessAlgorithm(variant.algorithm),
   };
 }
 
-function resolveResizeVariantAlgorithm(value: string | undefined): PostProcessAlgorithm {
-  const normalized = value?.trim().toLowerCase();
-  if (
-    normalized &&
-    SUPPORTED_POST_PROCESS_ALGORITHMS.has(normalized as PostProcessAlgorithm)
-  ) {
-    return normalized as PostProcessAlgorithm;
-  }
-  return "lanczos3";
-}
-
-function resolvePostProcessAlgorithm(
-  value: string | undefined,
-  target: ManifestTarget,
-): PostProcessAlgorithm {
-  const normalized = value?.trim().toLowerCase();
-  if (
-    normalized &&
-    SUPPORTED_POST_PROCESS_ALGORITHMS.has(normalized as PostProcessAlgorithm)
-  ) {
-    return normalized as PostProcessAlgorithm;
+function parseResizeTo(
+  resizeTo: ManifestPostProcess["resizeTo"],
+  fallbackSize?: string,
+): { width: number; height: number } | undefined {
+  if (typeof resizeTo === "number" && Number.isFinite(resizeTo) && resizeTo > 0) {
+    const rounded = Math.max(1, Math.round(resizeTo));
+    return { width: rounded, height: rounded };
   }
 
-  if (resolvePromptStylePreset(target) === "pixel-art-16bit") {
-    return "nearest";
-  }
-
-  return "lanczos3";
-}
-
-function resolvePromptStylePreset(target: ManifestTarget): string | undefined {
-  if (target.promptSpec?.stylePreset?.trim()) {
-    return target.promptSpec.stylePreset.trim();
-  }
-
-  if (target.prompt && typeof target.prompt === "object") {
-    const prompt = target.prompt as PromptSpec;
-    if (prompt.stylePreset?.trim()) {
-      return prompt.stylePreset.trim();
+  if (typeof resizeTo === "string") {
+    const parsed = parseSize(resizeTo);
+    if (parsed) {
+      return parsed;
     }
   }
 
-  return undefined;
-}
-
-function normalizePostProcessResize(
-  value: string | number | undefined,
-): { width: number; height: number } | undefined {
-  if (typeof value === "number" && Number.isFinite(value) && value > 0) {
-    const edge = Math.round(value);
-    return { width: edge, height: edge };
-  }
-
-  if (typeof value === "string") {
-    return parseSizeLiteral(value);
+  if (fallbackSize) {
+    return parseSize(fallbackSize);
   }
 
   return undefined;
 }
 
-function deriveResizeFromRuntimeSpec(
-  target: ManifestTarget,
-): { width: number; height: number } | undefined {
-  const previewWidth = target.runtimeSpec?.previewWidth;
-  const previewHeight = target.runtimeSpec?.previewHeight;
-  if (
-    typeof previewWidth !== "number" ||
-    typeof previewHeight !== "number" ||
-    !Number.isFinite(previewWidth) ||
-    !Number.isFinite(previewHeight)
-  ) {
+function parseSize(size: string | undefined): { width: number; height: number } | undefined {
+  if (!size) {
     return undefined;
   }
 
-  const acceptance = parseSizeLiteral(target.acceptance?.size);
-  if (!acceptance) {
-    return undefined;
-  }
-
-  const derivedWidth = Math.min(acceptance.width, Math.round(previewWidth * 2));
-  const derivedHeight = Math.min(acceptance.height, Math.round(previewHeight * 2));
-
-  if (
-    derivedWidth <= 0 ||
-    derivedHeight <= 0 ||
-    (derivedWidth === acceptance.width && derivedHeight === acceptance.height)
-  ) {
-    return undefined;
-  }
-
-  return { width: derivedWidth, height: derivedHeight };
-}
-
-function parseSizeLiteral(
-  value: string | undefined,
-): { width: number; height: number } | undefined {
-  if (!value) {
-    return undefined;
-  }
-  const match = /^(\d+)x(\d+)$/i.exec(value.trim());
+  const match = SIZE_PATTERN.exec(size.trim());
   if (!match) {
     return undefined;
   }
@@ -557,103 +812,20 @@ function parseSizeLiteral(
   return { width, height };
 }
 
-function toNormalizedGenerationPolicy(target: ManifestTarget) {
+function toProviderJobSpec(target: PlannedTarget, provider: ProviderName): PlannedProviderJobSpec {
   return {
-    size: resolveSize(target),
-    quality: resolveQuality(target),
-    background: resolveBackground(target),
-    outputFormat: normalizeOutputFormatAlias(resolveOutputFormat(target)),
-    candidates:
-      typeof target.generationPolicy?.candidates === "number"
-        ? target.generationPolicy.candidates
-        : 1,
-    maxRetries:
-      typeof target.generationPolicy?.maxRetries === "number"
-        ? target.generationPolicy.maxRetries
-        : 1,
-    fallbackProviders: target.generationPolicy?.fallbackProviders ?? [],
-    providerConcurrency: target.generationPolicy?.providerConcurrency,
-    rateLimitPerMinute: target.generationPolicy?.rateLimitPerMinute,
-  };
-}
-
-function resolveSize(target: ManifestTarget): string {
-  return firstNonEmpty(
-    target.generationPolicy?.size,
-    target.acceptance?.size,
-    "1024x1024",
-  );
-}
-
-function resolveQuality(target: ManifestTarget): string {
-  return firstNonEmpty(
-    target.generationPolicy?.quality,
-    target.generationPolicy?.finalQuality,
-    "high",
-  );
-}
-
-function resolveBackground(target: ManifestTarget): string {
-  const policyBackground = target.generationPolicy?.background?.trim();
-  if (policyBackground) {
-    return policyBackground;
-  }
-
-  if (target.acceptance?.alpha === true || target.runtimeSpec?.alphaRequired === true) {
-    return "transparent";
-  }
-
-  return "opaque";
-}
-
-function resolveOutputFormat(target: ManifestTarget): string {
-  const policyFormat = target.generationPolicy?.outputFormat?.trim();
-  if (policyFormat) {
-    return policyFormat.toLowerCase();
-  }
-
-  const ext = path.extname(target.out).replace(".", "").trim().toLowerCase();
-  return ext || "png";
-}
-
-function resolveTargetModel(
-  manifest: ManifestV2,
-  target: ManifestTarget,
-  provider: ProviderName,
-): string | undefined {
-  if (target.model && target.model.trim()) {
-    return target.model.trim();
-  }
-
-  if (provider === "openai") {
-    return manifest.providers?.openai?.model?.trim() || undefined;
-  }
-  if (provider === "nano") {
-    return manifest.providers?.nano?.model?.trim() || undefined;
-  }
-
-  return manifest.providers?.local?.model?.trim() || undefined;
-}
-
-function toProviderJobSpec(
-  target: PlannedTarget,
-  provider: ProviderName,
-): PlannedProviderJobSpec {
-  const row: PlannedProviderJobSpec = {
     targetId: target.id,
     out: target.out,
     provider,
+    model: target.model,
     prompt: buildStructuredPrompt(target.promptSpec),
     promptSpec: target.promptSpec,
-    generationPolicy: getTargetGenerationPolicy(target),
-    ...(target.postProcess ? { postProcess: target.postProcess } : {}),
+    generationPolicy: target.generationPolicy ?? {},
+    postProcess: target.postProcess,
+    styleKitId: target.styleKitId,
+    consistencyGroup: target.consistencyGroup,
+    evaluationProfileId: target.evaluationProfileId,
   };
-
-  if (target.model) {
-    row.model = target.model;
-  }
-
-  return row;
 }
 
 function toSchemaValidationIssue(issue: ZodIssue): ValidationIssue {
@@ -665,47 +837,8 @@ function toSchemaValidationIssue(issue: ZodIssue): ValidationIssue {
   };
 }
 
-function validateAtlasOptions(
-  atlas: ManifestV2["atlas"],
-  issues: ValidationIssue[],
-): void {
-  if (!atlas) {
-    return;
-  }
-
-  validateAtlasGroupOptions("atlas", atlas, issues);
-
-  for (const [groupId, groupOptions] of Object.entries(atlas.groups ?? {})) {
-    validateAtlasGroupOptions(`atlas.groups.${groupId}`, groupOptions, issues);
-  }
-}
-
-function validateAtlasGroupOptions(
-  pathPrefix: string,
-  options: ManifestAtlasGroupOptions,
-  issues: ValidationIssue[],
-): void {
-  if (typeof options.padding === "number" && options.padding < 0) {
-    issues.push({
-      level: "error",
-      code: "invalid_atlas_padding",
-      path: `${pathPrefix}.padding`,
-      message: "atlas padding must be >= 0",
-    });
-  }
-
-  if (typeof options.bleed === "number" && options.bleed < 0) {
-    issues.push({
-      level: "error",
-      code: "invalid_atlas_bleed",
-      path: `${pathPrefix}.bleed`,
-      message: "atlas bleed must be >= 0",
-    });
-  }
-}
-
 function formatIssuePath(pathItems: Array<string | number>): string {
-  if (pathItems.length === 0) {
+  if (!pathItems.length) {
     return "$";
   }
 
@@ -719,12 +852,14 @@ function formatIssuePath(pathItems: Array<string | number>): string {
     .join("");
 }
 
-function firstNonEmpty(...values: Array<string | undefined>): string {
-  for (const value of values) {
-    if (value && value.trim()) {
-      return value.trim();
-    }
+function normalizeHexColor(input: string): string {
+  const trimmed = input.trim();
+  if (trimmed.startsWith("#")) {
+    return trimmed.toLowerCase();
   }
+  return `#${trimmed.toLowerCase()}`;
+}
 
-  return "";
+export function parseManifestProviderFlag(value: string | undefined): ProviderName | "auto" {
+  return parseProviderSelection(value);
 }

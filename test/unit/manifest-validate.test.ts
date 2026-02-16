@@ -4,7 +4,7 @@ import { createPlanArtifacts, validateManifestSource } from "../../src/manifest/
 import type { ManifestV2 } from "../../src/manifest/types.ts";
 
 const BASE_MANIFEST: ManifestV2 = {
-  version: "2",
+  version: "next",
   pack: {
     id: "test-pack",
     version: "0.1.0",
@@ -17,11 +17,36 @@ const BASE_MANIFEST: ManifestV2 = {
       model: "gpt-image-1",
     },
   },
+  styleKits: [
+    {
+      id: "default-kit",
+      rulesPath: "style/default/style.md",
+      palettePath: "style/default/palette.txt",
+      referenceImages: ["style/default/ref-1.png"],
+      lightingModel: "top-left key with soft ambient fill",
+    },
+  ],
+  evaluationProfiles: [
+    {
+      id: "sprite-quality",
+      hardGates: {
+        requireAlpha: true,
+        maxFileSizeKB: 256,
+      },
+      scoreWeights: {
+        readability: 1,
+      },
+    },
+  ],
   targets: [
     {
       id: "hero",
       kind: "sprite",
       out: "hero.png",
+      styleKitId: "default-kit",
+      consistencyGroup: "hero-family",
+      evaluationProfileId: "sprite-quality",
+      generationMode: "text",
       prompt: "Top-down hero sprite",
       generationPolicy: {
         size: "1024x1024",
@@ -42,28 +67,18 @@ const BASE_MANIFEST: ManifestV2 = {
 };
 
 describe("manifest normalization", () => {
-  it("applies styleGuide preset when target prompt does not define one", () => {
-    const manifest: ManifestV2 = {
-      ...BASE_MANIFEST,
-      styleGuide: {
-        preset: "topdown-painterly-sci-fi",
-      },
-    };
-
-    const artifacts = createPlanArtifacts(manifest, "/tmp/manifest.json");
-    expect(artifacts.targets[0].promptSpec.stylePreset).toBe("topdown-painterly-sci-fi");
+  it("injects style-kit constraints into the normalized prompt", () => {
+    const artifacts = createPlanArtifacts(BASE_MANIFEST, "/tmp/manifest.json");
+    expect(artifacts.targets[0].promptSpec.style).toContain("default-kit");
+    expect(artifacts.targets[0].promptSpec.constraints).toContain("Consistency group: hero-family");
   });
 
-  it("normalizes numeric postProcess resize and defaults pixel-art algorithm", () => {
+  it("normalizes numeric postProcess resize with default lanczos3 algorithm", () => {
     const manifest: ManifestV2 = {
       ...BASE_MANIFEST,
       targets: [
         {
           ...BASE_MANIFEST.targets[0],
-          prompt: {
-            primary: "16-bit hero sprite",
-            stylePreset: "pixel-art-16bit",
-          },
           postProcess: {
             resizeTo: 128,
           },
@@ -74,7 +89,7 @@ describe("manifest normalization", () => {
     const artifacts = createPlanArtifacts(manifest, "/tmp/manifest.json");
     expect(artifacts.targets[0].postProcess).toEqual({
       resizeTo: { width: 128, height: 128 },
-      algorithm: "nearest",
+      algorithm: "lanczos3",
       stripMetadata: true,
     });
   });
@@ -102,5 +117,42 @@ describe("manifest normalization", () => {
     expect(
       validation.report.issues.some((issue) => issue.code === "invalid_postprocess_resize"),
     ).toBe(true);
+  });
+
+  it("expands spritesheet targets into frame jobs plus assemble target", () => {
+    const manifest: ManifestV2 = {
+      ...BASE_MANIFEST,
+      targets: [
+        {
+          ...BASE_MANIFEST.targets[0],
+          id: "hero.sheet",
+          kind: "spritesheet",
+          out: "hero_sheet.png",
+          prompt: undefined,
+          promptSpec: undefined,
+          animations: {
+            walk: {
+              count: 2,
+              prompt: "Top-down hero walk animation frame",
+              fps: 10,
+              loop: true,
+              pivot: { x: 0.5, y: 0.85 },
+            },
+          },
+        },
+      ],
+    };
+
+    const artifacts = createPlanArtifacts(manifest, "/tmp/manifest.json");
+    expect(artifacts.targets.some((target) => target.id === "hero.sheet")).toBe(true);
+    expect(
+      artifacts.targets.some(
+        (target) =>
+          target.id === "hero.sheet.walk.0" &&
+          target.catalogDisabled === true &&
+          target.generationDisabled !== true,
+      ),
+    ).toBe(true);
+    expect(artifacts.openaiJobs.every((job) => !job.targetId.endsWith(".sheet"))).toBe(true);
   });
 });

@@ -11,6 +11,11 @@ export interface CatalogTarget {
     alpha?: boolean;
     maxFileSizeKB?: number;
   };
+  runtimeSpec?: {
+    alphaRequired?: boolean;
+    previewWidth?: number;
+    previewHeight?: number;
+  };
 }
 
 export interface CatalogItem {
@@ -72,9 +77,10 @@ export async function buildCatalog(
       atlasGroup: target.atlasGroup ?? null,
       out: target.out,
       url: `/assets/images/${target.out}`,
-      alphaRequired: target.acceptance?.alpha === true,
-      previewWidth: expectedSize.width,
-      previewHeight: expectedSize.height,
+      alphaRequired:
+        target.runtimeSpec?.alphaRequired ?? target.acceptance?.alpha === true,
+      previewWidth: target.runtimeSpec?.previewWidth ?? expectedSize.width,
+      previewHeight: target.runtimeSpec?.previewHeight ?? expectedSize.height,
       sizeBytes,
       exists,
     });
@@ -85,4 +91,3 @@ export async function buildCatalog(
     items,
   };
 }
-

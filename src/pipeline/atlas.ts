@@ -11,6 +11,11 @@ interface PlannedTarget {
     alpha?: boolean;
     size?: string;
   };
+  runtimeSpec?: {
+    alphaRequired?: boolean;
+    previewWidth?: number;
+    previewHeight?: number;
+  };
 }
 
 interface PlannedIndex {
@@ -63,9 +68,38 @@ function parseSize(size: string | undefined): { width: number; height: number } 
   };
 }
 
+function sanitizeBundleId(targetId: string): string {
+  return `atlas-${targetId.trim().toLowerCase().replace(/[^a-z0-9_-]+/g, "-")}`;
+}
+
 function hasCommand(command: string): boolean {
   const run = spawnSync(command, ["--version"], { stdio: "ignore" });
   return run.status === 0;
+}
+
+function buildSingleFrameAtlasData(
+  frameName: string,
+  imageName: string,
+  width: number,
+  height: number,
+): Record<string, unknown> {
+  return {
+    frames: {
+      [frameName]: {
+        frame: { x: 0, y: 0, w: width, h: height },
+        rotated: false,
+        trimmed: false,
+        spriteSourceSize: { x: 0, y: 0, w: width, h: height },
+        sourceSize: { w: width, h: height },
+      },
+    },
+    meta: {
+      app: "lootforge",
+      format: "RGBA8888",
+      image: imageName,
+      scale: "1",
+    },
+  };
 }
 
 async function fileExists(filePath: string): Promise<boolean> {
@@ -109,12 +143,13 @@ export async function runAtlasPipeline(
     const expectedSize = parseSize(target.acceptance?.size);
     return {
       id: target.id,
-      kind: target.kind,
+      kind: target.kind || "asset",
       url: `/assets/images/${target.out}`,
       atlasGroup: target.atlasGroup ?? null,
-      alphaRequired: target.acceptance?.alpha === true,
-      previewWidth: expectedSize.width,
-      previewHeight: expectedSize.height,
+      alphaRequired:
+        target.runtimeSpec?.alphaRequired ?? target.acceptance?.alpha === true,
+      previewWidth: target.runtimeSpec?.previewWidth ?? expectedSize.width,
+      previewHeight: target.runtimeSpec?.previewHeight ?? expectedSize.height,
     };
   });
 
@@ -170,6 +205,34 @@ export async function runAtlasPipeline(
         targets: groupTargets.map((target) => target.id),
       });
     }
+  } else if (groups.size > 0) {
+    for (const groupTargets of groups.values()) {
+      for (const target of groupTargets) {
+        const imagePath = path.join(imagesDir, target.out);
+        if (!(await fileExists(imagePath))) continue;
+
+        const expectedSize = parseSize(target.acceptance?.size);
+        const frameWidth = expectedSize.width;
+        const frameHeight = expectedSize.height;
+        const bundleId = sanitizeBundleId(target.id);
+        const atlasJsonPath = path.join(atlasDir, `${bundleId}.json`);
+        const atlasData = buildSingleFrameAtlasData(
+          target.id,
+          target.out,
+          frameWidth,
+          frameHeight,
+        );
+
+        await writeFile(atlasJsonPath, `${JSON.stringify(atlasData, null, 2)}\n`, "utf8");
+
+        bundles.push({
+          id: bundleId,
+          imageUrl: `/assets/images/${target.out}`,
+          jsonUrl: `/assets/atlases/${bundleId}.json`,
+          targets: [target.id],
+        });
+      }
+    }
   }
 
   const manifest: AtlasManifest = {
@@ -188,4 +251,3 @@ export async function runAtlasPipeline(
     manifest,
   };
 }
-

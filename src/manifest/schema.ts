@@ -7,6 +7,7 @@ export const ProviderNameSchema = z.enum(["openai", "nano"]);
 export const PromptSpecSchema = z.object({
   primary: nonEmptyString,
   useCase: nonEmptyString.optional(),
+  stylePreset: nonEmptyString.optional(),
   scene: nonEmptyString.optional(),
   subject: nonEmptyString.optional(),
   style: nonEmptyString.optional(),
@@ -39,6 +40,13 @@ export const ManifestRuntimeSpecSchema = z.object({
   previewHeight: z.number().int().positive().optional(),
 });
 
+export const ManifestPostProcessSchema = z.object({
+  resizeTo: z.union([nonEmptyString, z.number().int().positive()]).optional(),
+  algorithm: nonEmptyString.optional(),
+  stripMetadata: z.boolean().optional(),
+  pngPaletteColors: z.number().int().min(2).max(256).optional(),
+});
+
 export const ManifestTargetSchema = z
   .object({
     id: nonEmptyString,
@@ -48,6 +56,7 @@ export const ManifestTargetSchema = z
     prompt: z.union([nonEmptyString, PromptSpecSchema]).optional(),
     promptSpec: PromptSpecSchema.optional(),
     generationPolicy: ManifestGenerationPolicySchema.optional(),
+    postProcess: ManifestPostProcessSchema.optional(),
     acceptance: ManifestAcceptanceSchema.optional(),
     runtimeSpec: ManifestRuntimeSpecSchema.optional(),
     provider: ProviderNameSchema.optional(),

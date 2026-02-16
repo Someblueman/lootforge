@@ -1,5 +1,6 @@
 import type {
   GenerationPolicy,
+  PostProcessPolicy,
   PlannedTarget,
   PlannedTargetsIndex,
   PromptSpec,
@@ -44,6 +45,13 @@ export interface ManifestGenerationPolicy {
   finalQuality?: string;
 }
 
+export interface ManifestPostProcess {
+  resizeTo?: string | number;
+  algorithm?: string;
+  stripMetadata?: boolean;
+  pngPaletteColors?: number;
+}
+
 export type ManifestPrompt = string | PromptSpec;
 
 export interface ManifestTarget {
@@ -54,6 +62,7 @@ export interface ManifestTarget {
   prompt?: ManifestPrompt;
   promptSpec?: PromptSpec;
   generationPolicy?: ManifestGenerationPolicy;
+  postProcess?: ManifestPostProcess;
   acceptance?: ManifestAcceptance;
   runtimeSpec?: ManifestRuntimeSpec;
   provider?: ProviderName;
@@ -110,6 +119,7 @@ export interface PlannedProviderJobSpec {
   prompt: string;
   promptSpec: PromptSpec;
   generationPolicy: GenerationPolicy;
+  postProcess?: PostProcessPolicy;
 }
 
 export interface PlanArtifacts {

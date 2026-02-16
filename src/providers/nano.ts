@@ -15,7 +15,7 @@ import {
 } from "./types.js";
 
 const GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
-const DEFAULT_NANO_MODEL = "gemini-2.0-flash-preview-image-generation";
+const DEFAULT_NANO_MODEL = "gemini-2.5-flash-image";
 
 export interface NanoProviderOptions {
   model?: string;
@@ -222,4 +222,3 @@ export class NanoProvider implements GenerationProvider {
 export function createNanoProvider(options: NanoProviderOptions = {}): NanoProvider {
   return new NanoProvider(options);
 }
-

@@ -6,8 +6,11 @@ import {
   buildStructuredPrompt,
   getTargetGenerationPolicy,
   nowIso,
+  POST_PROCESS_ALGORITHMS,
 } from "../providers/types.js";
 import type {
+  PostProcessAlgorithm,
+  PostProcessPolicy,
   PlannedTarget,
   PromptSpec,
   ProviderName,
@@ -25,6 +28,7 @@ import type {
 
 const SIZE_PATTERN = /^\d+x\d+$/i;
 const SUPPORTED_OUTPUT_FORMATS = new Set(["png", "jpg", "jpeg", "webp"]);
+const SUPPORTED_POST_PROCESS_ALGORITHMS = new Set(POST_PROCESS_ALGORITHMS);
 
 export interface ValidateManifestOptions {
   now?: () => Date;
@@ -143,6 +147,27 @@ function collectSemanticIssues(manifest: ManifestV2): ValidationIssue[] {
       });
     }
 
+    if (typeof target.postProcess?.resizeTo === "string") {
+      if (!SIZE_PATTERN.test(target.postProcess.resizeTo)) {
+        issues.push({
+          level: "error",
+          code: "invalid_postprocess_resize",
+          path: `targets[${index}].postProcess.resizeTo`,
+          message: `postProcess.resizeTo "${target.postProcess.resizeTo}" must match WIDTHxHEIGHT.`,
+        });
+      }
+    }
+
+    const algorithm = target.postProcess?.algorithm?.trim().toLowerCase();
+    if (algorithm && !SUPPORTED_POST_PROCESS_ALGORITHMS.has(algorithm as PostProcessAlgorithm)) {
+      issues.push({
+        level: "warning",
+        code: "unusual_postprocess_algorithm",
+        path: `targets[${index}].postProcess.algorithm`,
+        message: `postProcess.algorithm "${target.postProcess?.algorithm}" is not officially supported. Use nearest or lanczos3.`,
+      });
+    }
+
     const provider = target.provider ?? defaultProvider;
     const background = resolveBackground(target);
     if (provider === "nano" && background === "transparent") {
@@ -176,18 +201,43 @@ function normalizeTargetForGeneration(
 ): PlannedTarget {
   const provider = target.provider ?? defaultProvider;
   const model = resolveTargetModel(manifest, target, provider);
+  const atlasGroup = target.atlasGroup?.trim() || null;
+  const defaultStylePreset = resolveManifestStylePreset(manifest);
 
   const normalized: PlannedTarget = {
     id: target.id.trim(),
+    kind: target.kind.trim(),
     out: target.out.trim(),
+    atlasGroup,
+    acceptance: {
+      ...(target.acceptance?.size ? { size: target.acceptance.size.trim() } : {}),
+      ...(typeof target.acceptance?.alpha === "boolean"
+        ? { alpha: target.acceptance.alpha }
+        : {}),
+      ...(typeof target.acceptance?.maxFileSizeKB === "number"
+        ? { maxFileSizeKB: target.acceptance.maxFileSizeKB }
+        : {}),
+    },
+    runtimeSpec: {
+      ...(typeof target.runtimeSpec?.alphaRequired === "boolean"
+        ? { alphaRequired: target.runtimeSpec.alphaRequired }
+        : {}),
+      ...(typeof target.runtimeSpec?.previewWidth === "number"
+        ? { previewWidth: target.runtimeSpec.previewWidth }
+        : {}),
+      ...(typeof target.runtimeSpec?.previewHeight === "number"
+        ? { previewHeight: target.runtimeSpec.previewHeight }
+        : {}),
+    },
     provider,
-    promptSpec: normalizePromptSpec(target),
+    promptSpec: normalizePromptSpec(target, defaultStylePreset),
     generationPolicy: {
       size: resolveSize(target),
       quality: resolveQuality(target),
       background: resolveBackground(target),
       outputFormat: resolveOutputFormat(target),
     },
+    postProcess: resolvePostProcess(target),
   };
 
   if (model) {
@@ -197,28 +247,40 @@ function normalizeTargetForGeneration(
   return normalized;
 }
 
-function normalizePromptSpec(target: ManifestTarget): PromptSpec {
+function normalizePromptSpec(
+  target: ManifestTarget,
+  defaultStylePreset: string | undefined,
+): PromptSpec {
   if (target.promptSpec) {
-    return trimPromptSpec(target.promptSpec);
+    return trimPromptSpec(target.promptSpec, defaultStylePreset);
   }
 
   if (typeof target.prompt === "string") {
     return {
       primary: target.prompt.trim(),
+      ...(defaultStylePreset ? { stylePreset: defaultStylePreset } : {}),
     };
   }
 
   if (target.prompt && typeof target.prompt === "object") {
-    return trimPromptSpec(target.prompt);
+    return trimPromptSpec(target.prompt, defaultStylePreset);
   }
 
   throw new Error(`Target "${target.id}" has no prompt content.`);
 }
 
-function trimPromptSpec(promptSpec: PromptSpec): PromptSpec {
+function trimPromptSpec(
+  promptSpec: PromptSpec,
+  defaultStylePreset: string | undefined,
+): PromptSpec {
   return {
     primary: promptSpec.primary.trim(),
     ...(promptSpec.useCase ? { useCase: promptSpec.useCase.trim() } : {}),
+    ...(promptSpec.stylePreset
+      ? { stylePreset: promptSpec.stylePreset.trim() }
+      : defaultStylePreset
+        ? { stylePreset: defaultStylePreset }
+        : {}),
     ...(promptSpec.scene ? { scene: promptSpec.scene.trim() } : {}),
     ...(promptSpec.subject ? { subject: promptSpec.subject.trim() } : {}),
     ...(promptSpec.style ? { style: promptSpec.style.trim() } : {}),
@@ -229,6 +291,139 @@ function trimPromptSpec(promptSpec: PromptSpec): PromptSpec {
     ...(promptSpec.constraints ? { constraints: promptSpec.constraints.trim() } : {}),
     ...(promptSpec.negative ? { negative: promptSpec.negative.trim() } : {}),
   };
+}
+
+function resolveManifestStylePreset(manifest: ManifestV2): string | undefined {
+  const rawPreset = manifest.styleGuide?.preset;
+  if (typeof rawPreset !== "string") {
+    return undefined;
+  }
+  const trimmed = rawPreset.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function resolvePostProcess(target: ManifestTarget): PostProcessPolicy {
+  const explicitResize = normalizePostProcessResize(target.postProcess?.resizeTo);
+  const runtimeResize = deriveResizeFromRuntimeSpec(target);
+  const resizeTo = explicitResize ?? runtimeResize;
+  const algorithm = resolvePostProcessAlgorithm(target.postProcess?.algorithm, target);
+  const stripMetadata =
+    typeof target.postProcess?.stripMetadata === "boolean"
+      ? target.postProcess.stripMetadata
+      : true;
+  const pngPaletteColors =
+    typeof target.postProcess?.pngPaletteColors === "number"
+      ? target.postProcess.pngPaletteColors
+      : undefined;
+
+  return {
+    ...(resizeTo ? { resizeTo } : {}),
+    algorithm,
+    stripMetadata,
+    ...(typeof pngPaletteColors === "number" ? { pngPaletteColors } : {}),
+  };
+}
+
+function resolvePostProcessAlgorithm(
+  value: string | undefined,
+  target: ManifestTarget,
+): PostProcessAlgorithm {
+  const normalized = value?.trim().toLowerCase();
+  if (
+    normalized &&
+    SUPPORTED_POST_PROCESS_ALGORITHMS.has(normalized as PostProcessAlgorithm)
+  ) {
+    return normalized as PostProcessAlgorithm;
+  }
+
+  if (resolvePromptStylePreset(target) === "pixel-art-16bit") {
+    return "nearest";
+  }
+
+  return "lanczos3";
+}
+
+function resolvePromptStylePreset(target: ManifestTarget): string | undefined {
+  if (target.promptSpec?.stylePreset?.trim()) {
+    return target.promptSpec.stylePreset.trim();
+  }
+
+  if (target.prompt && typeof target.prompt === "object") {
+    const prompt = target.prompt as PromptSpec;
+    if (prompt.stylePreset?.trim()) {
+      return prompt.stylePreset.trim();
+    }
+  }
+
+  return undefined;
+}
+
+function normalizePostProcessResize(
+  value: string | number | undefined,
+): { width: number; height: number } | undefined {
+  if (typeof value === "number" && Number.isFinite(value) && value > 0) {
+    const edge = Math.round(value);
+    return { width: edge, height: edge };
+  }
+
+  if (typeof value === "string") {
+    return parseSizeLiteral(value);
+  }
+
+  return undefined;
+}
+
+function deriveResizeFromRuntimeSpec(
+  target: ManifestTarget,
+): { width: number; height: number } | undefined {
+  const previewWidth = target.runtimeSpec?.previewWidth;
+  const previewHeight = target.runtimeSpec?.previewHeight;
+  if (
+    typeof previewWidth !== "number" ||
+    typeof previewHeight !== "number" ||
+    !Number.isFinite(previewWidth) ||
+    !Number.isFinite(previewHeight)
+  ) {
+    return undefined;
+  }
+
+  const acceptance = parseSizeLiteral(target.acceptance?.size);
+  if (!acceptance) {
+    return undefined;
+  }
+
+  const derivedWidth = Math.min(acceptance.width, Math.round(previewWidth * 2));
+  const derivedHeight = Math.min(acceptance.height, Math.round(previewHeight * 2));
+
+  if (
+    derivedWidth <= 0 ||
+    derivedHeight <= 0 ||
+    (derivedWidth === acceptance.width && derivedHeight === acceptance.height)
+  ) {
+    return undefined;
+  }
+
+  return { width: derivedWidth, height: derivedHeight };
+}
+
+function parseSizeLiteral(
+  value: string | undefined,
+): { width: number; height: number } | undefined {
+  if (!value) {
+    return undefined;
+  }
+  const match = /^(\d+)x(\d+)$/i.exec(value.trim());
+  if (!match) {
+    return undefined;
+  }
+
+  const width = Number.parseInt(match[1], 10);
+  const height = Number.parseInt(match[2], 10);
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+    return undefined;
+  }
+
+  return { width, height };
 }
 
 function resolveSize(target: ManifestTarget): string {
@@ -297,6 +492,7 @@ function toProviderJobSpec(
     prompt: buildStructuredPrompt(target.promptSpec),
     promptSpec: target.promptSpec,
     generationPolicy: getTargetGenerationPolicy(target),
+    ...(target.postProcess ? { postProcess: target.postProcess } : {}),
   };
 
   if (target.model) {

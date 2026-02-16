@@ -17,6 +17,10 @@ import {
   ProviderSelection,
   sha256Hex,
 } from "../providers/types.js";
+import {
+  assertTargetAcceptance,
+  postProcessGeneratedImage,
+} from "../shared/image.js";
 
 export interface GeneratePipelineOptions {
   outDir: string;
@@ -27,6 +31,7 @@ export interface GeneratePipelineOptions {
   fetchImpl?: typeof fetch;
   registry?: ProviderRegistry;
   runId?: string;
+  onProgress?: (event: GenerateProgressEvent) => void;
 }
 
 export interface GeneratePipelineResult {
@@ -36,6 +41,24 @@ export interface GeneratePipelineResult {
   imagesDir: string;
   provenancePath: string;
   jobs: ProviderRunResult[];
+}
+
+export type GenerateProgressEventType =
+  | "prepare"
+  | "job_start"
+  | "job_finish"
+  | "job_error";
+
+export interface GenerateProgressEvent {
+  type: GenerateProgressEventType;
+  totalJobs: number;
+  jobIndex?: number;
+  targetId?: string;
+  provider?: string;
+  model?: string;
+  bytesWritten?: number;
+  outputPath?: string;
+  message?: string;
 }
 
 interface TargetsIndexShape {
@@ -72,20 +95,78 @@ export async function runGeneratePipeline(
     now: options.now,
     registry,
   });
+  options.onProgress?.({
+    type: "prepare",
+    totalJobs: jobs.length,
+  });
 
   const results: ProviderRunResult[] = [];
-  for (const job of jobs) {
+  for (let jobIndex = 0; jobIndex < jobs.length; jobIndex += 1) {
+    const job = jobs[jobIndex];
     const provider = getProvider(registry, job.provider);
+    options.onProgress?.({
+      type: "job_start",
+      totalJobs: jobs.length,
+      jobIndex,
+      targetId: job.targetId,
+      provider: job.provider,
+      model: job.model,
+    });
+    let result: ProviderRunResult;
     try {
-      const result = await provider.runJob(job, {
+      result = await provider.runJob(job, {
         outDir,
         imagesDir,
         now: options.now,
         fetchImpl: options.fetchImpl,
       });
-      results.push(result);
     } catch (error) {
+      options.onProgress?.({
+        type: "job_error",
+        totalJobs: jobs.length,
+        jobIndex,
+        targetId: job.targetId,
+        provider: job.provider,
+        model: job.model,
+        message: error instanceof Error ? error.message : String(error),
+      });
       throw provider.normalizeError(error);
+    }
+
+    try {
+      const inspection = await postProcessGeneratedImage(job.target, result.outputPath);
+      assertTargetAcceptance(job.target, inspection);
+
+      const finalizedResult: ProviderRunResult = {
+        ...result,
+        bytesWritten: inspection.sizeBytes,
+      };
+      results.push(finalizedResult);
+      options.onProgress?.({
+        type: "job_finish",
+        totalJobs: jobs.length,
+        jobIndex,
+        targetId: job.targetId,
+        provider: job.provider,
+        model: job.model,
+        bytesWritten: finalizedResult.bytesWritten,
+        outputPath: finalizedResult.outputPath,
+      });
+    } catch (error) {
+      options.onProgress?.({
+        type: "job_error",
+        totalJobs: jobs.length,
+        jobIndex,
+        targetId: job.targetId,
+        provider: job.provider,
+        model: job.model,
+        message: error instanceof Error ? error.message : String(error),
+      });
+      throw new Error(
+        `Post-processing or acceptance checks failed for "${job.targetId}": ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
     }
   }
 

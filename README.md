@@ -4,6 +4,18 @@ LootForge is a manifest-driven CLI for generating and packaging runtime-ready ga
 
 Current version: `0.1.0`
 
+## Try the Playable Demo in 2 Minutes
+
+```bash
+npm install --cache .npm-cache
+npm run demo:dev
+```
+
+Open `http://localhost:5173` and play immediately (no API keys required).
+
+Gameplay screenshot:
+![LootForge Phaser demo gameplay](examples/phaser-demo/docs/gameplay.png)
+
 It is designed to:
 - plan generation jobs from a single manifest
 - run image generation with pluggable providers (OpenAI + Nano)
@@ -27,9 +39,11 @@ That means it produces:
 - Manifest v2 schema with semantic validation
 - Provider selection: `openai`, `nano`, or `auto`
 - Deterministic job IDs and provenance output
+- Built-in post-process step (`resizeTo`, `algorithm`, metadata stripping, PNG palette options)
+- Acceptance enforcement after generation (`size`, alpha, `maxFileSizeKB`)
 - Atlas stage with optional TexturePacker integration
 - Pack assembly with runtime manifests and review artifacts
-- Starter Phaser app for quick consumption testing
+- Playable Phaser arena shooter demo using committed generated assets
 
 ## Requirements
 
@@ -171,10 +185,10 @@ Top-level fields:
 
 Per target:
 - `id`, `kind`, `out`, `atlasGroup?`
-- `prompt` (string or structured object)
+- `prompt` (string or structured object, supports `stylePreset`)
 - `provider?` (`openai|nano`)
 - `acceptance`: `{ size, alpha, maxFileSizeKB }`
-- optional generation/runtime fields (`generationPolicy`, `runtimeSpec`, `model`)
+- optional generation/runtime fields (`generationPolicy`, `postProcess`, `runtimeSpec`, `model`)
 
 Minimal example:
 
@@ -190,7 +204,7 @@ Minimal example:
   "providers": {
     "default": "openai",
     "openai": { "model": "gpt-image-1" },
-    "nano": { "model": "gemini-2.0-flash-preview-image-generation" }
+    "nano": { "model": "gemini-2.5-flash-image" }
   },
   "targets": [
     {
@@ -199,8 +213,13 @@ Minimal example:
       "out": "player-idle.png",
       "atlasGroup": "actors",
       "prompt": "Top-down sci-fi pilot idle sprite with clear silhouette.",
+      "postProcess": {
+        "resizeTo": "512x512",
+        "algorithm": "lanczos3",
+        "stripMetadata": true
+      },
       "acceptance": {
-        "size": "1024x1024",
+        "size": "512x512",
         "alpha": true,
         "maxFileSizeKB": 512
       }
@@ -231,7 +250,7 @@ See also: `docs/manifest-schema.md`
 
 No network keys are required for `init`, `plan`, `validate`, `atlas`, or `package`.
 
-## Starter Phaser Template
+## Legacy Starter Template
 
 Location:
 - `examples/starter-phaser`
@@ -244,6 +263,8 @@ npm --prefix examples/starter-phaser run dev
 
 The app attempts to load `/manifest/phaser.json` and render available assets.
 
+For the canonical generated-assets showcase, use `examples/phaser-demo` instead.
+
 ## Development
 
 Scripts:
@@ -253,6 +274,32 @@ Scripts:
 - `npm run test:unit`
 - `npm run test:integration`
 - `npm run demo:dev`
+- `npm run demo:build`
+- `npm run demo:test`
+
+## Playable Demo
+
+Location:
+- `examples/phaser-demo`
+
+Run:
+```bash
+npm run demo:dev
+```
+
+Asset regeneration (requires `OPENAI_API_KEY`):
+```bash
+npm run demo:assets:plan
+npm run demo:assets:generate
+npm run demo:assets:atlas
+npm run demo:assets:postprocess
+```
+
+Contract consumed by the demo runtime:
+- `examples/phaser-demo/public/assets/atlases/manifest.json`
+- `examples/phaser-demo/public/assets/atlases/*.json`
+- `examples/phaser-demo/public/assets/images/*.png`
+- `examples/phaser-demo/public/assets/imagegen/processed/catalog.json`
 
 ## Status / Roadmap
 

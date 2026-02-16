@@ -1,100 +1,34 @@
 {
-  "runId": "c8c0d941822d2e5e",
-  "inputHash": "977aa2389ac8899c6932be5692f7c0901f84f6ebb56f75d9e6c4dc2e058508a2",
-  "startedAt": "2026-02-16T19:28:26.338Z",
-  "finishedAt": "2026-02-16T19:31:56.042Z",
-  "generatedAt": "2026-02-16T19:31:56.042Z",
-  "jobs": [
+  "runId": "2dfefa10ee7f1637",
+  "inputHash": "5f34d017ebb40dd27bfc63a7b9849ad1af7acfe103e390ef75684ee555f8e1fb",
+  "startedAt": "2026-02-16T21:25:30.562Z",
+  "finishedAt": "2026-02-16T21:25:31.685Z",
+  "generatedAt": "2026-02-16T21:25:31.685Z",
+  "jobs": [],
+  "failures": [
     {
-      "jobId": "70c182bcd189e9999a4c335ed42f64559e89c38377b6af9831b96ca7744984bf",
-      "provider": "openai",
-      "model": "gpt-image-1",
-      "targetId": "arena.background.scrapyard",
-      "inputHash": "78de8f3966d4f84e85d79c49f2b3ca73272f51dc7bb6697352bf33ad102cc786",
-      "startedAt": "2026-02-16T19:28:26.344Z",
-      "finishedAt": "2026-02-16T19:29:16.594Z",
-      "outputPath": "/Users/sws/Code/lootforge/examples/phaser-demo/public/assets/imagegen/raw/arena_background_scrapyard.png"
+      "targetId": "room.crypt_entrance",
+      "provider": "nano",
+      "attemptedProviders": [
+        "nano"
+      ],
+      "message": "Nano provider request failed with status 404."
     },
     {
-      "jobId": "a888747c1e04eb061cfdd759dc639ae0dd84d4d5bb23b714c4e394cc89c1181f",
-      "provider": "openai",
-      "model": "gpt-image-1",
-      "targetId": "effect.hit_spark",
-      "inputHash": "d258b7a8defa933b648f18dad26a092af457ab24725a3d70bb4373be94f00f04",
-      "startedAt": "2026-02-16T19:28:26.594Z",
-      "finishedAt": "2026-02-16T19:29:12.576Z",
-      "outputPath": "/Users/sws/Code/lootforge/examples/phaser-demo/public/assets/imagegen/raw/effect_hit_spark.png"
+      "targetId": "room.throne_room",
+      "provider": "nano",
+      "attemptedProviders": [
+        "nano"
+      ],
+      "message": "Nano provider request failed with status 404."
     },
     {
-      "jobId": "6a1a4558fdf05beb6b30a50a513cdea093d4b324c2614cf9064bac2d1b2470aa",
-      "provider": "openai",
-      "model": "gpt-image-1",
-      "targetId": "enemy.rust_drone",
-      "inputHash": "bec1b9cfa099f38d40b90f8b0800054be834c2fefffc7f6c80fa026ac47b9df8",
-      "startedAt": "2026-02-16T19:29:12.606Z",
-      "finishedAt": "2026-02-16T19:30:01.658Z",
-      "outputPath": "/Users/sws/Code/lootforge/examples/phaser-demo/public/assets/imagegen/raw/enemy_rust_drone.png"
-    },
-    {
-      "jobId": "469de38dec62a1aaa0fb8de1f554095a9257e24ba5cc4642555c46ed37da901a",
-      "provider": "openai",
-      "model": "gpt-image-1",
-      "targetId": "enemy.scrap_rat",
-      "inputHash": "6d415d0e6d7512708931c80a7dc88515036e092e10937ba1ed3996dd76382885",
-      "startedAt": "2026-02-16T19:29:16.617Z",
-      "finishedAt": "2026-02-16T19:29:52.913Z",
-      "outputPath": "/Users/sws/Code/lootforge/examples/phaser-demo/public/assets/imagegen/raw/enemy_scrap_rat.png"
-    },
-    {
-      "jobId": "cdd89ad343b108dc1d206ab9218354aa4f9d84b6ebf67362f8c69dff86400253",
-      "provider": "openai",
-      "model": "gpt-image-1",
-      "targetId": "player.scavenger",
-      "inputHash": "bb4fba53c45a64a1dba6ea5d46d12346f3152a16419c9940d0debc6ba7958576",
-      "startedAt": "2026-02-16T19:29:52.941Z",
-      "finishedAt": "2026-02-16T19:30:49.567Z",
-      "outputPath": "/Users/sws/Code/lootforge/examples/phaser-demo/public/assets/imagegen/raw/player_scavenger.png"
-    },
-    {
-      "jobId": "afa5df0a732b7541eb2ce1bd95291381590ec627c54883d89ca302018810f736",
-      "provider": "openai",
-      "model": "gpt-image-1",
-      "targetId": "projectile.plasma_bolt",
-      "inputHash": "873feab3fe44a4120816a6cad321726d099cfcc5207e2da3943cf6d7ceef1daf",
-      "startedAt": "2026-02-16T19:30:01.698Z",
-      "finishedAt": "2026-02-16T19:30:40.145Z",
-      "outputPath": "/Users/sws/Code/lootforge/examples/phaser-demo/public/assets/imagegen/raw/projectile_plasma_bolt.png"
-    },
-    {
-      "jobId": "799418f71197daaeb84715d946eb30b4ad13eb75de88a8da31242d87e214cf56",
-      "provider": "openai",
-      "model": "gpt-image-1",
-      "targetId": "ui.icon.health",
-      "inputHash": "670f1e178da1df208bdf6cad6fcd213070caaebb2a5837d532ce2cca8e82a296",
-      "startedAt": "2026-02-16T19:30:40.175Z",
-      "finishedAt": "2026-02-16T19:31:17.175Z",
-      "outputPath": "/Users/sws/Code/lootforge/examples/phaser-demo/public/assets/imagegen/raw/ui_icon_health.png"
-    },
-    {
-      "jobId": "cc98154455ee1db1456f5a9443f738a94395aa23ca13170e548f79ee8f90c2b2",
-      "provider": "openai",
-      "model": "gpt-image-1",
-      "targetId": "ui.icon.score",
-      "inputHash": "ce22d3f1c9d3ab20e27547f6eca1c3c751f04650ed021c72826a482f6996c287",
-      "startedAt": "2026-02-16T19:30:49.602Z",
-      "finishedAt": "2026-02-16T19:31:29.148Z",
-      "outputPath": "/Users/sws/Code/lootforge/examples/phaser-demo/public/assets/imagegen/raw/ui_icon_score.png"
-    },
-    {
-      "jobId": "92fdd73f639f42d8688d03c6bf9263d5a19489463db8c1401c52de3c07e1e34b",
-      "provider": "openai",
-      "model": "gpt-image-1",
-      "targetId": "ui.icon.wave",
-      "inputHash": "b487b2336bbeaeae9a99bb50b69c68031a6d29dc92a9e4ee68c4041a23c1a527",
-      "startedAt": "2026-02-16T19:31:17.202Z",
-      "finishedAt": "2026-02-16T19:31:56.014Z",
-      "outputPath": "/Users/sws/Code/lootforge/examples/phaser-demo/public/assets/imagegen/raw/ui_icon_wave.png"
+      "targetId": "room.treasure_hall",
+      "provider": "nano",
+      "attemptedProviders": [
+        "nano"
+      ],
+      "message": "Nano provider request failed with status 404."
     }
-  ],
-  "failures": []
+  ]
 }

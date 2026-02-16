@@ -1,85 +1,55 @@
-import { DEMO_ASSET_IDS } from "./constants";
+import { DEMO_ASSET_IDS, GAME_CONFIG, TUNING } from "./constants";
+import type { DungeonState, PlayerState, Inventory, RoomId } from "./types";
 
-export type GameMode = "playing" | "gameover";
-
-export interface VectorLike {
-  x: number;
-  y: number;
-}
+export type { DungeonState };
 
 export interface WorldBounds {
   width: number;
   height: number;
 }
 
-export interface PlayerState extends VectorLike {
-  vx: number;
-  vy: number;
-  hp: number;
-  maxHp: number;
-  speed: number;
-  radius: number;
-  visualId: string;
+function createInitialPlayer(spawnX: number, spawnY: number): PlayerState {
+  return {
+    x: spawnX,
+    y: spawnY,
+    vx: 0,
+    vy: 0,
+    hp: TUNING.player.maxHp,
+    maxHp: TUNING.player.maxHp,
+    speed: TUNING.player.speed,
+    radius: TUNING.player.radius,
+    facingAngle: 0,
+    meleeCooldownMs: 0,
+    boltCooldownMs: 0,
+    invulnerabilityMs: 0,
+    visualId: DEMO_ASSET_IDS.player,
+  };
 }
 
-export interface EnemyState extends VectorLike {
-  id: string;
-  kind: string;
-  visualId: string;
-  hp: number;
-  speed: number;
-  radius: number;
-  scoreValue: number;
+function createInitialInventory(): Inventory {
+  return {
+    keys: 0,
+    gold: 0,
+  };
 }
 
-export interface ProjectileState extends VectorLike {
-  id: string;
-  vx: number;
-  vy: number;
-  ttlMs: number;
-  radius: number;
-  damage: number;
-  visualId: string;
-}
-
-export interface ArenaState {
-  mode: GameMode;
-  coordinateSystem: string;
-  world: WorldBounds;
-  elapsedMs: number;
-  player: PlayerState;
-  enemies: EnemyState[];
-  projectiles: ProjectileState[];
-  score: number;
-  kills: number;
-  wave: number;
-  waveCountdownMs: number;
-  fireCooldownMs: number;
-}
-
-export function createInitialArenaState(world: WorldBounds): ArenaState {
+export function createInitialDungeonState(
+  world: WorldBounds = { width: GAME_CONFIG.width, height: GAME_CONFIG.height },
+  startRoom: RoomId = "crypt_entrance",
+): DungeonState {
   return {
     mode: "playing",
-    coordinateSystem: "origin top-left, +x right, +y down",
-    world,
-    elapsedMs: 0,
-    player: {
-      x: world.width / 2,
-      y: world.height / 2,
-      vx: 0,
-      vy: 0,
-      hp: 120,
-      maxHp: 120,
-      speed: 260,
-      radius: 20,
-      visualId: DEMO_ASSET_IDS.player,
-    },
+    currentRoom: startRoom,
+    player: createInitialPlayer(world.width / 2, world.height / 2),
     enemies: [],
     projectiles: [],
+    pickups: [],
+    doors: [],
+    inventory: createInitialInventory(),
+    roomsCleared: new Set<RoomId>(),
     score: 0,
     kills: 0,
-    wave: 0,
-    waveCountdownMs: 600,
-    fireCooldownMs: 0,
+    elapsedMs: 0,
+    bossDefeated: false,
   };
 }

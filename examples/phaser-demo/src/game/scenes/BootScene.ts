@@ -24,7 +24,7 @@ export class BootScene extends Phaser.Scene {
 
       registry.enqueueLoaderAssets(this.load);
       this.load.once(Phaser.Loader.Events.COMPLETE, () => {
-        this.scene.start("ArenaScene");
+        this.scene.start("GameScene");
       });
       this.load.start();
     } catch (error) {
@@ -34,7 +34,7 @@ export class BootScene extends Phaser.Scene {
         .text(
           20,
           20,
-          `Asset bootstrap failed.\n${message}\n\nRun npm run demo:assets:plan && npm run demo:assets:generate && npm run demo:assets:process && npm run demo:assets:atlas`,
+          `Asset bootstrap failed.\n${message}\n\nRun npm run demo:dungeon:assets:plan && npm run demo:dungeon:assets:generate && npm run demo:dungeon:assets:process && npm run demo:dungeon:assets:atlas`,
           {
             color: "#f8fafc",
             fontFamily: "monospace",

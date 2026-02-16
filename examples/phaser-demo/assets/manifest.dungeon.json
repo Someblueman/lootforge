@@ -1,0 +1,627 @@
+{
+  "version": "2",
+  "pack": {
+    "id": "dungeon-crawler-pack",
+    "version": "0.1.0",
+    "license": "UNLICENSED",
+    "author": "lootforge"
+  },
+  "providers": {
+    "default": "openai",
+    "openai": {
+      "model": "gpt-image-1"
+    }
+  },
+  "styleGuide": {
+    "preset": "topdown-painterly-fantasy",
+    "notes": "Dark fantasy dungeon, warm torchlight palette, painterly style with readable top-down silhouettes."
+  },
+  "targets": [
+    {
+      "id": "room.crypt_entrance",
+      "kind": "background",
+      "out": "room_crypt_entrance.png",
+      "atlasGroup": "rooms",
+      "prompt": {
+        "primary": "Orthographic top-down dark fantasy crypt entrance floor texture, cracked stone tiles with moss, iron gate frame visible at top edge, warm torchlight glow from sconces, readable navigation space.",
+        "stylePreset": "topdown-painterly-fantasy",
+        "style": "stylized painterly game texture",
+        "constraints": "no characters, no UI, no text, no logos, seamless play space, strong but not noisy contrast"
+      },
+      "acceptance": {
+        "size": "1024x576",
+        "alpha": false,
+        "maxFileSizeKB": 768
+      },
+      "runtimeSpec": {
+        "previewWidth": 1024,
+        "previewHeight": 576
+      },
+      "generationPolicy": {
+        "size": "1024x1024",
+        "background": "opaque",
+        "outputFormat": "png",
+        "quality": "high"
+      },
+      "postProcess": {
+        "resizeTo": "1024x576",
+        "algorithm": "lanczos3",
+        "stripMetadata": true
+      }
+    },
+    {
+      "id": "room.treasure_hall",
+      "kind": "background",
+      "out": "room_treasure_hall.png",
+      "atlasGroup": "rooms",
+      "prompt": {
+        "primary": "Orthographic top-down dark fantasy great hall floor texture, blackened flagstones with glowing ember cracks, lava channels along edges, brazier light pools, open combat arena feel.",
+        "stylePreset": "topdown-painterly-fantasy",
+        "style": "stylized painterly game texture",
+        "constraints": "no characters, no UI, no text, no logos, seamless play space, strong but not noisy contrast"
+      },
+      "acceptance": {
+        "size": "1024x576",
+        "alpha": false,
+        "maxFileSizeKB": 768
+      },
+      "runtimeSpec": {
+        "previewWidth": 1024,
+        "previewHeight": 576
+      },
+      "generationPolicy": {
+        "size": "1024x1024",
+        "background": "opaque",
+        "outputFormat": "png",
+        "quality": "high"
+      },
+      "postProcess": {
+        "resizeTo": "1024x576",
+        "algorithm": "lanczos3",
+        "stripMetadata": true
+      }
+    },
+    {
+      "id": "room.throne_room",
+      "kind": "background",
+      "out": "room_throne_room.png",
+      "atlasGroup": "rooms",
+      "prompt": {
+        "primary": "Orthographic top-down dark fantasy throne room floor texture, ornate ruined carpet over dark stone, collapsed pillars at edges, ominous ember glow from throne platform at far end.",
+        "stylePreset": "topdown-painterly-fantasy",
+        "style": "stylized painterly game texture",
+        "constraints": "no characters, no UI, no text, no logos, seamless play space, strong but not noisy contrast"
+      },
+      "acceptance": {
+        "size": "1024x576",
+        "alpha": false,
+        "maxFileSizeKB": 768
+      },
+      "runtimeSpec": {
+        "previewWidth": 1024,
+        "previewHeight": 576
+      },
+      "generationPolicy": {
+        "size": "1024x1024",
+        "background": "opaque",
+        "outputFormat": "png",
+        "quality": "high"
+      },
+      "postProcess": {
+        "resizeTo": "1024x576",
+        "algorithm": "lanczos3",
+        "stripMetadata": true
+      }
+    },
+    {
+      "id": "player.knight",
+      "kind": "sprite",
+      "out": "player_knight.png",
+      "atlasGroup": "actors",
+      "prompt": {
+        "primary": "Orthographic top-down character sprite of an armored knight hero, viewed from above, full body visible, warm torchlit metal armor, sword and shield, clear directional silhouette.",
+        "stylePreset": "topdown-painterly-fantasy",
+        "style": "stylized hand-painted game sprite",
+        "constraints": "transparent background only, centered subject, no ground shadow, no vignette, no text",
+        "negative": "front-facing portrait, side view, scenic background, gradient backdrop"
+      },
+      "acceptance": {
+        "size": "512x512",
+        "alpha": true,
+        "maxFileSizeKB": 320
+      },
+      "runtimeSpec": {
+        "alphaRequired": true,
+        "previewWidth": 256,
+        "previewHeight": 256
+      },
+      "generationPolicy": {
+        "size": "1024x1024",
+        "background": "transparent",
+        "outputFormat": "png",
+        "quality": "high"
+      },
+      "postProcess": {
+        "resizeTo": "512x512",
+        "algorithm": "lanczos3",
+        "stripMetadata": true
+      }
+    },
+    {
+      "id": "enemy.skeleton",
+      "kind": "sprite",
+      "out": "enemy_skeleton.png",
+      "atlasGroup": "actors",
+      "prompt": {
+        "primary": "Orthographic top-down skeleton warrior enemy sprite for dungeon crawler, bony frame with rusted sword, glowing eye sockets, readable combat silhouette from above.",
+        "stylePreset": "topdown-painterly-fantasy",
+        "style": "stylized hand-painted game sprite",
+        "constraints": "transparent background only, centered subject, no ground shadow, no text",
+        "negative": "front-facing portrait, side view, scenic background, gradient backdrop"
+      },
+      "acceptance": {
+        "size": "512x512",
+        "alpha": true,
+        "maxFileSizeKB": 320
+      },
+      "runtimeSpec": {
+        "alphaRequired": true,
+        "previewWidth": 256,
+        "previewHeight": 256
+      },
+      "generationPolicy": {
+        "size": "1024x1024",
+        "background": "transparent",
+        "outputFormat": "png",
+        "quality": "high"
+      },
+      "postProcess": {
+        "resizeTo": "512x512",
+        "algorithm": "lanczos3",
+        "stripMetadata": true
+      }
+    },
+    {
+      "id": "enemy.slime",
+      "kind": "sprite",
+      "out": "enemy_slime.png",
+      "atlasGroup": "actors",
+      "prompt": {
+        "primary": "Orthographic top-down green slime enemy sprite for dungeon crawler, translucent gelatinous blob with darker core, bubbling surface, compact round shape from above.",
+        "stylePreset": "topdown-painterly-fantasy",
+        "style": "stylized hand-painted game sprite",
+        "constraints": "transparent background only, centered subject, no ground shadow, no text",
+        "negative": "front-facing portrait, side view, scenic background, gradient backdrop"
+      },
+      "acceptance": {
+        "size": "512x512",
+        "alpha": true,
+        "maxFileSizeKB": 400
+      },
+      "runtimeSpec": {
+        "alphaRequired": true,
+        "previewWidth": 256,
+        "previewHeight": 256
+      },
+      "generationPolicy": {
+        "size": "1024x1024",
+        "background": "transparent",
+        "outputFormat": "png",
+        "quality": "high"
+      },
+      "postProcess": {
+        "resizeTo": "512x512",
+        "algorithm": "lanczos3",
+        "stripMetadata": true
+      }
+    },
+    {
+      "id": "boss.ember_king",
+      "kind": "sprite",
+      "out": "boss_ember_king.png",
+      "atlasGroup": "actors",
+      "prompt": {
+        "primary": "Orthographic top-down boss character sprite, the Ember King, a massive armored figure wreathed in flames, crown of embers, imposing silhouette twice the size of normal enemies, viewed from above.",
+        "stylePreset": "topdown-painterly-fantasy",
+        "style": "stylized hand-painted game sprite",
+        "constraints": "transparent background only, centered subject, no ground shadow, no text",
+        "negative": "front-facing portrait, side view, scenic background, gradient backdrop"
+      },
+      "acceptance": {
+        "size": "512x512",
+        "alpha": true,
+        "maxFileSizeKB": 320
+      },
+      "runtimeSpec": {
+        "alphaRequired": true,
+        "previewWidth": 256,
+        "previewHeight": 256
+      },
+      "generationPolicy": {
+        "size": "1024x1024",
+        "background": "transparent",
+        "outputFormat": "png",
+        "quality": "high"
+      },
+      "postProcess": {
+        "resizeTo": "512x512",
+        "algorithm": "lanczos3",
+        "stripMetadata": true
+      }
+    },
+    {
+      "id": "effect.hit_slash",
+      "kind": "effect",
+      "out": "effect_hit_slash.png",
+      "atlasGroup": "effects",
+      "prompt": {
+        "primary": "Top-down melee attack sprite: glowing sword slash arc, crescent-shaped swing trail with warm ember sparks.",
+        "stylePreset": "topdown-painterly-fantasy",
+        "style": "stylized VFX icon",
+        "constraints": "transparent background only, centered, single effect, no text",
+        "negative": "large scene, character, background plate"
+      },
+      "acceptance": {
+        "size": "384x384",
+        "alpha": true,
+        "maxFileSizeKB": 192
+      },
+      "runtimeSpec": {
+        "alphaRequired": true,
+        "previewWidth": 192,
+        "previewHeight": 192
+      },
+      "generationPolicy": {
+        "size": "1024x1024",
+        "background": "transparent",
+        "outputFormat": "png",
+        "quality": "high"
+      },
+      "postProcess": {
+        "resizeTo": "384x384",
+        "algorithm": "lanczos3",
+        "stripMetadata": true
+      }
+    },
+    {
+      "id": "projectile.fireball",
+      "kind": "projectile",
+      "out": "projectile_fireball.png",
+      "atlasGroup": "effects",
+      "prompt": {
+        "primary": "Top-down projectile sprite: bright fire bolt with compact flame core and short directional trail, warm orange-red ember glow.",
+        "stylePreset": "topdown-painterly-fantasy",
+        "style": "stylized VFX icon",
+        "constraints": "transparent background only, centered, single projectile, no text",
+        "negative": "large scene, character, background plate"
+      },
+      "acceptance": {
+        "size": "384x384",
+        "alpha": true,
+        "maxFileSizeKB": 192
+      },
+      "runtimeSpec": {
+        "alphaRequired": true,
+        "previewWidth": 192,
+        "previewHeight": 192
+      },
+      "generationPolicy": {
+        "size": "1024x1024",
+        "background": "transparent",
+        "outputFormat": "png",
+        "quality": "high"
+      },
+      "postProcess": {
+        "resizeTo": "384x384",
+        "algorithm": "lanczos3",
+        "stripMetadata": true
+      }
+    },
+    {
+      "id": "projectile.magic_bolt",
+      "kind": "projectile",
+      "out": "projectile_magic_bolt.png",
+      "atlasGroup": "effects",
+      "prompt": {
+        "primary": "Top-down projectile sprite: glowing blue magic bolt with compact arcane core and short directional energy trail.",
+        "stylePreset": "topdown-painterly-fantasy",
+        "style": "stylized VFX icon",
+        "constraints": "transparent background only, centered, single projectile, no text",
+        "negative": "large scene, character, background plate"
+      },
+      "acceptance": {
+        "size": "384x384",
+        "alpha": true,
+        "maxFileSizeKB": 192
+      },
+      "runtimeSpec": {
+        "alphaRequired": true,
+        "previewWidth": 192,
+        "previewHeight": 192
+      },
+      "generationPolicy": {
+        "size": "1024x1024",
+        "background": "transparent",
+        "outputFormat": "png",
+        "quality": "high"
+      },
+      "postProcess": {
+        "resizeTo": "384x384",
+        "algorithm": "lanczos3",
+        "stripMetadata": true
+      }
+    },
+    {
+      "id": "effect.death_burst",
+      "kind": "effect",
+      "out": "effect_death_burst.png",
+      "atlasGroup": "effects",
+      "prompt": {
+        "primary": "Top-down death explosion effect sprite, dark burst of bone fragments and ember sparks, enemy destruction feedback, warm orange and purple glow.",
+        "stylePreset": "topdown-painterly-fantasy",
+        "style": "stylized VFX icon",
+        "constraints": "transparent background only, centered, no text",
+        "negative": "full-screen explosion scene, background, characters"
+      },
+      "acceptance": {
+        "size": "384x384",
+        "alpha": true,
+        "maxFileSizeKB": 256
+      },
+      "runtimeSpec": {
+        "alphaRequired": true,
+        "previewWidth": 192,
+        "previewHeight": 192
+      },
+      "generationPolicy": {
+        "size": "1024x1024",
+        "background": "transparent",
+        "outputFormat": "png",
+        "quality": "high"
+      },
+      "postProcess": {
+        "resizeTo": "384x384",
+        "algorithm": "lanczos3",
+        "stripMetadata": true
+      }
+    },
+    {
+      "id": "pickup.health_potion",
+      "kind": "sprite",
+      "out": "pickup_health_potion.png",
+      "atlasGroup": "pickups",
+      "prompt": {
+        "primary": "Top-down pickup item sprite: small red health potion in glass flask, glowing liquid, cork stopper, readable at small sizes.",
+        "stylePreset": "topdown-painterly-fantasy",
+        "style": "stylized hand-painted game sprite",
+        "constraints": "transparent background only, centered subject, no ground shadow, no text",
+        "negative": "front-facing portrait, side view, scenic background, gradient backdrop"
+      },
+      "acceptance": {
+        "size": "256x256",
+        "alpha": true,
+        "maxFileSizeKB": 128
+      },
+      "runtimeSpec": {
+        "alphaRequired": true,
+        "previewWidth": 128,
+        "previewHeight": 128
+      },
+      "generationPolicy": {
+        "size": "1024x1024",
+        "background": "transparent",
+        "outputFormat": "png",
+        "quality": "high"
+      },
+      "postProcess": {
+        "resizeTo": "256x256",
+        "algorithm": "lanczos3",
+        "stripMetadata": true
+      }
+    },
+    {
+      "id": "pickup.key",
+      "kind": "sprite",
+      "out": "pickup_key.png",
+      "atlasGroup": "pickups",
+      "prompt": {
+        "primary": "Top-down pickup item sprite: ornate golden dungeon key with ember glow on the bow, old iron teeth, readable at small sizes.",
+        "stylePreset": "topdown-painterly-fantasy",
+        "style": "stylized hand-painted game sprite",
+        "constraints": "transparent background only, centered subject, no ground shadow, no text",
+        "negative": "front-facing portrait, side view, scenic background, gradient backdrop"
+      },
+      "acceptance": {
+        "size": "256x256",
+        "alpha": true,
+        "maxFileSizeKB": 128
+      },
+      "runtimeSpec": {
+        "alphaRequired": true,
+        "previewWidth": 128,
+        "previewHeight": 128
+      },
+      "generationPolicy": {
+        "size": "1024x1024",
+        "background": "transparent",
+        "outputFormat": "png",
+        "quality": "high"
+      },
+      "postProcess": {
+        "resizeTo": "256x256",
+        "algorithm": "lanczos3",
+        "stripMetadata": true
+      }
+    },
+    {
+      "id": "pickup.gold",
+      "kind": "sprite",
+      "out": "pickup_gold.png",
+      "atlasGroup": "pickups",
+      "prompt": {
+        "primary": "Top-down pickup item sprite: shiny gold coin with embossed skull motif, warm metallic sheen, readable at small sizes.",
+        "stylePreset": "topdown-painterly-fantasy",
+        "style": "stylized hand-painted game sprite",
+        "constraints": "transparent background only, centered subject, no ground shadow, no text",
+        "negative": "front-facing portrait, side view, scenic background, gradient backdrop"
+      },
+      "acceptance": {
+        "size": "256x256",
+        "alpha": true,
+        "maxFileSizeKB": 128
+      },
+      "runtimeSpec": {
+        "alphaRequired": true,
+        "previewWidth": 128,
+        "previewHeight": 128
+      },
+      "generationPolicy": {
+        "size": "1024x1024",
+        "background": "transparent",
+        "outputFormat": "png",
+        "quality": "high"
+      },
+      "postProcess": {
+        "resizeTo": "256x256",
+        "algorithm": "lanczos3",
+        "stripMetadata": true
+      }
+    },
+    {
+      "id": "ui.icon.health",
+      "kind": "ui",
+      "out": "ui_icon_health.png",
+      "atlasGroup": "ui",
+      "prompt": {
+        "primary": "Game UI health icon for dark fantasy dungeon theme, red heart with ember glow, simple emblem, legible at small sizes.",
+        "stylePreset": "topdown-painterly-fantasy",
+        "style": "flat icon with subtle shading",
+        "constraints": "transparent background only, centered icon, no letters or numbers"
+      },
+      "acceptance": {
+        "size": "256x256",
+        "alpha": true,
+        "maxFileSizeKB": 128
+      },
+      "runtimeSpec": {
+        "alphaRequired": true,
+        "previewWidth": 128,
+        "previewHeight": 128
+      },
+      "generationPolicy": {
+        "size": "1024x1024",
+        "background": "transparent",
+        "outputFormat": "png",
+        "quality": "high"
+      },
+      "postProcess": {
+        "resizeTo": "256x256",
+        "algorithm": "lanczos3",
+        "stripMetadata": true,
+        "pngPaletteColors": 128
+      }
+    },
+    {
+      "id": "ui.icon.key",
+      "kind": "ui",
+      "out": "ui_icon_key.png",
+      "atlasGroup": "ui",
+      "prompt": {
+        "primary": "Game UI key counter icon for dark fantasy dungeon theme, small golden key silhouette, simple emblem, legible at small sizes.",
+        "stylePreset": "topdown-painterly-fantasy",
+        "style": "flat icon with subtle shading",
+        "constraints": "transparent background only, centered icon, no letters or numbers"
+      },
+      "acceptance": {
+        "size": "256x256",
+        "alpha": true,
+        "maxFileSizeKB": 128
+      },
+      "runtimeSpec": {
+        "alphaRequired": true,
+        "previewWidth": 128,
+        "previewHeight": 128
+      },
+      "generationPolicy": {
+        "size": "1024x1024",
+        "background": "transparent",
+        "outputFormat": "png",
+        "quality": "high"
+      },
+      "postProcess": {
+        "resizeTo": "256x256",
+        "algorithm": "lanczos3",
+        "stripMetadata": true,
+        "pngPaletteColors": 128
+      }
+    },
+    {
+      "id": "ui.icon.gold",
+      "kind": "ui",
+      "out": "ui_icon_gold.png",
+      "atlasGroup": "ui",
+      "prompt": {
+        "primary": "Game UI gold counter icon for dark fantasy dungeon theme, gold coin stack silhouette, simple emblem, legible at small sizes.",
+        "stylePreset": "topdown-painterly-fantasy",
+        "style": "flat icon with subtle shading",
+        "constraints": "transparent background only, centered icon, no letters or numbers"
+      },
+      "acceptance": {
+        "size": "256x256",
+        "alpha": true,
+        "maxFileSizeKB": 128
+      },
+      "runtimeSpec": {
+        "alphaRequired": true,
+        "previewWidth": 128,
+        "previewHeight": 128
+      },
+      "generationPolicy": {
+        "size": "1024x1024",
+        "background": "transparent",
+        "outputFormat": "png",
+        "quality": "high"
+      },
+      "postProcess": {
+        "resizeTo": "256x256",
+        "algorithm": "lanczos3",
+        "stripMetadata": true,
+        "pngPaletteColors": 128
+      }
+    },
+    {
+      "id": "ui.icon.attack",
+      "kind": "ui",
+      "out": "ui_icon_attack.png",
+      "atlasGroup": "ui",
+      "prompt": {
+        "primary": "Game UI attack power icon for dark fantasy dungeon theme, crossed sword emblem with ember accent, simple symbol, legible at small sizes.",
+        "stylePreset": "topdown-painterly-fantasy",
+        "style": "flat icon with subtle shading",
+        "constraints": "transparent background only, centered icon, no letters or numbers"
+      },
+      "acceptance": {
+        "size": "256x256",
+        "alpha": true,
+        "maxFileSizeKB": 128
+      },
+      "runtimeSpec": {
+        "alphaRequired": true,
+        "previewWidth": 128,
+        "previewHeight": 128
+      },
+      "generationPolicy": {
+        "size": "1024x1024",
+        "background": "transparent",
+        "outputFormat": "png",
+        "quality": "high"
+      },
+      "postProcess": {
+        "resizeTo": "256x256",
+        "algorithm": "lanczos3",
+        "stripMetadata": true,
+        "pngPaletteColors": 128
+      }
+    }
+  ]
+}

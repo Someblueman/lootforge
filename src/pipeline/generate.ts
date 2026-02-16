@@ -1,26 +1,25 @@
-import { mkdir, readFile } from "node:fs/promises";
+import { cp, mkdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
 
+import { scoreCandidateImages } from "../checks/candidateScore.js";
 import { writeRunProvenance } from "../output/provenance.js";
 import {
   createProviderRegistry,
   getProvider,
   ProviderRegistry,
-  resolveTargetProviderName,
+  resolveTargetProviderRoute,
 } from "../providers/registry.js";
 import {
   nowIso,
   parseProviderSelection,
   PlannedTarget,
   ProviderJob,
+  ProviderName,
   ProviderRunResult,
   ProviderSelection,
   sha256Hex,
 } from "../providers/types.js";
-import {
-  assertTargetAcceptance,
-  postProcessGeneratedImage,
-} from "../shared/image.js";
+import { resolveStagePathLayout } from "../shared/paths.js";
 
 export interface GeneratePipelineOptions {
   outDir: string;
@@ -34,6 +33,13 @@ export interface GeneratePipelineOptions {
   onProgress?: (event: GenerateProgressEvent) => void;
 }
 
+export interface GenerateJobFailure {
+  targetId: string;
+  provider: ProviderName;
+  attemptedProviders: ProviderName[];
+  message: string;
+}
+
 export interface GeneratePipelineResult {
   runId: string;
   inputHash: string;
@@ -41,6 +47,7 @@ export interface GeneratePipelineResult {
   imagesDir: string;
   provenancePath: string;
   jobs: ProviderRunResult[];
+  failures: GenerateJobFailure[];
 }
 
 export type GenerateProgressEventType =
@@ -65,16 +72,23 @@ interface TargetsIndexShape {
   targets?: PlannedTarget[];
 }
 
+interface TargetTask {
+  target: PlannedTarget;
+  targetIndex: number;
+  primaryProvider: ProviderName;
+  fallbackProviders: ProviderName[];
+}
+
 export async function runGeneratePipeline(
   options: GeneratePipelineOptions,
 ): Promise<GeneratePipelineResult> {
-  const outDir = path.resolve(options.outDir);
+  const layout = resolveStagePathLayout(options.outDir);
   const targetsIndexPath = path.resolve(
-    options.targetsIndexPath ?? path.join(outDir, "jobs", "targets-index.json"),
+    options.targetsIndexPath ?? path.join(layout.jobsDir, "targets-index.json"),
   );
   const providerSelection = options.provider ?? "auto";
   const registry = options.registry ?? createProviderRegistry();
-  const imagesDir = path.join(outDir, "assets", "images");
+  const imagesDir = layout.rawDir;
 
   const indexRaw = await readFile(targetsIndexPath, "utf8");
   const index = parseTargetsIndex(indexRaw, targetsIndexPath);
@@ -87,91 +101,131 @@ export async function runGeneratePipeline(
 
   await mkdir(imagesDir, { recursive: true });
 
-  const jobs = await prepareAllJobs({
-    targets: filteredTargets,
-    providerSelection,
-    outDir,
-    imagesDir,
-    now: options.now,
-    registry,
+  const tasks = filteredTargets.map((target, targetIndex) => {
+    const route = resolveTargetProviderRoute(target, providerSelection);
+    return {
+      target,
+      targetIndex,
+      primaryProvider: route.primary,
+      fallbackProviders: route.fallbacks,
+    } as TargetTask;
   });
+
   options.onProgress?.({
     type: "prepare",
-    totalJobs: jobs.length,
+    totalJobs: tasks.length,
   });
 
-  const results: ProviderRunResult[] = [];
-  for (let jobIndex = 0; jobIndex < jobs.length; jobIndex += 1) {
-    const job = jobs[jobIndex];
-    const provider = getProvider(registry, job.provider);
-    options.onProgress?.({
-      type: "job_start",
-      totalJobs: jobs.length,
-      jobIndex,
-      targetId: job.targetId,
-      provider: job.provider,
-      model: job.model,
-    });
-    let result: ProviderRunResult;
-    try {
-      result = await provider.runJob(job, {
-        outDir,
-        imagesDir,
-        now: options.now,
-        fetchImpl: options.fetchImpl,
-      });
-    } catch (error) {
-      options.onProgress?.({
-        type: "job_error",
-        totalJobs: jobs.length,
-        jobIndex,
-        targetId: job.targetId,
-        provider: job.provider,
-        model: job.model,
-        message: error instanceof Error ? error.message : String(error),
-      });
-      throw provider.normalizeError(error);
-    }
-
-    try {
-      const inspection = await postProcessGeneratedImage(job.target, result.outputPath);
-      assertTargetAcceptance(job.target, inspection);
-
-      const finalizedResult: ProviderRunResult = {
-        ...result,
-        bytesWritten: inspection.sizeBytes,
-      };
-      results.push(finalizedResult);
-      options.onProgress?.({
-        type: "job_finish",
-        totalJobs: jobs.length,
-        jobIndex,
-        targetId: job.targetId,
-        provider: job.provider,
-        model: job.model,
-        bytesWritten: finalizedResult.bytesWritten,
-        outputPath: finalizedResult.outputPath,
-      });
-    } catch (error) {
-      options.onProgress?.({
-        type: "job_error",
-        totalJobs: jobs.length,
-        jobIndex,
-        targetId: job.targetId,
-        provider: job.provider,
-        model: job.model,
-        message: error instanceof Error ? error.message : String(error),
-      });
-      throw new Error(
-        `Post-processing or acceptance checks failed for "${job.targetId}": ${
-          error instanceof Error ? error.message : String(error)
-        }`,
-      );
+  const groupedTasks = new Map<ProviderName, TargetTask[]>();
+  for (const task of tasks) {
+    const existing = groupedTasks.get(task.primaryProvider);
+    if (existing) {
+      existing.push(task);
+    } else {
+      groupedTasks.set(task.primaryProvider, [task]);
     }
   }
 
+  const results: ProviderRunResult[] = [];
+  const failures: GenerateJobFailure[] = [];
+
+  await Promise.all(
+    Array.from(groupedTasks.entries()).map(async ([providerName, providerTasks]) => {
+      const provider = getProvider(registry, providerName);
+      const providerConcurrency = Math.max(
+        1,
+        ...providerTasks.map(
+          (task) => task.target.generationPolicy?.providerConcurrency ?? 0,
+        ),
+        provider.capabilities.defaultConcurrency,
+      );
+
+      const queue = [...providerTasks].sort((left, right) =>
+        left.target.id.localeCompare(right.target.id),
+      );
+      let nextTask = 0;
+      let lastRunAt = 0;
+
+      const workers: Promise<void>[] = [];
+      for (let workerIndex = 0; workerIndex < providerConcurrency; workerIndex += 1) {
+        workers.push(
+          (async () => {
+            while (nextTask < queue.length) {
+              const currentIndex = nextTask;
+              nextTask += 1;
+              const task = queue[currentIndex];
+
+              const minDelayMs = computeProviderDelayMs(task, provider.capabilities.minDelayMs);
+              const waitMs = Math.max(0, lastRunAt + minDelayMs - Date.now());
+              if (waitMs > 0) {
+                await delay(waitMs);
+              }
+              lastRunAt = Date.now();
+
+              const progressIndex = task.targetIndex;
+              options.onProgress?.({
+                type: "job_start",
+                totalJobs: tasks.length,
+                jobIndex: progressIndex,
+                targetId: task.target.id,
+                provider: task.primaryProvider,
+                model: task.target.model,
+              });
+
+              try {
+                const result = await runTaskWithFallback({
+                  task,
+                  outDir: layout.outDir,
+                  imagesDir,
+                  now: options.now,
+                  fetchImpl: options.fetchImpl,
+                  registry,
+                });
+                results.push(result);
+
+                options.onProgress?.({
+                  type: "job_finish",
+                  totalJobs: tasks.length,
+                  jobIndex: progressIndex,
+                  targetId: task.target.id,
+                  provider: result.provider,
+                  model: result.model,
+                  bytesWritten: result.bytesWritten,
+                  outputPath: result.outputPath,
+                });
+              } catch (error) {
+                const message = error instanceof Error ? error.message : String(error);
+                failures.push({
+                  targetId: task.target.id,
+                  provider: task.primaryProvider,
+                  attemptedProviders: [task.primaryProvider, ...task.fallbackProviders],
+                  message,
+                });
+
+                options.onProgress?.({
+                  type: "job_error",
+                  totalJobs: tasks.length,
+                  jobIndex: progressIndex,
+                  targetId: task.target.id,
+                  provider: task.primaryProvider,
+                  model: task.target.model,
+                  message,
+                });
+              }
+            }
+          })(),
+        );
+      }
+
+      await Promise.all(workers);
+    }),
+  );
+
+  results.sort((left, right) => left.targetId.localeCompare(right.targetId));
+  failures.sort((left, right) => left.targetId.localeCompare(right.targetId));
+
   const finishedAt = nowIso(options.now);
-  const provenancePath = await writeRunProvenance(outDir, {
+  const provenancePath = await writeRunProvenance(layout.outDir, {
     runId,
     inputHash,
     startedAt,
@@ -187,7 +241,17 @@ export async function runGeneratePipeline(
       finishedAt: result.finishedAt,
       outputPath: result.outputPath,
     })),
+    failures,
   });
+
+  if (failures.length > 0) {
+    throw new Error(
+      `Generation failed for ${failures.length} target(s): ${failures
+        .slice(0, 5)
+        .map((failure) => `${failure.targetId}`)
+        .join(", ")}`,
+    );
+  }
 
   return {
     runId,
@@ -196,6 +260,7 @@ export async function runGeneratePipeline(
     imagesDir,
     provenancePath,
     jobs: results,
+    failures,
   };
 }
 
@@ -239,48 +304,6 @@ function normalizeTargets(index: TargetsIndexShape, filePath: string): PlannedTa
   });
 }
 
-async function prepareAllJobs(params: {
-  targets: PlannedTarget[];
-  providerSelection: ProviderSelection;
-  outDir: string;
-  imagesDir: string;
-  now?: () => Date;
-  registry: ProviderRegistry;
-}): Promise<ProviderJob[]> {
-  const groupedTargets = new Map<string, PlannedTarget[]>();
-
-  for (const target of params.targets) {
-    const providerName = resolveTargetProviderName(
-      target,
-      params.providerSelection,
-    );
-    const existing = groupedTargets.get(providerName);
-    if (existing) {
-      existing.push(target);
-    } else {
-      groupedTargets.set(providerName, [target]);
-    }
-  }
-
-  const jobs: ProviderJob[] = [];
-  for (const [providerName, targets] of groupedTargets) {
-    const provider = getProvider(params.registry, providerName as "openai" | "nano");
-    try {
-      const providerJobs = await provider.prepareJobs(targets, {
-        outDir: params.outDir,
-        imagesDir: params.imagesDir,
-        now: params.now,
-      });
-      jobs.push(...providerJobs);
-    } catch (error) {
-      throw provider.normalizeError(error);
-    }
-  }
-
-  jobs.sort((left, right) => left.id.localeCompare(right.id));
-  return jobs;
-}
-
 function filterTargetsByIds(targets: PlannedTarget[], ids?: string[]): PlannedTarget[] {
   if (!ids || ids.length === 0) {
     return targets;
@@ -299,4 +322,94 @@ function filterTargetsByIds(targets: PlannedTarget[], ids?: string[]): PlannedTa
   }
 
   return filtered;
+}
+
+async function runTaskWithFallback(params: {
+  task: TargetTask;
+  outDir: string;
+  imagesDir: string;
+  now?: () => Date;
+  fetchImpl?: typeof fetch;
+  registry: ProviderRegistry;
+}): Promise<ProviderRunResult> {
+  const providerChain = [params.task.primaryProvider, ...params.task.fallbackProviders];
+  let lastError: unknown;
+
+  for (const providerName of providerChain) {
+    const provider = getProvider(params.registry, providerName);
+    const preparedJobs = await provider.prepareJobs([params.task.target], {
+      outDir: params.outDir,
+      imagesDir: params.imagesDir,
+      now: params.now,
+    });
+
+    if (preparedJobs.length === 0) {
+      lastError = new Error(`Provider ${providerName} produced no jobs for ${params.task.target.id}`);
+      continue;
+    }
+
+    const job = preparedJobs[0];
+    const attempts = Math.max(1, job.maxRetries + 1);
+
+    for (let attempt = 1; attempt <= attempts; attempt += 1) {
+      try {
+        const runResult = await provider.runJob(job, {
+          outDir: params.outDir,
+          imagesDir: params.imagesDir,
+          now: params.now,
+          fetchImpl: params.fetchImpl,
+        });
+
+        const candidatePaths =
+          runResult.candidateOutputs?.map((candidate) => candidate.outputPath) ??
+          [runResult.outputPath];
+
+        const candidateSelection = await scoreCandidateImages(params.task.target, candidatePaths);
+        const bestPath = candidateSelection.bestPath;
+        if (bestPath !== job.outPath) {
+          await cp(bestPath, job.outPath, { force: true });
+        }
+
+        const fileStat = await stat(job.outPath);
+        return {
+          ...runResult,
+          provider: providerName,
+          outputPath: job.outPath,
+          bytesWritten: fileStat.size,
+          candidateScores: candidateSelection.scores,
+        };
+      } catch (error) {
+        lastError = provider.normalizeError(error);
+        if (attempt < attempts) {
+          await delay(backoffMsForAttempt(attempt));
+        }
+      }
+    }
+  }
+
+  throw lastError instanceof Error
+    ? lastError
+    : new Error(`Generation failed for target ${params.task.target.id}`);
+}
+
+function backoffMsForAttempt(attempt: number): number {
+  return Math.min(5000, 300 * 2 ** (attempt - 1));
+}
+
+function computeProviderDelayMs(task: TargetTask, fallbackDelay: number): number {
+  const requestedRateLimit = task.target.generationPolicy?.rateLimitPerMinute;
+  if (
+    typeof requestedRateLimit === "number" &&
+    Number.isFinite(requestedRateLimit) &&
+    requestedRateLimit > 0
+  ) {
+    const rateDelay = Math.ceil(60000 / requestedRateLimit);
+    return Math.max(rateDelay, fallbackDelay);
+  }
+
+  return fallbackDelay;
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }

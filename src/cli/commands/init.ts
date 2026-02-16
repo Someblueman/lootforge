@@ -13,6 +13,8 @@ export interface InitCommandResult {
   manifestPath: string;
   rawDir: string;
   processedDir: string;
+  processedImagesDir: string;
+  legacyImagesDir: string;
   jobsDir: string;
   manifestCreated: boolean;
 }
@@ -29,12 +31,16 @@ export async function runInitCommand(argv: string[]): Promise<InitCommandResult>
   const manifestPath = path.join(imagegenDir, "manifest.json");
   const rawDir = path.join(imagegenDir, "raw");
   const processedDir = path.join(imagegenDir, "processed");
+  const processedImagesDir = path.join(processedDir, "images");
+  const legacyImagesDir = path.join(path.dirname(imagegenDir), "images");
   const jobsDir = path.join(imagegenDir, "jobs");
 
   await Promise.all([
     ensureDir(imagegenDir),
     ensureDir(rawDir),
     ensureDir(processedDir),
+    ensureDir(processedImagesDir),
+    ensureDir(legacyImagesDir),
     ensureDir(jobsDir),
   ]);
 
@@ -48,6 +54,8 @@ export async function runInitCommand(argv: string[]): Promise<InitCommandResult>
     manifestPath,
     rawDir,
     processedDir,
+    processedImagesDir,
+    legacyImagesDir,
     jobsDir,
     manifestCreated: !manifestAlreadyExists,
   };
@@ -70,6 +78,18 @@ function createDefaultManifest(): ManifestV2 {
       nano: {
         model: "gemini-2.5-flash-image",
       },
+      local: {
+        model: "sdxl-controlnet",
+        baseUrl: "http://127.0.0.1:8188",
+      },
+    },
+    atlas: {
+      padding: 2,
+      trim: true,
+      bleed: 1,
+      multipack: false,
+      maxWidth: 2048,
+      maxHeight: 2048,
     },
     targets: [
       {
@@ -86,11 +106,18 @@ function createDefaultManifest(): ManifestV2 {
           outputFormat: "png",
           quality: "high",
           background: "transparent",
+          candidates: 2,
+          maxRetries: 1,
         },
         postProcess: {
           resizeTo: "512x512",
           algorithm: "lanczos3",
           stripMetadata: true,
+          operations: {
+            trim: { enabled: true },
+            pad: { pixels: 2, extrude: true },
+            quantize: { colors: 128, dither: 0.6 },
+          },
         },
         acceptance: {
           size: "512x512",

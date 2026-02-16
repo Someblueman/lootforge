@@ -18,7 +18,7 @@ Gameplay screenshot:
 
 It is designed to:
 - plan generation jobs from a single manifest
-- run image generation with pluggable providers (OpenAI + Nano)
+- run image generation with pluggable providers (OpenAI + Nano + Local adapter)
 - validate and bundle outputs into a portable asset pack
 - emit Phaser-friendly manifests plus generic metadata
 
@@ -37,11 +37,14 @@ That means it produces:
 ## Features
 
 - Manifest v2 schema with semantic validation
-- Provider selection: `openai`, `nano`, or `auto`
-- Deterministic job IDs and provenance output
-- Built-in post-process step (`resizeTo`, `algorithm`, metadata stripping, PNG palette options)
-- Acceptance enforcement after generation (`size`, alpha, `maxFileSizeKB`)
-- Atlas stage with optional TexturePacker integration
+- Provider selection: `openai`, `nano`, `local`, or `auto`
+- Provider-aware normalization (`jpg -> jpeg`, transparent/background compatibility checks)
+- Deterministic job IDs keyed to normalized generation policy
+- Raw/processed pipeline stages (`generate -> process -> atlas -> package`)
+- Multi-candidate generation with deterministic best-of scoring
+- Post-process operators (`trim`, `pad/extrude`, `quantize`, `outline`, `resizeVariants`)
+- Pixel-level acceptance checks with JSON report output
+- Atlas stage with optional TexturePacker integration plus reproducibility artifacts
 - Pack assembly with runtime manifests and review artifacts
 - Playable Phaser arena shooter demo using committed generated assets
 
@@ -97,7 +100,10 @@ node dist/cli/index.js generate \
   --out assets/imagegen \
   --provider openai
 
-# 5) Build atlases and package artifact bundle
+# 5) Process raw assets into runtime-ready outputs
+node dist/cli/index.js process --out assets/imagegen
+
+# 6) Build atlases and package artifact bundle
 node dist/cli/index.js atlas --out assets/imagegen
 node dist/cli/index.js package \
   --manifest assets/imagegen/manifest.json \
@@ -125,6 +131,7 @@ Validates manifest and writes planned jobs:
 - `<out>/jobs/targets-index.json`
 - `<out>/jobs/openai.jsonl`
 - `<out>/jobs/nano.jsonl`
+- `<out>/jobs/local.jsonl`
 
 Example:
 ```bash
@@ -135,13 +142,16 @@ lootforge plan --manifest assets/imagegen/manifest.json --out assets/imagegen
 
 Writes:
 - `<out>/checks/validation-report.json`
+- optional `<out>/checks/image-acceptance-report.json`
 
 Flags:
 - `--strict true|false` (default: `true`)
+- `--check-images true|false` (default: `false`)
+- `--images-dir <path>` optional override for acceptance checks
 
 Example:
 ```bash
-lootforge validate --manifest assets/imagegen/manifest.json --out assets/imagegen --strict true
+lootforge validate --manifest assets/imagegen/manifest.json --out assets/imagegen --strict true --check-images true
 ```
 
 ### `lootforge generate`
@@ -151,12 +161,25 @@ Runs provider generation from planned targets index.
 Flags:
 - `--out <dir>`
 - `--index <path>` optional (default `<out>/jobs/targets-index.json`)
-- `--provider openai|nano|auto`
+- `--provider openai|nano|local|auto`
 - `--ids a,b,c` optional subset
 
 Example:
 ```bash
 lootforge generate --out assets/imagegen --provider nano --ids enemy-1,ui-icon-attack
+```
+
+### `lootforge process`
+
+Reads raw outputs, applies post-processing and acceptance checks, and writes:
+- `<out>/assets/imagegen/processed/images/*` (or `<out>/processed/images/*` when `out` is already `assets/imagegen`)
+- compatibility mirror: `<out>/assets/images/*`
+- `<out>/assets/imagegen/processed/catalog.json`
+- `<out>/checks/image-acceptance-report.json`
+
+Example:
+```bash
+lootforge process --out assets/imagegen --strict true
 ```
 
 ### `lootforge atlas`
@@ -180,15 +203,16 @@ Launches the starter Phaser preview app from:
 
 Top-level fields:
 - `pack`: `{ id, version, license, author }` (required)
-- `providers`: `{ default, openai?, nano? }` (required)
+- `providers`: `{ default, openai?, nano?, local? }` (required)
+- `atlas` options for packing defaults and per-group overrides
 - `targets[]` (required)
 
 Per target:
 - `id`, `kind`, `out`, `atlasGroup?`
 - `prompt` (string or structured object, supports `stylePreset`)
-- `provider?` (`openai|nano`)
+- `provider?` (`openai|nano|local`)
 - `acceptance`: `{ size, alpha, maxFileSizeKB }`
-- optional generation/runtime fields (`generationPolicy`, `postProcess`, `runtimeSpec`, `model`)
+- optional generation/runtime fields (`generationPolicy`, `postProcess`, `runtimeSpec`, `model`, `edit`, `auxiliaryMaps`)
 
 Minimal example:
 
@@ -204,7 +228,8 @@ Minimal example:
   "providers": {
     "default": "openai",
     "openai": { "model": "gpt-image-1" },
-    "nano": { "model": "gemini-2.5-flash-image" }
+    "nano": { "model": "gemini-2.5-flash-image" },
+    "local": { "model": "sdxl-controlnet", "baseUrl": "http://127.0.0.1:8188" }
   },
   "targets": [
     {
@@ -241,12 +266,20 @@ See also: `docs/manifest-schema.md`
 - `dist/packs/<pack-id>/review/contact-sheet.png`
 - `dist/packs/<pack-id>/provenance/run.json`
 - `dist/packs/<pack-id>/checks/validation-report.json`
+- `dist/packs/<pack-id>/checks/image-acceptance-report.json`
 - `dist/packs/game-asset-pack-<pack-id>.zip`
+
+Stage outputs during generation flow:
+- `raw/` stage: generated provider outputs
+- `processed/` stage: deterministic post-processed outputs + catalog
+- compatibility mirror under `assets/images/`
+- atlas reproducibility artifact: `assets/atlases/atlas-config.json`
 
 ## Environment Variables
 
 - `OPENAI_API_KEY`: required for OpenAI generation
 - `GEMINI_API_KEY`: required for Nano generation
+- `LOCAL_DIFFUSION_BASE_URL`: optional for local diffusion adapter (default `http://127.0.0.1:8188`)
 
 No network keys are required for `init`, `plan`, `validate`, `atlas`, or `package`.
 
@@ -291,6 +324,7 @@ Asset regeneration (requires `OPENAI_API_KEY`):
 ```bash
 npm run demo:assets:plan
 npm run demo:assets:generate
+npm run demo:assets:process
 npm run demo:assets:atlas
 npm run demo:assets:postprocess
 ```
@@ -306,7 +340,7 @@ Contract consumed by the demo runtime:
 `0.1.0` is an early foundation release.
 
 Planned follow-ups:
-- stronger image quality and acceptance checks
-- improved contact sheet generation
-- richer auto-provider routing heuristics
+- provider edit workflows and iterative refinement
+- expanded local diffusion/ControlNet integrations
+- deeper auxiliary map generation and runtime material pipelines
 - expanded runtime templates and loaders

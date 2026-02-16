@@ -1,10 +1,12 @@
 import type {
+  AuxiliaryMapPolicy,
   GenerationPolicy,
-  PostProcessPolicy,
   PlannedTarget,
   PlannedTargetsIndex,
+  PostProcessPolicy,
   PromptSpec,
   ProviderName,
+  TargetEditSpec,
 } from "../providers/types.js";
 
 export interface ManifestPack {
@@ -16,12 +18,22 @@ export interface ManifestPack {
 
 export interface ManifestProviderConfig {
   model?: string;
+  endpoint?: string;
+  timeoutMs?: number;
+  maxRetries?: number;
+  minDelayMs?: number;
+  defaultConcurrency?: number;
+}
+
+export interface ManifestLocalProviderConfig extends ManifestProviderConfig {
+  baseUrl?: string;
 }
 
 export interface ManifestProviders {
   default?: ProviderName;
   openai?: ManifestProviderConfig;
   nano?: ManifestProviderConfig;
+  local?: ManifestLocalProviderConfig;
 }
 
 export interface ManifestAcceptance {
@@ -36,13 +48,34 @@ export interface ManifestRuntimeSpec {
   previewHeight?: number;
 }
 
-export interface ManifestGenerationPolicy {
-  size?: string;
-  background?: string;
-  outputFormat?: string;
-  quality?: string;
+export interface ManifestGenerationPolicy extends GenerationPolicy {
   draftQuality?: string;
   finalQuality?: string;
+}
+
+export interface ManifestPostProcessOperations {
+  trim?: {
+    enabled?: boolean;
+    threshold?: number;
+  };
+  pad?: {
+    pixels: number;
+    extrude?: boolean;
+    background?: string;
+  };
+  quantize?: {
+    colors: number;
+    dither?: number;
+  };
+  outline?: {
+    size: number;
+    color?: string;
+  };
+  resizeVariants?: Array<{
+    name: string;
+    size: string;
+    algorithm?: string;
+  }>;
 }
 
 export interface ManifestPostProcess {
@@ -50,6 +83,20 @@ export interface ManifestPostProcess {
   algorithm?: string;
   stripMetadata?: boolean;
   pngPaletteColors?: number;
+  operations?: ManifestPostProcessOperations;
+}
+
+export interface ManifestAtlasGroupOptions {
+  padding?: number;
+  trim?: boolean;
+  bleed?: number;
+  multipack?: boolean;
+  maxWidth?: number;
+  maxHeight?: number;
+}
+
+export interface ManifestAtlasOptions extends ManifestAtlasGroupOptions {
+  groups?: Record<string, ManifestAtlasGroupOptions>;
 }
 
 export type ManifestPrompt = string | PromptSpec;
@@ -67,6 +114,8 @@ export interface ManifestTarget {
   runtimeSpec?: ManifestRuntimeSpec;
   provider?: ProviderName;
   model?: string;
+  edit?: TargetEditSpec;
+  auxiliaryMaps?: AuxiliaryMapPolicy;
 }
 
 export interface ManifestV2 {
@@ -74,6 +123,7 @@ export interface ManifestV2 {
   pack: ManifestPack;
   providers: ManifestProviders;
   styleGuide?: Record<string, unknown>;
+  atlas?: ManifestAtlasOptions;
   targets: ManifestTarget[];
 }
 
@@ -127,4 +177,5 @@ export interface PlanArtifacts {
   targetsIndex: PlannedTargetsIndex;
   openaiJobs: PlannedProviderJobSpec[];
   nanoJobs: PlannedProviderJobSpec[];
+  localJobs: PlannedProviderJobSpec[];
 }

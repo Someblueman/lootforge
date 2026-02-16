@@ -1,0 +1,45 @@
+Original prompt: Could you help implement the provided plan by creating a new branch first and building a playable Phaser demo at examples/phaser-demo that consumes 100% generated-and-committed pipeline assets, adds demo asset scripts/tests/docs, and supports a reliable web-game verification loop.
+
+- 2026-02-15: Started task on branch feat/phaser-demo-generated-assets.
+- Loaded skills: codex-compound-workflow and develop-web-game.
+- Compound memory reuse check: no existing lootforge repo memory directory found.
+- Next: scaffold demo app, generated asset contract files, tests, and docs.
+- Added new Phaser demo scaffold under examples/phaser-demo with BootScene/ArenaScene/systems/Hud/AssetRegistry.
+- Added deterministic hooks (`window.render_game_to_text`, `window.advanceTime`) in ArenaScene.
+- Added root scripts for demo build/dev/test + asset plan/generate/atlas/postprocess.
+- Expanded pipeline target metadata propagation and atlas fallback bundle generation when TexturePacker is unavailable.
+- Added demo smoke/contract tests under test/demo.
+- Ran demo asset pipeline with OpenAI and committed 9 generated PNGs + atlas/catalog manifests in examples/phaser-demo/public/assets.
+- Added generation progress logging (prepare + per-target start/finish/error) for CLI transparency.
+- Added demo README and demo tests (`npm run demo:test` currently passing).
+- Verified Playwright loop using develop-web-game client on dedicated port 5180 (to avoid a separate service on 5173).
+- Added arrow-key movement and Enter/Space restart aliases to support automated input bursts.
+- Fixed demo Vite root resolution bug so the new app is served from examples/phaser-demo, not repo root.
+- Fixed fallback atlas frame sizing (use acceptance/image dimensions, not runtime preview dimensions) to prevent cropped/invisible sprites.
+- Captured gameplay screenshot at examples/phaser-demo/docs/gameplay.png.
+- Validation run status:
+  - npm run demo:build ✅
+  - npm run demo:test ✅
+  - npm test ✅
+  - npm run typecheck ✅
+  - npm run build ✅
+- TODO: if this demo is promoted publicly, consider adding true packed atlases via TexturePacker in CI for tighter runtime payloads.
+- Added CLI generation progress logging and validated output format by running a 1-target generate command.
+- Additional gameplay verification via Playwright action bursts:
+  - movement + shooting + score/kills progression
+  - game over transition
+  - restart via Enter (automation-friendly alias)
+- Final regression checks rerun after latest edits:
+  - npm run demo:test ✅
+  - npm run test ✅
+  - npm run build ✅
+- Follow-up quality pass from user feedback:
+  - switched controls to explicit `keyboard.addKey` bindings (W/A/S/D + arrows + restart aliases)
+  - rebalanced runtime sprite sizes (player/enemy/projectile/effect/UI) for better proportions
+  - strengthened manifest prompts for top-down readability and transparent-background constraints
+  - regenerated full demo asset set and rebuilt atlas/catalog outputs
+- Verification probes after the fix:
+  - left movement with `A` key: player x 480 -> 376 ✅
+  - downward movement with arrow down: player y 270 -> 377.7 ✅
+  - right movement with arrow right: player x 480 -> 584 ✅
+- Refreshed gameplay screenshot at examples/phaser-demo/docs/gameplay.png.

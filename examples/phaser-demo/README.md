@@ -33,6 +33,7 @@ Regeneration flow:
 ```bash
 npm run demo:assets:plan
 npm run demo:assets:generate
+npm run demo:assets:process
 npm run demo:assets:atlas
 npm run demo:assets:postprocess
 ```

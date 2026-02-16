@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import path from "node:path";
 
-export const PROVIDER_NAMES = ["openai", "nano"] as const;
+export const PROVIDER_NAMES = ["openai", "nano", "local"] as const;
 export const KNOWN_STYLE_PRESETS = [
   "pixel-art-16bit",
   "topdown-painterly-sci-fi",
@@ -10,9 +10,69 @@ export const POST_PROCESS_ALGORITHMS = ["nearest", "lanczos3"] as const;
 
 export type ProviderName = (typeof PROVIDER_NAMES)[number];
 export type ProviderSelection = ProviderName | "auto";
-export type ProviderFeature = "image-generation" | "transparent-background";
+export type ProviderFeature =
+  | "image-generation"
+  | "transparent-background"
+  | "image-edits"
+  | "multi-candidate"
+  | "controlnet";
 export type KnownStylePreset = (typeof KNOWN_STYLE_PRESETS)[number];
 export type PostProcessAlgorithm = (typeof POST_PROCESS_ALGORITHMS)[number];
+export type NormalizedOutputFormat = "png" | "jpeg" | "webp";
+
+export interface ProviderCapabilities {
+  readonly name: ProviderName;
+  readonly defaultOutputFormat: NormalizedOutputFormat;
+  readonly supportedOutputFormats: ReadonlySet<NormalizedOutputFormat>;
+  readonly supportsTransparentBackground: boolean;
+  readonly supportsEdits: boolean;
+  readonly supportsControlNet: boolean;
+  readonly maxCandidates: number;
+  readonly defaultConcurrency: number;
+  readonly minDelayMs: number;
+}
+
+const SUPPORTED_FORMATS: ReadonlySet<NormalizedOutputFormat> = new Set([
+  "png",
+  "jpeg",
+  "webp",
+]);
+
+export const PROVIDER_CAPABILITIES: Record<ProviderName, ProviderCapabilities> = {
+  openai: {
+    name: "openai",
+    defaultOutputFormat: "png",
+    supportedOutputFormats: SUPPORTED_FORMATS,
+    supportsTransparentBackground: true,
+    supportsEdits: true,
+    supportsControlNet: false,
+    maxCandidates: 8,
+    defaultConcurrency: 2,
+    minDelayMs: 250,
+  },
+  nano: {
+    name: "nano",
+    defaultOutputFormat: "png",
+    supportedOutputFormats: SUPPORTED_FORMATS,
+    supportsTransparentBackground: false,
+    supportsEdits: true,
+    supportsControlNet: false,
+    maxCandidates: 4,
+    defaultConcurrency: 2,
+    minDelayMs: 350,
+  },
+  local: {
+    name: "local",
+    defaultOutputFormat: "png",
+    supportedOutputFormats: SUPPORTED_FORMATS,
+    supportsTransparentBackground: true,
+    supportsEdits: true,
+    supportsControlNet: true,
+    maxCandidates: 8,
+    defaultConcurrency: 2,
+    minDelayMs: 100,
+  },
+};
 
 export interface PromptSpec {
   primary: string;
@@ -34,6 +94,51 @@ export interface GenerationPolicy {
   background?: "transparent" | "opaque" | string;
   outputFormat?: string;
   quality?: string;
+  candidates?: number;
+  maxRetries?: number;
+  fallbackProviders?: ProviderName[];
+  providerConcurrency?: number;
+  rateLimitPerMinute?: number;
+}
+
+export interface TrimOperation {
+  enabled?: boolean;
+  threshold?: number;
+}
+
+export interface PadOperation {
+  pixels: number;
+  extrude?: boolean;
+  background?: string;
+}
+
+export interface QuantizeOperation {
+  colors: number;
+  dither?: number;
+}
+
+export interface OutlineOperation {
+  size: number;
+  color?: string;
+}
+
+export interface ResizeVariant {
+  name: string;
+  width: number;
+  height: number;
+  algorithm?: PostProcessAlgorithm;
+}
+
+export interface ResizeVariantsOperation {
+  variants: ResizeVariant[];
+}
+
+export interface PostProcessOperations {
+  trim?: TrimOperation;
+  pad?: PadOperation;
+  quantize?: QuantizeOperation;
+  outline?: OutlineOperation;
+  resizeVariants?: ResizeVariantsOperation;
 }
 
 export interface PostProcessPolicy {
@@ -44,6 +149,26 @@ export interface PostProcessPolicy {
   algorithm?: PostProcessAlgorithm;
   stripMetadata?: boolean;
   pngPaletteColors?: number;
+  operations?: PostProcessOperations;
+}
+
+export interface TargetEditInput {
+  path: string;
+  role?: "base" | "mask" | "reference";
+  fidelity?: "low" | "medium" | "high";
+}
+
+export interface TargetEditSpec {
+  mode?: "edit" | "iterate";
+  instruction?: string;
+  inputs?: TargetEditInput[];
+  preserveComposition?: boolean;
+}
+
+export interface AuxiliaryMapPolicy {
+  normalFromHeight?: boolean;
+  specularFromLuma?: boolean;
+  aoFromLuma?: boolean;
 }
 
 export interface PlannedTarget {
@@ -66,12 +191,37 @@ export interface PlannedTarget {
   postProcess?: PostProcessPolicy;
   provider?: ProviderName;
   model?: string;
+  edit?: TargetEditSpec;
+  auxiliaryMaps?: AuxiliaryMapPolicy;
 }
 
 export interface PlannedTargetsIndex {
   targets: PlannedTarget[];
   generatedAt?: string;
   manifestPath?: string;
+}
+
+export interface NormalizedGenerationPolicy {
+  size: string;
+  quality: string;
+  background: "transparent" | "opaque" | string;
+  outputFormat: NormalizedOutputFormat;
+  candidates: number;
+  maxRetries: number;
+  fallbackProviders: ProviderName[];
+  providerConcurrency?: number;
+  rateLimitPerMinute?: number;
+}
+
+export interface PolicyNormalizationIssue {
+  level: "warning" | "error";
+  code: string;
+  message: string;
+}
+
+export interface ProviderPolicyNormalizationResult {
+  policy: NormalizedGenerationPolicy;
+  issues: PolicyNormalizationIssue[];
 }
 
 export interface ProviderJob {
@@ -86,8 +236,25 @@ export interface ProviderJob {
   size: string;
   quality: string;
   background: string;
-  outputFormat: string;
+  outputFormat: NormalizedOutputFormat;
+  candidateCount: number;
+  maxRetries: number;
+  fallbackProviders: ProviderName[];
+  providerConcurrency?: number;
+  rateLimitPerMinute?: number;
   target: PlannedTarget;
+}
+
+export interface ProviderCandidateOutput {
+  outputPath: string;
+  bytesWritten: number;
+}
+
+export interface CandidateScoreRecord {
+  outputPath: string;
+  score: number;
+  passedAcceptance: boolean;
+  reasons: string[];
 }
 
 export interface ProviderRunResult {
@@ -100,6 +267,9 @@ export interface ProviderRunResult {
   inputHash: string;
   startedAt: string;
   finishedAt: string;
+  candidateOutputs?: ProviderCandidateOutput[];
+  candidateScores?: CandidateScoreRecord[];
+  warnings?: string[];
 }
 
 export interface ProviderPrepareContext {
@@ -112,13 +282,28 @@ export interface ProviderRunContext extends ProviderPrepareContext {
   fetchImpl?: typeof fetch;
 }
 
+export interface ProviderEditJob {
+  id: string;
+  provider: ProviderName;
+  model: string;
+  targetId: string;
+  instruction: string;
+  inputs: TargetEditInput[];
+  outPath: string;
+  inputHash: string;
+}
+
+export interface ProviderEditContext extends ProviderRunContext {}
+
 export interface GenerationProvider {
   readonly name: ProviderName;
+  readonly capabilities: ProviderCapabilities;
   prepareJobs(
     targets: PlannedTarget[],
     ctx: ProviderPrepareContext,
   ): ProviderJob[] | Promise<ProviderJob[]>;
   runJob(job: ProviderJob, ctx: ProviderRunContext): Promise<ProviderRunResult>;
+  runEditJob?(job: ProviderEditJob, ctx: ProviderEditContext): Promise<ProviderRunResult>;
   supports(feature: ProviderFeature): boolean;
   normalizeError(error: unknown): ProviderError;
 }
@@ -154,8 +339,10 @@ const DEFAULT_PROMPT_USE_CASE = "stylized-concept";
 const DEFAULT_SIZE = "1024x1024";
 const DEFAULT_QUALITY = "high";
 const DEFAULT_BACKGROUND = "opaque";
-const DEFAULT_OUTPUT_FORMAT = "png";
+const DEFAULT_OUTPUT_FORMAT: NormalizedOutputFormat = "png";
 const DEFAULT_POST_PROCESS_ALGORITHM: PostProcessAlgorithm = "lanczos3";
+const DEFAULT_CANDIDATE_COUNT = 1;
+const DEFAULT_MAX_RETRIES = 1;
 
 const STYLE_PRESET_LINES: Record<KnownStylePreset, string[]> = {
   "pixel-art-16bit": [
@@ -214,14 +401,105 @@ export function buildStructuredPrompt(promptSpec: PromptSpec): string {
   return lines.filter(Boolean).join("\n");
 }
 
-export function getTargetGenerationPolicy(target: PlannedTarget) {
+export function normalizeOutputFormatAlias(value: string | undefined): NormalizedOutputFormat {
+  const normalized = value?.trim().toLowerCase() ?? "";
+  if (normalized === "jpg") return "jpeg";
+  if (normalized === "jpeg") return "jpeg";
+  if (normalized === "webp") return "webp";
+  return "png";
+}
+
+export function getProviderCapabilities(provider: ProviderName): ProviderCapabilities {
+  return PROVIDER_CAPABILITIES[provider];
+}
+
+export function getTargetGenerationPolicy(target: PlannedTarget): NormalizedGenerationPolicy {
   const policy = target.generationPolicy ?? {};
+  const candidatesRaw =
+    typeof policy.candidates === "number" && Number.isFinite(policy.candidates)
+      ? Math.round(policy.candidates)
+      : DEFAULT_CANDIDATE_COUNT;
+  const maxRetriesRaw =
+    typeof policy.maxRetries === "number" && Number.isFinite(policy.maxRetries)
+      ? Math.round(policy.maxRetries)
+      : DEFAULT_MAX_RETRIES;
+
   return {
     size: policy.size?.trim() || DEFAULT_SIZE,
     quality: policy.quality?.trim() || DEFAULT_QUALITY,
     background: policy.background?.trim() || DEFAULT_BACKGROUND,
-    outputFormat: policy.outputFormat?.trim() || DEFAULT_OUTPUT_FORMAT,
+    outputFormat: normalizeOutputFormatAlias(policy.outputFormat || DEFAULT_OUTPUT_FORMAT),
+    candidates: Math.max(1, candidatesRaw),
+    maxRetries: Math.max(0, maxRetriesRaw),
+    fallbackProviders: Array.isArray(policy.fallbackProviders)
+      ? policy.fallbackProviders.filter((name): name is ProviderName => isProviderName(name))
+      : [],
+    providerConcurrency:
+      typeof policy.providerConcurrency === "number" &&
+      Number.isFinite(policy.providerConcurrency) &&
+      policy.providerConcurrency > 0
+        ? Math.round(policy.providerConcurrency)
+        : undefined,
+    rateLimitPerMinute:
+      typeof policy.rateLimitPerMinute === "number" &&
+      Number.isFinite(policy.rateLimitPerMinute) &&
+      policy.rateLimitPerMinute > 0
+        ? Math.round(policy.rateLimitPerMinute)
+        : undefined,
   };
+}
+
+export function normalizeGenerationPolicyForProvider(
+  provider: ProviderName,
+  rawPolicy: NormalizedGenerationPolicy,
+): ProviderPolicyNormalizationResult {
+  const capabilities = getProviderCapabilities(provider);
+  const issues: PolicyNormalizationIssue[] = [];
+
+  const policy: NormalizedGenerationPolicy = {
+    ...rawPolicy,
+    outputFormat: normalizeOutputFormatAlias(rawPolicy.outputFormat),
+  };
+
+  if (!capabilities.supportedOutputFormats.has(policy.outputFormat)) {
+    issues.push({
+      level: "error",
+      code: "unsupported_output_format",
+      message: `${provider} does not support output format \"${policy.outputFormat}\".`,
+    });
+  }
+
+  if (policy.background === "transparent" && policy.outputFormat === "jpeg") {
+    policy.outputFormat = "png";
+    issues.push({
+      level: "warning",
+      code: "jpg_transparency_normalized",
+      message:
+        "Transparent background requested with JPEG output; outputFormat normalized to png.",
+    });
+  }
+
+  if (policy.background === "transparent" && !capabilities.supportsTransparentBackground) {
+    policy.background = "opaque";
+    issues.push({
+      level: "warning",
+      code: "transparent_background_normalized",
+      message: `${provider} does not guarantee transparent backgrounds; background normalized to opaque.`,
+    });
+  }
+
+  if (policy.candidates > capabilities.maxCandidates) {
+    issues.push({
+      level: "warning",
+      code: "candidate_count_clamped",
+      message: `${provider} max candidates is ${capabilities.maxCandidates}; clamped requested value.`,
+    });
+    policy.candidates = capabilities.maxCandidates;
+  }
+
+  policy.fallbackProviders = policy.fallbackProviders.filter((name) => name !== provider);
+
+  return { policy, issues };
 }
 
 export function getTargetPostProcessPolicy(target: PlannedTarget): PostProcessPolicy {
@@ -231,6 +509,7 @@ export function getTargetPostProcessPolicy(target: PlannedTarget): PostProcessPo
     algorithm: policy.algorithm ?? DEFAULT_POST_PROCESS_ALGORITHM,
     stripMetadata: policy.stripMetadata ?? true,
     pngPaletteColors: policy.pngPaletteColors,
+    operations: policy.operations,
   };
 }
 
@@ -261,6 +540,12 @@ export interface DeterministicJobIdParams {
   targetOut: string;
   prompt: string;
   model: string;
+  inputHash: string;
+  size: string;
+  quality: string;
+  background: string;
+  outputFormat: NormalizedOutputFormat;
+  candidateCount: number;
 }
 
 export function createDeterministicJobId(params: DeterministicJobIdParams): string {
@@ -270,12 +555,31 @@ export function createDeterministicJobId(params: DeterministicJobIdParams): stri
     targetOut: params.targetOut,
     prompt: params.prompt,
     model: params.model,
+    inputHash: params.inputHash,
+    size: params.size,
+    quality: params.quality,
+    background: params.background,
+    outputFormat: params.outputFormat,
+    candidateCount: params.candidateCount,
   });
   return sha256Hex(source);
 }
 
-export function createInputHash(target: PlannedTarget): string {
-  return sha256Hex(stableSerialize(target));
+export function createInputHash(
+  target: PlannedTarget,
+  policyOverride?: Partial<NormalizedGenerationPolicy>,
+): string {
+  const generationPolicy = {
+    ...(target.generationPolicy ?? {}),
+    ...(policyOverride ?? {}),
+  };
+
+  return sha256Hex(
+    stableSerialize({
+      ...target,
+      generationPolicy,
+    }),
+  );
 }
 
 export function isProviderName(value: unknown): value is ProviderName {
@@ -285,7 +589,7 @@ export function isProviderName(value: unknown): value is ProviderName {
 export function parseProviderSelection(value: string | undefined): ProviderSelection {
   if (!value || value === "auto") return "auto";
   if (isProviderName(value)) return value;
-  throw new Error(`Unsupported provider "${value}". Use openai, nano, or auto.`);
+  throw new Error(`Unsupported provider \"${value}\". Use openai, nano, local, or auto.`);
 }
 
 export interface CreateJobParams {
@@ -297,13 +601,30 @@ export interface CreateJobParams {
 
 export function createProviderJob(params: CreateJobParams): ProviderJob {
   const prompt = buildStructuredPrompt(params.target.promptSpec);
-  const policy = getTargetGenerationPolicy(params.target);
+  const basePolicy = getTargetGenerationPolicy(params.target);
+  const normalized = normalizeGenerationPolicyForProvider(params.provider, basePolicy);
+  const policyErrors = normalized.issues.filter((issue) => issue.level === "error");
+  if (policyErrors.length > 0) {
+    throw new Error(
+      `Provider policy normalization failed for target \"${params.target.id}\": ${policyErrors
+        .map((issue) => issue.message)
+        .join(" ")}`,
+    );
+  }
+
+  const inputHash = createInputHash(params.target, normalized.policy);
   const id = createDeterministicJobId({
     provider: params.provider,
     targetId: params.target.id,
     targetOut: params.target.out,
     prompt,
     model: params.model,
+    inputHash,
+    size: normalized.policy.size,
+    quality: normalized.policy.quality,
+    background: normalized.policy.background,
+    outputFormat: normalized.policy.outputFormat,
+    candidateCount: normalized.policy.candidates,
   });
 
   return {
@@ -314,11 +635,16 @@ export function createProviderJob(params: CreateJobParams): ProviderJob {
     targetOut: params.target.out,
     prompt,
     outPath: path.join(params.imagesDir, params.target.out),
-    inputHash: createInputHash(params.target),
-    size: policy.size,
-    quality: policy.quality,
-    background: policy.background,
-    outputFormat: policy.outputFormat,
+    inputHash,
+    size: normalized.policy.size,
+    quality: normalized.policy.quality,
+    background: normalized.policy.background,
+    outputFormat: normalized.policy.outputFormat,
+    candidateCount: normalized.policy.candidates,
+    maxRetries: normalized.policy.maxRetries,
+    fallbackProviders: normalized.policy.fallbackProviders,
+    providerConcurrency: normalized.policy.providerConcurrency,
+    rateLimitPerMinute: normalized.policy.rateLimitPerMinute,
     target: params.target,
   };
 }

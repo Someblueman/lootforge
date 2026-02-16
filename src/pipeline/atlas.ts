@@ -2,6 +2,11 @@ import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 
+import sharp from "sharp";
+
+import type { ManifestAtlasGroupOptions, ManifestV2 } from "../manifest/types.js";
+import { resolveStagePathLayout } from "../shared/paths.js";
+
 interface PlannedTarget {
   id: string;
   kind: string;
@@ -49,6 +54,7 @@ export interface AtlasManifest {
 export interface AtlasPipelineOptions {
   outDir: string;
   targetsIndexPath?: string;
+  manifestPath?: string;
 }
 
 export interface AtlasPipelineResult {
@@ -123,27 +129,73 @@ function parsePlannedIndex(raw: string, filePath: string): PlannedIndex {
   }
 }
 
+async function readManifestAtlasOptions(manifestPath: string): Promise<ManifestV2["atlas"]> {
+  try {
+    const raw = await readFile(manifestPath, "utf8");
+    const parsed = JSON.parse(raw) as ManifestV2;
+    return parsed.atlas;
+  } catch {
+    return undefined;
+  }
+}
+
+function resolveAtlasGroupOptions(
+  atlasConfig: ManifestV2["atlas"],
+  groupId: string,
+): ManifestAtlasGroupOptions {
+  const defaults = atlasConfig ?? {};
+  const group = atlasConfig?.groups?.[groupId] ?? {};
+
+  return {
+    padding: group.padding ?? defaults.padding ?? 2,
+    trim: group.trim ?? defaults.trim ?? true,
+    bleed: group.bleed ?? defaults.bleed ?? 1,
+    multipack: group.multipack ?? defaults.multipack ?? false,
+    maxWidth: group.maxWidth ?? defaults.maxWidth ?? 2048,
+    maxHeight: group.maxHeight ?? defaults.maxHeight ?? 2048,
+  };
+}
+
+async function detectImageSize(filePath: string): Promise<{ width: number; height: number }> {
+  const metadata = await sharp(filePath).metadata();
+  if (
+    typeof metadata.width === "number" &&
+    metadata.width > 0 &&
+    typeof metadata.height === "number" &&
+    metadata.height > 0
+  ) {
+    return { width: metadata.width, height: metadata.height };
+  }
+  return { width: 96, height: 96 };
+}
+
 export async function runAtlasPipeline(
   options: AtlasPipelineOptions,
 ): Promise<AtlasPipelineResult> {
-  const outDir = path.resolve(options.outDir);
+  const layout = resolveStagePathLayout(options.outDir);
+  const outDir = layout.outDir;
   const targetsIndexPath = path.resolve(
-    options.targetsIndexPath ?? path.join(outDir, "jobs", "targets-index.json"),
+    options.targetsIndexPath ?? path.join(layout.jobsDir, "targets-index.json"),
   );
-  const atlasDir = path.join(outDir, "assets", "atlases");
-  const imagesDir = path.join(outDir, "assets", "images");
+  const manifestPath = path.resolve(
+    options.manifestPath ?? path.join(layout.imagegenDir, "manifest.json"),
+  );
+  const atlasDir = layout.atlasDir;
+  const imagesDir = layout.processedImagesDir;
 
   await mkdir(atlasDir, { recursive: true });
 
   const indexRaw = await readFile(targetsIndexPath, "utf8");
   const index = parsePlannedIndex(indexRaw, targetsIndexPath);
   const targets = Array.isArray(index.targets) ? index.targets : [];
+  const atlasConfig = await readManifestAtlasOptions(manifestPath);
 
   const manifestItems: AtlasManifestItem[] = targets.map((target) => {
     const expectedSize = parseSize(target.acceptance?.size);
     return {
       id: target.id,
       kind: target.kind || "asset",
+      // Runtime compatibility mirror remains /assets/images in this release.
       url: `/assets/images/${target.out}`,
       atlasGroup: target.atlasGroup ?? null,
       alphaRequired:
@@ -161,13 +213,28 @@ export async function runAtlasPipeline(
     groups.set(target.atlasGroup, list);
   }
 
+  const atlasConfigPath = path.join(atlasDir, "atlas-config.json");
+  await writeFile(
+    atlasConfigPath,
+    `${JSON.stringify(
+      {
+        generatedAt: new Date().toISOString(),
+        sourceManifest: manifestPath,
+        atlas: atlasConfig ?? null,
+      },
+      null,
+      2,
+    )}\n`,
+    "utf8",
+  );
+
   let packer: AtlasManifest["packer"] = "none";
   const bundles: AtlasBundle[] = [];
 
   if (groups.size > 0 && hasCommand("texturepacker")) {
     packer = "texturepacker";
     for (const [groupId, groupTargets] of groups) {
-      const inputPaths = [];
+      const inputPaths: string[] = [];
       for (const target of groupTargets) {
         const imagePath = path.join(imagesDir, target.out);
         if (await fileExists(imagePath)) {
@@ -177,25 +244,55 @@ export async function runAtlasPipeline(
 
       if (inputPaths.length === 0) continue;
 
+      const groupOptions = resolveAtlasGroupOptions(atlasConfig, groupId);
       const sheetPath = path.join(atlasDir, `${groupId}.png`);
       const dataPath = path.join(atlasDir, `${groupId}.json`);
 
-      const run = spawnSync(
-        "texturepacker",
-        [
-          "--format",
-          "phaser-json-hash",
-          "--sheet",
-          sheetPath,
-          "--data",
-          dataPath,
-          ...inputPaths,
-        ],
-        { stdio: "ignore" },
+      const args = [
+        "--format",
+        "phaser-json-hash",
+        "--sheet",
+        sheetPath,
+        "--data",
+        dataPath,
+        "--shape-padding",
+        String(groupOptions.padding ?? 2),
+        "--extrude",
+        String(groupOptions.bleed ?? 1),
+        "--max-width",
+        String(groupOptions.maxWidth ?? 2048),
+        "--max-height",
+        String(groupOptions.maxHeight ?? 2048),
+      ];
+
+      if (groupOptions.trim === true) {
+        args.push("--trim-mode", "Trim");
+      }
+      if (groupOptions.multipack === true) {
+        args.push("--multipack");
+      }
+
+      args.push(...inputPaths);
+
+      const configArtifactPath = path.join(atlasDir, `${groupId}.texturepacker-config.json`);
+      await writeFile(
+        configArtifactPath,
+        `${JSON.stringify(
+          {
+            groupId,
+            args,
+            inputPaths,
+          },
+          null,
+          2,
+        )}\n`,
+        "utf8",
       );
 
+      const run = spawnSync("texturepacker", args, { stdio: "ignore" });
+
       if (run.status !== 0) {
-        throw new Error(`TexturePacker failed for atlas group "${groupId}"`);
+        throw new Error(`TexturePacker failed for atlas group \"${groupId}\"`);
       }
 
       bundles.push({
@@ -211,9 +308,9 @@ export async function runAtlasPipeline(
         const imagePath = path.join(imagesDir, target.out);
         if (!(await fileExists(imagePath))) continue;
 
-        const expectedSize = parseSize(target.acceptance?.size);
-        const frameWidth = expectedSize.width;
-        const frameHeight = expectedSize.height;
+        const measured = await detectImageSize(imagePath);
+        const frameWidth = measured.width;
+        const frameHeight = measured.height;
         const bundleId = sanitizeBundleId(target.id);
         const atlasJsonPath = path.join(atlasDir, `${bundleId}.json`);
         const atlasData = buildSingleFrameAtlasData(
@@ -242,12 +339,12 @@ export async function runAtlasPipeline(
     items: manifestItems,
   };
 
-  const manifestPath = path.join(atlasDir, "manifest.json");
-  await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+  const manifestPathOut = path.join(atlasDir, "manifest.json");
+  await writeFile(manifestPathOut, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
 
   return {
     atlasDir,
-    manifestPath,
+    manifestPath: manifestPathOut,
     manifest,
   };
 }

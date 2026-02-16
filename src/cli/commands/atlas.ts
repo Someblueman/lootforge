@@ -22,10 +22,12 @@ function readArgValue(argv: string[], name: string): string | undefined {
 export async function runAtlasCommand(argv: string[]): Promise<AtlasCommandResult> {
   const outDir = path.resolve(readArgValue(argv, "out") ?? process.cwd());
   const indexPath = readArgValue(argv, "index");
+  const manifestPath = readArgValue(argv, "manifest");
 
   const result = await runAtlasPipeline({
     outDir,
     targetsIndexPath: indexPath ? path.resolve(indexPath) : undefined,
+    manifestPath: manifestPath ? path.resolve(manifestPath) : undefined,
   });
 
   return {
@@ -33,4 +35,3 @@ export async function runAtlasCommand(argv: string[]): Promise<AtlasCommandResul
     bundles: result.manifest.atlasBundles.length,
   };
 }
-

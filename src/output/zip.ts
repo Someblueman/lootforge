@@ -1,41 +1,76 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { createWriteStream } from "node:fs";
+import { mkdir, readdir } from "node:fs/promises";
 import path from "node:path";
-import { spawnSync } from "node:child_process";
 
-function hasZipCommand(): boolean {
-  const run = spawnSync("zip", ["-v"], { stdio: "ignore" });
-  return run.status === 0;
-}
+import { ZipFile } from "yazl";
 
 export interface ZipResult {
   zipPath: string;
-  mode: "zip" | "stub";
+  mode: "zip";
+}
+
+async function collectFilesRecursive(rootDir: string): Promise<string[]> {
+  const output: string[] = [];
+
+  async function walk(currentDir: string): Promise<void> {
+    const entries = await readdir(currentDir, { withFileTypes: true });
+    for (const entry of entries) {
+      const absolutePath = path.join(currentDir, entry.name);
+      if (entry.isDirectory()) {
+        // Depth-first to keep deterministic central-directory ordering.
+        await walk(absolutePath);
+      } else if (entry.isFile()) {
+        output.push(absolutePath);
+      }
+    }
+  }
+
+  await walk(rootDir);
+  output.sort((left, right) => left.localeCompare(right));
+  return output;
+}
+
+function toZipEntryName(sourceDir: string, filePath: string): string {
+  const relativePath = path.relative(sourceDir, filePath);
+
+  // Guard against path traversal via unexpected relative paths.
+  if (
+    relativePath.length === 0 ||
+    relativePath.startsWith("..") ||
+    path.isAbsolute(relativePath)
+  ) {
+    throw new Error(`Unsafe zip entry path for ${filePath}`);
+  }
+
+  return relativePath.split(path.sep).join("/");
 }
 
 export async function createZipArchive(
   sourceDir: string,
   zipPath: string,
 ): Promise<ZipResult> {
-  await mkdir(path.dirname(zipPath), { recursive: true });
+  const resolvedSourceDir = path.resolve(sourceDir);
+  const resolvedZipPath = path.resolve(zipPath);
+  await mkdir(path.dirname(resolvedZipPath), { recursive: true });
 
-  if (hasZipCommand()) {
-    const run = spawnSync("zip", ["-rq", zipPath, "."], {
-      cwd: sourceDir,
-      stdio: "ignore",
-    });
+  const files = await collectFilesRecursive(resolvedSourceDir);
 
-    if (run.status !== 0) {
-      throw new Error(`zip command failed for ${sourceDir}`);
+  await new Promise<void>((resolve, reject) => {
+    const zipFile = new ZipFile();
+    const zipOutput = createWriteStream(resolvedZipPath);
+
+    zipOutput.on("close", () => resolve());
+    zipOutput.on("error", (error) => reject(error));
+    zipFile.outputStream.on("error", (error) => reject(error));
+
+    zipFile.outputStream.pipe(zipOutput);
+
+    for (const filePath of files) {
+      zipFile.addFile(filePath, toZipEntryName(resolvedSourceDir, filePath));
     }
 
-    return { zipPath, mode: "zip" };
-  }
+    zipFile.end();
+  });
 
-  await writeFile(
-    zipPath,
-    "zip command unavailable on this system; this is a placeholder archive.\n",
-    "utf8",
-  );
-  return { zipPath, mode: "stub" };
+  return { zipPath: resolvedZipPath, mode: "zip" };
 }
-

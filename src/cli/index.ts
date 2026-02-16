@@ -7,6 +7,7 @@ import { runGenerateCommand } from "./commands/generate.js";
 import { runInitCommand } from "./commands/init.js";
 import { runPackageCommand } from "./commands/package.js";
 import { runPlanCommand } from "./commands/plan.js";
+import { runProcessCommand } from "./commands/process.js";
 import { runPreviewCommand } from "./commands/preview.js";
 import { runValidateCommand } from "./commands/validate.js";
 import { getErrorExitCode, getErrorMessage } from "../shared/errors.js";
@@ -52,6 +53,14 @@ export async function main(argv: string[]): Promise<number> {
       return 0;
     }
 
+    if (command === "process") {
+      const result = await runProcessCommand(rest);
+      process.stdout.write(
+        `Processed ${result.processedCount} asset(s) (${result.variantCount} variant(s)) -> ${result.catalogPath}\nChecks: ${result.acceptanceReportPath}\n`,
+      );
+      return 0;
+    }
+
     if (command === "atlas") {
       const result = await runAtlasCommand(rest);
       process.stdout.write(
@@ -92,6 +101,7 @@ function writeUsage(stream: "stdout" | "stderr"): void {
       "  plan                         Validate manifest and write jobs outputs",
       "  validate                     Validate manifest and write report",
       "  generate                     Execute generation pipeline from targets index",
+      "  process                      Post-process raw assets into processed runtime outputs",
       "  atlas                        Build atlas outputs and atlas manifest",
       "  package                      Assemble distributable asset-pack artifacts",
       "  preview                      Launch starter app preview server",
@@ -99,8 +109,10 @@ function writeUsage(stream: "stdout" | "stderr"): void {
       "Options:",
       "  --manifest <path>            Manifest path (default assets/imagegen/manifest.json)",
       "  --out <dir>                  Output directory for command artifacts",
+      "  --index <path>               Optional targets index path override",
       "  --strict <true|false>        Validate strict mode (non-zero on errors)",
-      "  --provider <name>            Provider selection for generate (openai|nano|auto)",
+      "  --check-images <true|false>  Validate processed image acceptance during validate",
+      "  --provider <name>            Provider selection for generate (openai|nano|local|auto)",
       "  --ids <a,b,c>                Optional target id filter for generate",
       "",
     ].join("\n"),

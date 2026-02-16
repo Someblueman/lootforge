@@ -1,12 +1,16 @@
 import { access, cp, mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
+import { assertImageAcceptanceReport, runImageAcceptanceChecks } from "../checks/imageAcceptance.js";
 import { runAtlasPipeline } from "./atlas.js";
 import { buildAssetPackManifest } from "../output/assetPackManifest.js";
-import { buildCatalog, CatalogTarget } from "../output/catalog.js";
+import { buildCatalog } from "../output/catalog.js";
 import { writeContactSheetPng } from "../output/contactSheet.js";
 import { buildPhaserManifest } from "../output/phaserManifest.js";
 import { createZipArchive } from "../output/zip.js";
+import type { PlannedTarget } from "../providers/types.js";
+import { writeJsonFile } from "../shared/fs.js";
+import { resolveStagePathLayout } from "../shared/paths.js";
 
 interface ManifestPack {
   id: string;
@@ -23,7 +27,7 @@ interface ManifestV2 {
 }
 
 interface TargetsIndex {
-  targets?: CatalogTarget[];
+  targets?: PlannedTarget[];
 }
 
 export interface PackagePipelineOptions {
@@ -72,7 +76,7 @@ async function copyDirIfExists(src: string, dest: string): Promise<void> {
   await cp(src, dest, { recursive: true, force: true });
 }
 
-async function loadTargets(targetsIndexPath: string): Promise<CatalogTarget[]> {
+async function loadTargets(targetsIndexPath: string): Promise<PlannedTarget[]> {
   const raw = await readFile(targetsIndexPath, "utf8");
   const parsed = parseJson<TargetsIndex>(raw, targetsIndexPath);
   if (!Array.isArray(parsed.targets)) return [];
@@ -82,17 +86,24 @@ async function loadTargets(targetsIndexPath: string): Promise<CatalogTarget[]> {
 export async function runPackagePipeline(
   options: PackagePipelineOptions,
 ): Promise<PackagePipelineResult> {
-  const outDir = path.resolve(options.outDir);
+  const layout = resolveStagePathLayout(options.outDir);
   const manifestPath = path.resolve(options.manifestPath);
   const targetsIndexPath = path.resolve(
-    options.targetsIndexPath ?? path.join(outDir, "jobs", "targets-index.json"),
+    options.targetsIndexPath ?? path.join(layout.jobsDir, "targets-index.json"),
   );
 
   const manifestRaw = await readFile(manifestPath, "utf8");
   const manifest = parseJson<ManifestV2>(manifestRaw, manifestPath);
   const packId = sanitizePackId(manifest.pack?.id ?? "asset-pack");
 
-  const distPacksDir = path.join(outDir, "dist", "packs");
+  const processedImagesDir = layout.processedImagesDir;
+  if (!(await exists(processedImagesDir))) {
+    throw new Error(
+      `Processed images were not found at ${processedImagesDir}. Run \"lootforge process\" before packaging.`,
+    );
+  }
+
+  const distPacksDir = path.join(layout.outDir, "dist", "packs");
   const packDir = path.join(distPacksDir, packId);
   const packImagesDir = path.join(packDir, "assets", "images");
   const packAtlasesDir = path.join(packDir, "assets", "atlases");
@@ -109,16 +120,16 @@ export async function runPackagePipeline(
   await mkdir(packProvenanceDir, { recursive: true });
 
   const atlasResult = await runAtlasPipeline({
-    outDir,
+    outDir: layout.outDir,
     targetsIndexPath,
+    manifestPath,
   });
 
-  const sourceImagesDir = path.join(outDir, "assets", "images");
-  await copyDirIfExists(sourceImagesDir, packImagesDir);
+  await copyDirIfExists(processedImagesDir, packImagesDir);
   await copyDirIfExists(atlasResult.atlasDir, packAtlasesDir);
 
   const targets = await loadTargets(targetsIndexPath);
-  const catalog = await buildCatalog(targets, sourceImagesDir);
+  const catalog = await buildCatalog(targets, processedImagesDir);
   await writeFile(
     path.join(packReviewDir, "catalog.json"),
     `${JSON.stringify(catalog, null, 2)}\n`,
@@ -126,9 +137,22 @@ export async function runPackagePipeline(
   );
 
   await writeContactSheetPng(
-    sourceImagesDir,
+    processedImagesDir,
     path.join(packReviewDir, "contact-sheet.png"),
+    {
+      orderedFilenames: catalog.items.map((item) => path.basename(item.out)),
+    },
   );
+
+  const acceptanceReport = await runImageAcceptanceChecks({
+    targets,
+    imagesDir: processedImagesDir,
+    strict: true,
+  });
+  assertImageAcceptanceReport(acceptanceReport);
+
+  const acceptanceReportPath = path.join(layout.checksDir, "image-acceptance-report.json");
+  await writeJsonFile(acceptanceReportPath, acceptanceReport);
 
   const assetPackManifest = buildAssetPackManifest({
     pack: {
@@ -154,9 +178,13 @@ export async function runPackagePipeline(
     catalogItems: catalog.items,
   });
   const phaserManifestPath = path.join(packManifestDir, "phaser.json");
-  await writeFile(phaserManifestPath, `${JSON.stringify(phaserManifest, null, 2)}\n`, "utf8");
+  await writeFile(
+    phaserManifestPath,
+    `${JSON.stringify(phaserManifest, null, 2)}\n`,
+    "utf8",
+  );
 
-  const validationSrc = path.join(outDir, "checks", "validation-report.json");
+  const validationSrc = path.join(layout.checksDir, "validation-report.json");
   if (await exists(validationSrc)) {
     await cp(validationSrc, path.join(packChecksDir, "validation-report.json"), {
       force: true,
@@ -178,7 +206,13 @@ export async function runPackagePipeline(
     );
   }
 
-  const provenanceSrc = path.join(outDir, "provenance", "run.json");
+  await cp(
+    acceptanceReportPath,
+    path.join(packChecksDir, "image-acceptance-report.json"),
+    { force: true },
+  );
+
+  const provenanceSrc = path.join(layout.provenanceDir, "run.json");
   if (await exists(provenanceSrc)) {
     await cp(provenanceSrc, path.join(packProvenanceDir, "run.json"), {
       force: true,
@@ -210,4 +244,3 @@ export async function runPackagePipeline(
     phaserManifestPath,
   };
 }
-

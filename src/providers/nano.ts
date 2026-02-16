@@ -6,12 +6,15 @@ import {
   GenerationProvider,
   nowIso,
   PlannedTarget,
+  ProviderCapabilities,
+  ProviderCandidateOutput,
   ProviderError,
   ProviderFeature,
   ProviderJob,
   ProviderPrepareContext,
   ProviderRunContext,
   ProviderRunResult,
+  PROVIDER_CAPABILITIES,
 } from "./types.js";
 
 const GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
@@ -29,6 +32,8 @@ interface GeminiInlineData {
 
 export class NanoProvider implements GenerationProvider {
   readonly name = "nano" as const;
+  readonly capabilities: ProviderCapabilities = PROVIDER_CAPABILITIES.nano;
+
   private readonly model: string;
   private readonly apiBase: string;
 
@@ -51,6 +56,9 @@ export class NanoProvider implements GenerationProvider {
   supports(feature: ProviderFeature): boolean {
     if (feature === "image-generation") return true;
     if (feature === "transparent-background") return false;
+    if (feature === "image-edits") return true;
+    if (feature === "multi-candidate") return true;
+    if (feature === "controlnet") return false;
     return false;
   }
 
@@ -108,94 +116,101 @@ export class NanoProvider implements GenerationProvider {
       `?key=${encodeURIComponent(apiKey)}`;
 
     try {
-      const response = await fetchImpl(endpoint, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          contents: [
-            {
-              role: "user",
-              parts: [
-                {
-                  text: [
-                    job.prompt,
-                    "",
-                    "Output requirements:",
-                    `- image size: ${job.size}`,
-                    `- image format: ${job.outputFormat}`,
-                    `- background: ${job.background}`,
-                  ].join("\n"),
-                },
-              ],
-            },
-          ],
-          generationConfig: {
-            responseModalities: ["TEXT", "IMAGE"],
+      const candidateOutputs: ProviderCandidateOutput[] = [];
+      const count = Math.max(job.candidateCount, 1);
+      for (let index = 0; index < count; index += 1) {
+        const response = await fetchImpl(endpoint, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
           },
-        }),
-      });
-
-      if (!response.ok) {
-        const bodyText = await response.text();
-        throw new ProviderError({
-          provider: this.name,
-          code: "nano_http_error",
-          status: response.status,
-          message: `Nano provider request failed with status ${response.status}.`,
-          actionable:
-            "Confirm GEMINI_API_KEY access and that the chosen model supports image output.",
-          cause: bodyText,
+          body: JSON.stringify({
+            contents: [
+              {
+                role: "user",
+                parts: [
+                  {
+                    text: [
+                      job.prompt,
+                      "",
+                      "Output requirements:",
+                      `- image size: ${job.size}`,
+                      `- image format: ${job.outputFormat}`,
+                      `- background: ${job.background}`,
+                    ].join("\n"),
+                  },
+                ],
+              },
+            ],
+            generationConfig: {
+              responseModalities: ["TEXT", "IMAGE"],
+            },
+          }),
         });
+
+        if (!response.ok) {
+          const bodyText = await response.text();
+          throw new ProviderError({
+            provider: this.name,
+            code: "nano_http_error",
+            status: response.status,
+            message: `Nano provider request failed with status ${response.status}.`,
+            actionable:
+              "Confirm GEMINI_API_KEY access and that the chosen model supports image output.",
+            cause: bodyText,
+          });
+        }
+
+        const payload = (await response.json()) as {
+          candidates?: Array<{
+            content?: {
+              parts?: Array<{
+                inlineData?: GeminiInlineData;
+              }>;
+            };
+          }>;
+        };
+
+        const inlineData = this.findInlineImage(payload);
+        if (!inlineData?.data) {
+          throw new ProviderError({
+            provider: this.name,
+            code: "nano_missing_image",
+            message:
+              "Nano provider response did not include image data. The selected Gemini model may not support image generation for this request.",
+            actionable:
+              "Use an image-capable Gemini model and ensure generationConfig.responseModalities includes IMAGE.",
+          });
+        }
+
+        const imageBytes = Buffer.from(inlineData.data, "base64");
+        if (imageBytes.byteLength === 0) {
+          throw new ProviderError({
+            provider: this.name,
+            code: "nano_empty_image",
+            message: "Nano provider returned empty image bytes.",
+            actionable:
+              "Retry with a simpler prompt and verify the model returns inlineData image payloads.",
+          });
+        }
+
+        const outputPath = index === 0 ? job.outPath : withCandidateSuffix(job.outPath, index + 1);
+        await mkdir(path.dirname(outputPath), { recursive: true });
+        await writeFile(outputPath, imageBytes);
+        candidateOutputs.push({ outputPath, bytesWritten: imageBytes.byteLength });
       }
-
-      const payload = (await response.json()) as {
-        candidates?: Array<{
-          content?: {
-            parts?: Array<{
-              inlineData?: GeminiInlineData;
-            }>;
-          };
-        }>;
-      };
-
-      const inlineData = this.findInlineImage(payload);
-      if (!inlineData?.data) {
-        throw new ProviderError({
-          provider: this.name,
-          code: "nano_missing_image",
-          message:
-            "Nano provider response did not include image data. The selected Gemini model may not support image generation for this request.",
-          actionable:
-            "Use an image-capable Gemini model and ensure generationConfig.responseModalities includes IMAGE.",
-        });
-      }
-
-      const imageBytes = Buffer.from(inlineData.data, "base64");
-      if (imageBytes.byteLength === 0) {
-        throw new ProviderError({
-          provider: this.name,
-          code: "nano_empty_image",
-          message: "Nano provider returned empty image bytes.",
-          actionable:
-            "Retry with a simpler prompt and verify the model returns inlineData image payloads.",
-        });
-      }
-
-      await mkdir(path.dirname(job.outPath), { recursive: true });
-      await writeFile(job.outPath, imageBytes);
 
       return {
         jobId: job.id,
         provider: this.name,
         model: job.model,
         targetId: job.targetId,
-        outputPath: job.outPath,
-        bytesWritten: imageBytes.byteLength,
+        outputPath: candidateOutputs[0].outputPath,
+        bytesWritten: candidateOutputs[0].bytesWritten,
         inputHash: job.inputHash,
         startedAt,
         finishedAt: nowIso(ctx.now),
+        candidateOutputs,
       };
     } catch (error) {
       throw this.normalizeError(error);
@@ -217,6 +232,12 @@ export class NanoProvider implements GenerationProvider {
 
     return undefined;
   }
+}
+
+function withCandidateSuffix(filePath: string, candidateNumber: number): string {
+  const ext = path.extname(filePath);
+  const base = filePath.slice(0, filePath.length - ext.length);
+  return `${base}.candidate-${candidateNumber}${ext}`;
 }
 
 export function createNanoProvider(options: NanoProviderOptions = {}): NanoProvider {

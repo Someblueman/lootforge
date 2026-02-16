@@ -19,6 +19,12 @@ export interface RunProvenance {
   finishedAt: string;
   generatedAt: string;
   jobs: ProvenanceJobRecord[];
+  failures?: Array<{
+    targetId: string;
+    provider: string;
+    attemptedProviders: string[];
+    message: string;
+  }>;
 }
 
 export async function writeRunProvenance(
@@ -31,4 +37,3 @@ export async function writeRunProvenance(
   await writeFile(filePath, `${JSON.stringify(provenance, null, 2)}\n`, "utf8");
   return filePath;
 }
-

@@ -19,6 +19,7 @@ export interface PlanCommandResult {
   targetsIndexPath: string;
   openaiJobsPath: string;
   nanoJobsPath: string;
+  localJobsPath: string;
 }
 
 export function parsePlanCommandArgs(argv: string[]): PlanCommandArgs {
@@ -48,11 +49,13 @@ export async function runPlanCommand(argv: string[]): Promise<PlanCommandResult>
   const targetsIndexPath = path.join(jobsDir, "targets-index.json");
   const openaiJobsPath = path.join(jobsDir, "openai.jsonl");
   const nanoJobsPath = path.join(jobsDir, "nano.jsonl");
+  const localJobsPath = path.join(jobsDir, "local.jsonl");
 
   await Promise.all([
     writeJsonFile(targetsIndexPath, artifacts.targetsIndex),
     writeJsonLines(openaiJobsPath, artifacts.openaiJobs),
     writeJsonLines(nanoJobsPath, artifacts.nanoJobs),
+    writeJsonLines(localJobsPath, artifacts.localJobs),
   ]);
 
   return {
@@ -63,6 +66,7 @@ export async function runPlanCommand(argv: string[]): Promise<PlanCommandResult>
     targetsIndexPath,
     openaiJobsPath,
     nanoJobsPath,
+    localJobsPath,
   };
 }
 

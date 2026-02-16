@@ -6,30 +6,39 @@ import {
   GenerationProvider,
   nowIso,
   PlannedTarget,
+  ProviderCapabilities,
+  ProviderCandidateOutput,
   ProviderError,
   ProviderFeature,
   ProviderJob,
   ProviderPrepareContext,
   ProviderRunContext,
   ProviderRunResult,
+  PROVIDER_CAPABILITIES,
 } from "./types.js";
 
 const OPENAI_IMAGES_ENDPOINT = "https://api.openai.com/v1/images/generations";
+const OPENAI_EDITS_ENDPOINT = "https://api.openai.com/v1/images/edits";
 const DEFAULT_OPENAI_MODEL = "gpt-image-1";
 
 export interface OpenAIProviderOptions {
   model?: string;
   endpoint?: string;
+  editsEndpoint?: string;
 }
 
 export class OpenAIProvider implements GenerationProvider {
   readonly name = "openai" as const;
+  readonly capabilities: ProviderCapabilities = PROVIDER_CAPABILITIES.openai;
+
   private readonly model: string;
   private readonly endpoint: string;
+  private readonly editsEndpoint: string;
 
   constructor(options: OpenAIProviderOptions = {}) {
     this.model = options.model ?? DEFAULT_OPENAI_MODEL;
     this.endpoint = options.endpoint ?? OPENAI_IMAGES_ENDPOINT;
+    this.editsEndpoint = options.editsEndpoint ?? OPENAI_EDITS_ENDPOINT;
   }
 
   prepareJobs(targets: PlannedTarget[], ctx: ProviderPrepareContext): ProviderJob[] {
@@ -44,7 +53,12 @@ export class OpenAIProvider implements GenerationProvider {
   }
 
   supports(feature: ProviderFeature): boolean {
-    return feature === "image-generation" || feature === "transparent-background";
+    if (feature === "image-generation") return true;
+    if (feature === "transparent-background") return true;
+    if (feature === "image-edits") return true;
+    if (feature === "multi-candidate") return true;
+    if (feature === "controlnet") return false;
+    return false;
   }
 
   normalizeError(error: unknown): ProviderError {
@@ -110,6 +124,7 @@ export class OpenAIProvider implements GenerationProvider {
           quality: job.quality,
           background: job.background,
           output_format: job.outputFormat,
+          n: Math.max(1, job.candidateCount),
         }),
       });
 
@@ -130,8 +145,8 @@ export class OpenAIProvider implements GenerationProvider {
         data?: Array<{ b64_json?: string; url?: string }>;
       };
 
-      const firstImage = payload.data?.[0];
-      if (!firstImage) {
+      const images = payload.data ?? [];
+      if (images.length === 0) {
         throw new ProviderError({
           provider: this.name,
           code: "openai_missing_image",
@@ -141,20 +156,32 @@ export class OpenAIProvider implements GenerationProvider {
         });
       }
 
-      const imageBytes = await this.resolveImageBytes(firstImage, fetchImpl);
-      await mkdir(path.dirname(job.outPath), { recursive: true });
-      await writeFile(job.outPath, imageBytes);
+      const candidateOutputs: ProviderCandidateOutput[] = [];
+      const count = Math.max(job.candidateCount, 1);
+
+      for (let index = 0; index < count; index += 1) {
+        const image = images[index] ?? images[0];
+        const imageBytes = await this.resolveImageBytes(image, fetchImpl);
+        const outputPath = index === 0 ? job.outPath : withCandidateSuffix(job.outPath, index + 1);
+        await mkdir(path.dirname(outputPath), { recursive: true });
+        await writeFile(outputPath, imageBytes);
+        candidateOutputs.push({
+          outputPath,
+          bytesWritten: imageBytes.byteLength,
+        });
+      }
 
       return {
         jobId: job.id,
         provider: this.name,
         model: job.model,
         targetId: job.targetId,
-        outputPath: job.outPath,
-        bytesWritten: imageBytes.byteLength,
+        outputPath: candidateOutputs[0].outputPath,
+        bytesWritten: candidateOutputs[0].bytesWritten,
         inputHash: job.inputHash,
         startedAt,
         finishedAt: nowIso(ctx.now),
+        candidateOutputs,
       };
     } catch (error) {
       throw this.normalizeError(error);
@@ -205,9 +232,14 @@ export class OpenAIProvider implements GenerationProvider {
   }
 }
 
+function withCandidateSuffix(filePath: string, candidateNumber: number): string {
+  const ext = path.extname(filePath);
+  const base = filePath.slice(0, filePath.length - ext.length);
+  return `${base}.candidate-${candidateNumber}${ext}`;
+}
+
 export function createOpenAIProvider(
   options: OpenAIProviderOptions = {},
 ): OpenAIProvider {
   return new OpenAIProvider(options);
 }
-

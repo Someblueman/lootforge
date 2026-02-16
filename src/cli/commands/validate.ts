@@ -1,21 +1,28 @@
 import path from "node:path";
 
+import {
+  assertImageAcceptanceReport,
+  runImageAcceptanceChecks,
+} from "../../checks/imageAcceptance.js";
 import { loadManifestSource } from "../../manifest/load.js";
-import { validateManifestSource } from "../../manifest/validate.js";
+import { normalizeManifestTargets, validateManifestSource } from "../../manifest/validate.js";
 import type { ValidationReport } from "../../manifest/types.js";
 import { getErrorMessage, CliError } from "../../shared/errors.js";
 import { writeJsonFile } from "../../shared/fs.js";
-import { resolveManifestPath, resolveOutDir } from "../../shared/paths.js";
+import { resolveManifestPath, resolveOutDir, resolveStagePathLayout } from "../../shared/paths.js";
 
 export interface ValidateCommandArgs {
   manifestPath: string;
   outDir: string;
   strict: boolean;
+  checkImages: boolean;
+  imagesDir?: string;
 }
 
 export interface ValidateCommandResult {
   report: ValidationReport;
   reportPath: string;
+  imageAcceptanceReportPath?: string;
   strict: boolean;
   exitCode: number;
 }
@@ -23,12 +30,19 @@ export interface ValidateCommandResult {
 export function parseValidateCommandArgs(argv: string[]): ValidateCommandArgs {
   const manifestPath = resolveManifestPath(readArgValue(argv, "manifest"));
   const outDir = resolveOutDir(readArgValue(argv, "out"), path.dirname(manifestPath));
-  const strict = parseBooleanArg(readArgValue(argv, "strict") ?? "true");
+  const strict = parseBooleanArg(readArgValue(argv, "strict") ?? "true", "--strict");
+  const checkImages = parseBooleanArg(
+    readArgValue(argv, "check-images") ?? "false",
+    "--check-images",
+  );
+  const imagesDirFlag = readArgValue(argv, "images-dir");
 
   return {
     manifestPath,
     outDir,
     strict,
+    checkImages,
+    imagesDir: imagesDirFlag ? path.resolve(imagesDirFlag) : undefined,
   };
 }
 
@@ -39,9 +53,49 @@ export async function runValidateCommand(
   const reportPath = path.join(args.outDir, "checks", "validation-report.json");
 
   let report: ValidationReport;
+  let imageAcceptanceReportPath: string | undefined;
+
   try {
     const source = await loadManifestSource(args.manifestPath);
-    report = validateManifestSource(source).report;
+    const validation = validateManifestSource(source);
+    report = validation.report;
+
+    if (args.checkImages && validation.manifest) {
+      const targets = normalizeManifestTargets(validation.manifest);
+      const layout = resolveStagePathLayout(args.outDir);
+      const imagesDir = args.imagesDir ?? layout.processedImagesDir;
+      const acceptanceReport = await runImageAcceptanceChecks({
+        targets,
+        imagesDir,
+        strict: args.strict,
+      });
+
+      imageAcceptanceReportPath = path.join(
+        args.outDir,
+        "checks",
+        "image-acceptance-report.json",
+      );
+      await writeJsonFile(imageAcceptanceReportPath, acceptanceReport);
+
+      report.issues.push(
+        ...acceptanceReport.items.flatMap((item) =>
+          item.issues.map((issue) => ({
+            level: issue.level,
+            code: `image_${issue.code}`,
+            path: `targets.${item.targetId}.image`,
+            message: issue.message,
+          })),
+        ),
+      );
+
+      report.errors = report.issues.filter((issue) => issue.level === "error").length;
+      report.warnings = report.issues.filter((issue) => issue.level === "warning").length;
+      report.ok = report.errors === 0;
+
+      if (args.strict) {
+        assertImageAcceptanceReport(acceptanceReport);
+      }
+    }
   } catch (error) {
     report = {
       manifestPath: args.manifestPath,
@@ -67,12 +121,13 @@ export async function runValidateCommand(
   return {
     report,
     reportPath,
+    imageAcceptanceReportPath,
     strict: args.strict,
     exitCode: strictFailure ? 1 : 0,
   };
 }
 
-function parseBooleanArg(value: string): boolean {
+function parseBooleanArg(value: string, flagName: string): boolean {
   const normalized = value.trim().toLowerCase();
   if (["true", "1", "yes", "y"].includes(normalized)) {
     return true;
@@ -81,7 +136,7 @@ function parseBooleanArg(value: string): boolean {
     return false;
   }
   throw new CliError(
-    `Invalid boolean value "${value}" for --strict. Use true or false.`,
+    `Invalid boolean value \"${value}\" for ${flagName}. Use true or false.`,
     { code: "invalid_boolean_flag", exitCode: 1 },
   );
 }

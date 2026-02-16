@@ -2,14 +2,10 @@ import { mkdtemp, mkdir, writeFile, access } from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
 
+import sharp from "sharp";
 import { describe, expect, test } from "vitest";
 
 import { runPackagePipeline } from "../../src/pipeline/package.js";
-
-const SMALL_PNG = Buffer.from(
-  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO5Y6osAAAAASUVORK5CYII=",
-  "base64",
-);
 
 async function fileExists(filePath: string): Promise<boolean> {
   try {
@@ -26,7 +22,14 @@ describe("pipeline package integration", () => {
     const outDir = path.join(tempRoot, "work");
     const manifestPath = path.join(outDir, "assets", "imagegen", "manifest.json");
     const indexPath = path.join(outDir, "jobs", "targets-index.json");
-    const imagePath = path.join(outDir, "assets", "images", "enemy.png");
+    const imagePath = path.join(
+      outDir,
+      "assets",
+      "imagegen",
+      "processed",
+      "images",
+      "enemy.png",
+    );
 
     await mkdir(path.dirname(manifestPath), { recursive: true });
     await mkdir(path.dirname(indexPath), { recursive: true });
@@ -73,7 +76,16 @@ describe("pipeline package integration", () => {
       "utf8",
     );
 
-    await writeFile(imagePath, SMALL_PNG);
+    await sharp({
+      create: {
+        width: 32,
+        height: 32,
+        channels: 4,
+        background: { r: 0, g: 0, b: 0, alpha: 0 },
+      },
+    })
+      .png()
+      .toFile(imagePath);
     await writeFile(
       path.join(outDir, "checks", "validation-report.json"),
       `${JSON.stringify({ errors: [], warnings: [] }, null, 2)}\n`,
@@ -99,6 +111,7 @@ describe("pipeline package integration", () => {
       path.join(result.packDir, "review", "catalog.json"),
       path.join(result.packDir, "review", "contact-sheet.png"),
       path.join(result.packDir, "checks", "validation-report.json"),
+      path.join(result.packDir, "checks", "image-acceptance-report.json"),
       path.join(result.packDir, "provenance", "run.json"),
       result.zipPath,
     ];

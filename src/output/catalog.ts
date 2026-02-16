@@ -3,7 +3,7 @@ import path from "node:path";
 
 export interface CatalogTarget {
   id: string;
-  kind: string;
+  kind?: string;
   out: string;
   atlasGroup?: string | null;
   acceptance?: {
@@ -15,6 +15,11 @@ export interface CatalogTarget {
     alphaRequired?: boolean;
     previewWidth?: number;
     previewHeight?: number;
+  };
+  auxiliaryMaps?: {
+    normalFromHeight?: boolean;
+    specularFromLuma?: boolean;
+    aoFromLuma?: boolean;
   };
 }
 
@@ -29,6 +34,11 @@ export interface CatalogItem {
   previewHeight: number;
   sizeBytes: number;
   exists: boolean;
+  maps?: {
+    normalUrl?: string;
+    specularUrl?: string;
+    aoUrl?: string;
+  };
 }
 
 export interface CatalogOutput {
@@ -71,9 +81,29 @@ export async function buildCatalog(
       sizeBytes = 0;
     }
 
+    const ext = path.extname(target.out);
+    const base = target.out.slice(0, target.out.length - ext.length);
+    const maps =
+      target.auxiliaryMaps &&
+      (target.auxiliaryMaps.normalFromHeight ||
+        target.auxiliaryMaps.specularFromLuma ||
+        target.auxiliaryMaps.aoFromLuma)
+        ? {
+            ...(target.auxiliaryMaps.normalFromHeight
+              ? { normalUrl: `/assets/images/${base}__normal${ext}` }
+              : {}),
+            ...(target.auxiliaryMaps.specularFromLuma
+              ? { specularUrl: `/assets/images/${base}__specular${ext}` }
+              : {}),
+            ...(target.auxiliaryMaps.aoFromLuma
+              ? { aoUrl: `/assets/images/${base}__ao${ext}` }
+              : {}),
+          }
+        : undefined;
+
     items.push({
       id: target.id,
-      kind: target.kind,
+      kind: target.kind ?? "asset",
       atlasGroup: target.atlasGroup ?? null,
       out: target.out,
       url: `/assets/images/${target.out}`,
@@ -83,6 +113,7 @@ export async function buildCatalog(
       previewHeight: target.runtimeSpec?.previewHeight ?? expectedSize.height,
       sizeBytes,
       exists,
+      ...(maps ? { maps } : {}),
     });
   }
 

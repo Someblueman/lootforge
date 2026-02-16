@@ -1,95 +1,113 @@
 {
-  "generatedAt": "2026-02-16T00:38:08.138Z",
+  "generatedAt": "2026-02-16T19:31:59.620Z",
   "items": [
     {
       "id": "arena.background.scrapyard",
       "kind": "background",
+      "atlasGroup": "arena",
       "out": "arena_background_scrapyard.png",
       "url": "/assets/images/arena_background_scrapyard.png",
-      "atlasGroup": "arena",
       "alphaRequired": false,
       "previewWidth": 1024,
-      "previewHeight": 576
+      "previewHeight": 576,
+      "sizeBytes": 676092,
+      "exists": true
     },
     {
       "id": "player.scavenger",
       "kind": "sprite",
+      "atlasGroup": "actors",
       "out": "player_scavenger.png",
       "url": "/assets/images/player_scavenger.png",
-      "atlasGroup": "actors",
       "alphaRequired": true,
       "previewWidth": 256,
-      "previewHeight": 256
+      "previewHeight": 256,
+      "sizeBytes": 295199,
+      "exists": true
     },
     {
       "id": "enemy.scrap_rat",
       "kind": "sprite",
+      "atlasGroup": "actors",
       "out": "enemy_scrap_rat.png",
       "url": "/assets/images/enemy_scrap_rat.png",
-      "atlasGroup": "actors",
       "alphaRequired": true,
       "previewWidth": 256,
-      "previewHeight": 256
+      "previewHeight": 256,
+      "sizeBytes": 260321,
+      "exists": true
     },
     {
       "id": "enemy.rust_drone",
       "kind": "sprite",
+      "atlasGroup": "actors",
       "out": "enemy_rust_drone.png",
       "url": "/assets/images/enemy_rust_drone.png",
-      "atlasGroup": "actors",
       "alphaRequired": true,
       "previewWidth": 256,
-      "previewHeight": 256
+      "previewHeight": 256,
+      "sizeBytes": 248280,
+      "exists": true
     },
     {
       "id": "projectile.plasma_bolt",
       "kind": "projectile",
+      "atlasGroup": "effects",
       "out": "projectile_plasma_bolt.png",
       "url": "/assets/images/projectile_plasma_bolt.png",
-      "atlasGroup": "effects",
       "alphaRequired": true,
       "previewWidth": 192,
-      "previewHeight": 192
+      "previewHeight": 192,
+      "sizeBytes": 134552,
+      "exists": true
     },
     {
       "id": "effect.hit_spark",
       "kind": "effect",
+      "atlasGroup": "effects",
       "out": "effect_hit_spark.png",
       "url": "/assets/images/effect_hit_spark.png",
-      "atlasGroup": "effects",
       "alphaRequired": true,
       "previewWidth": 192,
-      "previewHeight": 192
+      "previewHeight": 192,
+      "sizeBytes": 123652,
+      "exists": true
     },
     {
       "id": "ui.icon.health",
       "kind": "ui",
+      "atlasGroup": "ui",
       "out": "ui_icon_health.png",
       "url": "/assets/images/ui_icon_health.png",
-      "atlasGroup": "ui",
       "alphaRequired": true,
       "previewWidth": 128,
-      "previewHeight": 128
+      "previewHeight": 128,
+      "sizeBytes": 8228,
+      "exists": true
     },
     {
       "id": "ui.icon.score",
       "kind": "ui",
+      "atlasGroup": "ui",
       "out": "ui_icon_score.png",
       "url": "/assets/images/ui_icon_score.png",
-      "atlasGroup": "ui",
       "alphaRequired": true,
       "previewWidth": 128,
-      "previewHeight": 128
+      "previewHeight": 128,
+      "sizeBytes": 9272,
+      "exists": true
     },
     {
       "id": "ui.icon.wave",
       "kind": "ui",
+      "atlasGroup": "ui",
       "out": "ui_icon_wave.png",
       "url": "/assets/images/ui_icon_wave.png",
-      "atlasGroup": "ui",
       "alphaRequired": true,
       "previewWidth": 128,
-      "previewHeight": 128
+      "previewHeight": 128,
+      "sizeBytes": 10338,
+      "exists": true
     }
   ]
 }

@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-02-16T00:26:35.690Z",
+  "generatedAt": "2026-02-16T19:28:23.099Z",
   "manifestPath": "/Users/sws/Code/lootforge/examples/phaser-demo/assets/manifest.demo.json",
   "targets": [
     {
@@ -27,7 +27,10 @@
         "size": "1024x1024",
         "quality": "high",
         "background": "opaque",
-        "outputFormat": "png"
+        "outputFormat": "png",
+        "candidates": 1,
+        "maxRetries": 1,
+        "fallbackProviders": []
       },
       "postProcess": {
         "resizeTo": {
@@ -66,7 +69,10 @@
         "size": "1024x1024",
         "quality": "high",
         "background": "transparent",
-        "outputFormat": "png"
+        "outputFormat": "png",
+        "candidates": 1,
+        "maxRetries": 1,
+        "fallbackProviders": []
       },
       "postProcess": {
         "resizeTo": {
@@ -105,7 +111,10 @@
         "size": "1024x1024",
         "quality": "high",
         "background": "transparent",
-        "outputFormat": "png"
+        "outputFormat": "png",
+        "candidates": 1,
+        "maxRetries": 1,
+        "fallbackProviders": []
       },
       "postProcess": {
         "resizeTo": {
@@ -144,7 +153,10 @@
         "size": "1024x1024",
         "quality": "high",
         "background": "transparent",
-        "outputFormat": "png"
+        "outputFormat": "png",
+        "candidates": 1,
+        "maxRetries": 1,
+        "fallbackProviders": []
       },
       "postProcess": {
         "resizeTo": {
@@ -183,7 +195,10 @@
         "size": "1024x1024",
         "quality": "high",
         "background": "transparent",
-        "outputFormat": "png"
+        "outputFormat": "png",
+        "candidates": 1,
+        "maxRetries": 1,
+        "fallbackProviders": []
       },
       "postProcess": {
         "resizeTo": {
@@ -222,7 +237,10 @@
         "size": "1024x1024",
         "quality": "high",
         "background": "transparent",
-        "outputFormat": "png"
+        "outputFormat": "png",
+        "candidates": 1,
+        "maxRetries": 1,
+        "fallbackProviders": []
       },
       "postProcess": {
         "resizeTo": {
@@ -260,7 +278,10 @@
         "size": "1024x1024",
         "quality": "high",
         "background": "transparent",
-        "outputFormat": "png"
+        "outputFormat": "png",
+        "candidates": 1,
+        "maxRetries": 1,
+        "fallbackProviders": []
       },
       "postProcess": {
         "resizeTo": {
@@ -269,7 +290,12 @@
         },
         "algorithm": "lanczos3",
         "stripMetadata": true,
-        "pngPaletteColors": 128
+        "pngPaletteColors": 128,
+        "operations": {
+          "quantize": {
+            "colors": 128
+          }
+        }
       },
       "model": "gpt-image-1"
     },
@@ -299,7 +325,10 @@
         "size": "1024x1024",
         "quality": "high",
         "background": "transparent",
-        "outputFormat": "png"
+        "outputFormat": "png",
+        "candidates": 1,
+        "maxRetries": 1,
+        "fallbackProviders": []
       },
       "postProcess": {
         "resizeTo": {
@@ -308,7 +337,12 @@
         },
         "algorithm": "lanczos3",
         "stripMetadata": true,
-        "pngPaletteColors": 128
+        "pngPaletteColors": 128,
+        "operations": {
+          "quantize": {
+            "colors": 128
+          }
+        }
       },
       "model": "gpt-image-1"
     },
@@ -338,7 +372,10 @@
         "size": "1024x1024",
         "quality": "high",
         "background": "transparent",
-        "outputFormat": "png"
+        "outputFormat": "png",
+        "candidates": 1,
+        "maxRetries": 1,
+        "fallbackProviders": []
       },
       "postProcess": {
         "resizeTo": {
@@ -347,7 +384,12 @@
         },
         "algorithm": "lanczos3",
         "stripMetadata": true,
-        "pngPaletteColors": 128
+        "pngPaletteColors": 128,
+        "operations": {
+          "quantize": {
+            "colors": 128
+          }
+        }
       },
       "model": "gpt-image-1"
     }

@@ -34,7 +34,7 @@ export class BootScene extends Phaser.Scene {
         .text(
           20,
           20,
-          `Asset bootstrap failed.\n${message}\n\nRun npm run demo:assets:plan && npm run demo:assets:generate && npm run demo:assets:atlas && npm run demo:assets:postprocess`,
+          `Asset bootstrap failed.\n${message}\n\nRun npm run demo:assets:plan && npm run demo:assets:generate && npm run demo:assets:process && npm run demo:assets:atlas`,
           {
             color: "#f8fafc",
             fontFamily: "monospace",

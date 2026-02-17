@@ -367,8 +367,11 @@ Scripts:
 
 `0.1.0` is an early foundation release.
 
-Planned follow-ups:
-- provider edit workflows and iterative refinement
-- expanded local diffusion/ControlNet integrations
-- deeper auxiliary map generation and runtime material pipelines
-- expanded runtime templates and loaders
+Release roadmap:
+- `0.2.0`: public beta foundation (edit/regenerate workflow, score transparency, tile/palette reliability)
+- `0.3.0`: control and consistency upgrades (group-level drift scoring, provider edit parity)
+- `0.4.0`: local production path (ControlNet contracts + LoRA/provenance maturity)
+- `0.5.0`: team scale and integration maturity (CI regressions + broader runtime export presets)
+- `1.0.0`: GA contract stabilization and public operational readiness
+
+See `docs/ROADMAP.md` for detailed scope, exit criteria, and cross-version trackers.

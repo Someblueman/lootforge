@@ -69,6 +69,8 @@ const BASE_MANIFEST: ManifestV2 = {
         alphaRequired: true,
         previewWidth: 256,
         previewHeight: 256,
+        anchorX: 0.25,
+        anchorY: 0.75,
       },
     },
   ],
@@ -81,6 +83,8 @@ describe("manifest normalization", () => {
     expect(artifacts.targets[0].promptSpec.constraints).toContain("Consistency group: hero-family");
     expect(artifacts.targets[0].promptSpec.constraints).toContain("Consistency notes:");
     expect(artifacts.targets[0].scoreWeights?.readability).toBe(1);
+    expect(artifacts.targets[0].runtimeSpec?.anchorX).toBe(0.25);
+    expect(artifacts.targets[0].runtimeSpec?.anchorY).toBe(0.75);
   });
 
   it("normalizes numeric postProcess resize with default lanczos3 algorithm", () => {

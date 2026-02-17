@@ -6,7 +6,10 @@ import { runAtlasPipeline } from "./atlas.js";
 import { buildAssetPackManifest } from "../output/assetPackManifest.js";
 import { buildCatalog } from "../output/catalog.js";
 import { writeContactSheetPng } from "../output/contactSheet.js";
-import { buildPhaserManifest } from "../output/phaserManifest.js";
+import {
+  buildRuntimeManifestArtifacts,
+  type RuntimeManifestTarget,
+} from "../output/runtimeManifests.js";
 import { createZipArchive } from "../output/zip.js";
 import type { PlannedTarget } from "../providers/types.js";
 import { writeJsonFile } from "../shared/fs.js";
@@ -52,6 +55,7 @@ export interface PackagePipelineOptions {
   manifestPath: string;
   targetsIndexPath?: string;
   strict?: boolean;
+  runtimeTargets?: RuntimeManifestTarget[];
 }
 
 export interface PackagePipelineResult {
@@ -60,6 +64,7 @@ export interface PackagePipelineResult {
   packId: string;
   assetPackManifestPath: string;
   phaserManifestPath: string;
+  runtimeManifestPaths: Partial<Record<RuntimeManifestTarget, string>>;
 }
 
 async function exists(filePath: string): Promise<boolean> {
@@ -239,17 +244,23 @@ export async function runPackagePipeline(
     "utf8",
   );
 
-  const phaserManifest = buildPhaserManifest({
+  const runtimeManifestArtifacts = buildRuntimeManifestArtifacts({
     packId,
     atlasBundles: atlasResult.manifest.atlasBundles,
     catalogItems: catalog.items,
+    targets,
+    runtimeTargets: options.runtimeTargets,
   });
-  const phaserManifestPath = path.join(packManifestDir, "phaser.json");
-  await writeFile(
-    phaserManifestPath,
-    `${JSON.stringify(phaserManifest, null, 2)}\n`,
-    "utf8",
-  );
+  const runtimeManifestPaths: Partial<Record<RuntimeManifestTarget, string>> = {};
+  for (const artifact of runtimeManifestArtifacts) {
+    const manifestPathOut = path.join(packManifestDir, artifact.fileName);
+    await writeFile(manifestPathOut, `${JSON.stringify(artifact.payload, null, 2)}\n`, "utf8");
+    runtimeManifestPaths[artifact.target] = manifestPathOut;
+  }
+  const phaserManifestPath = runtimeManifestPaths.phaser;
+  if (!phaserManifestPath) {
+    throw new Error("Packaging failed to emit baseline phaser runtime manifest.");
+  }
 
   const validationSrc = path.join(layout.checksDir, "validation-report.json");
   if (await exists(validationSrc)) {
@@ -325,5 +336,6 @@ export async function runPackagePipeline(
     packId,
     assetPackManifestPath,
     phaserManifestPath,
+    runtimeManifestPaths,
   };
 }

@@ -35,7 +35,8 @@ export function buildAssetPackManifest(
       alphaRequired: item.alphaRequired,
       previewWidth: item.previewWidth,
       previewHeight: item.previewHeight,
+      ...(typeof item.anchorX === "number" ? { anchorX: item.anchorX } : {}),
+      ...(typeof item.anchorY === "number" ? { anchorY: item.anchorY } : {}),
     })),
   };
 }
-

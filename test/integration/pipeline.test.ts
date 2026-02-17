@@ -102,13 +102,18 @@ describe("pipeline package integration", () => {
       manifestPath,
       targetsIndexPath: indexPath,
       strict: false,
+      runtimeTargets: ["pixi", "unity"],
     });
+    expect(result.runtimeManifestPaths.pixi).toBeDefined();
+    expect(result.runtimeManifestPaths.unity).toBeDefined();
 
     const requiredFiles = [
       path.join(result.packDir, "assets", "images", "enemy.png"),
       path.join(result.packDir, "assets", "atlases", "manifest.json"),
       path.join(result.packDir, "manifest", "asset-pack.json"),
       path.join(result.packDir, "manifest", "phaser.json"),
+      path.join(result.packDir, "manifest", "pixi.json"),
+      path.join(result.packDir, "manifest", "unity-import.json"),
       path.join(result.packDir, "review", "catalog.json"),
       path.join(result.packDir, "review", "contact-sheet.png"),
       path.join(result.packDir, "checks", "validation-report.json"),

@@ -145,6 +145,7 @@ function writeUsage(stream: "stdout" | "stderr"): void {
       "  --eval <path>                Eval report path for review/select",
       "  --provenance <path>          Provenance run path for select",
       "  --html <path>                Review HTML output path override",
+      "  --runtimes <a,b,c>           Extra runtime manifests for package (phaser,pixi,unity)",
       "",
     ].join("\n"),
   );

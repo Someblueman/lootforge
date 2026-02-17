@@ -18,6 +18,8 @@ export interface CatalogTarget {
     alphaRequired?: boolean;
     previewWidth?: number;
     previewHeight?: number;
+    anchorX?: number;
+    anchorY?: number;
   };
   auxiliaryMaps?: {
     normalFromHeight?: boolean;
@@ -35,6 +37,8 @@ export interface CatalogItem {
   alphaRequired: boolean;
   previewWidth: number;
   previewHeight: number;
+  anchorX?: number;
+  anchorY?: number;
   sizeBytes: number;
   exists: boolean;
   maps?: {
@@ -123,6 +127,12 @@ export async function buildCatalog(
         target.runtimeSpec?.alphaRequired ?? target.acceptance?.alpha === true,
       previewWidth: target.runtimeSpec?.previewWidth ?? expectedSize.width,
       previewHeight: target.runtimeSpec?.previewHeight ?? expectedSize.height,
+      ...(typeof target.runtimeSpec?.anchorX === "number"
+        ? { anchorX: target.runtimeSpec.anchorX }
+        : {}),
+      ...(typeof target.runtimeSpec?.anchorY === "number"
+        ? { anchorY: target.runtimeSpec.anchorY }
+        : {}),
       sizeBytes,
       exists,
       ...(maps ? { maps } : {}),

@@ -1,5 +1,6 @@
 import path from "node:path";
 
+import { parseRuntimeManifestTargetsArg } from "../../output/runtimeManifests.js";
 import { runPackagePipeline } from "../../pipeline/package.js";
 import { resolveStagePathLayout } from "../../shared/paths.js";
 
@@ -29,12 +30,17 @@ export async function runPackageCommand(argv: string[]): Promise<PackageCommandR
   );
   const indexPath = readArgValue(argv, "index");
   const strict = parseBooleanArg(readArgValue(argv, "strict") ?? "true");
+  const runtimesArg = readArgValue(argv, "runtimes");
+  const runtimeTargets = runtimesArg
+    ? parseRuntimeManifestTargetsArg(runtimesArg)
+    : undefined;
 
   const result = await runPackagePipeline({
     outDir,
     manifestPath,
     targetsIndexPath: indexPath ? path.resolve(indexPath) : undefined,
     strict,
+    runtimeTargets,
   });
 
   return {

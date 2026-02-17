@@ -92,6 +92,14 @@ function createDefaultManifest(): ManifestV2 {
         lightingModel: "top-left key light with soft ambient fill",
       },
     ],
+    consistencyGroups: [
+      {
+        id: "heroes",
+        description: "Shared hero character family for playable protagonists.",
+        styleKitId: "default-topdown",
+        referenceImages: [],
+      },
+    ],
     evaluationProfiles: [
       {
         id: "default-sprite-quality",

@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import {
@@ -20,6 +20,7 @@ import {
 const OPENAI_IMAGES_ENDPOINT = "https://api.openai.com/v1/images/generations";
 const OPENAI_EDITS_ENDPOINT = "https://api.openai.com/v1/images/edits";
 const DEFAULT_OPENAI_MODEL = "gpt-image-1";
+const DEFAULT_EDIT_IMAGE_MIME_TYPE = "image/png";
 
 export interface OpenAIProviderOptions {
   model?: string;
@@ -111,22 +112,24 @@ export class OpenAIProvider implements GenerationProvider {
     }
 
     try {
-      const response = await fetchImpl(this.endpoint, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: job.model,
-          prompt: job.prompt,
-          size: job.size,
-          quality: job.quality,
-          background: job.background,
-          output_format: job.outputFormat,
-          n: Math.max(1, job.candidateCount),
-        }),
-      });
+      const response = this.shouldUseEdits(job)
+        ? await this.runEditRequest(job, ctx, fetchImpl, apiKey)
+        : await fetchImpl(this.endpoint, {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${apiKey}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              model: job.model,
+              prompt: job.prompt,
+              size: job.size,
+              quality: job.quality,
+              background: job.background,
+              output_format: job.outputFormat,
+              n: Math.max(1, job.candidateCount),
+            }),
+          });
 
       if (!response.ok) {
         const bodyText = await response.text();
@@ -186,6 +189,138 @@ export class OpenAIProvider implements GenerationProvider {
     } catch (error) {
       throw this.normalizeError(error);
     }
+  }
+
+  private shouldUseEdits(job: ProviderJob): boolean {
+    if (job.target.generationMode !== "edit-first") {
+      return false;
+    }
+
+    return (job.target.edit?.inputs?.length ?? 0) > 0;
+  }
+
+  private async runEditRequest(
+    job: ProviderJob,
+    ctx: ProviderRunContext,
+    fetchImpl: typeof fetch,
+    apiKey: string,
+  ): Promise<Response> {
+    const editInputs = job.target.edit?.inputs ?? [];
+    const baseAndReferenceInputs = editInputs.filter((input) => input.role !== "mask");
+    const maskInputs = editInputs.filter((input) => input.role === "mask");
+
+    if (baseAndReferenceInputs.length === 0) {
+      throw new ProviderError({
+        provider: this.name,
+        code: "openai_edit_missing_base_image",
+        message: `Target "${job.targetId}" requested edit-first mode but no base/reference images were provided.`,
+        actionable:
+          "Add at least one edit input with role base/reference for generationMode=edit-first.",
+      });
+    }
+
+    const form = new FormData();
+    form.set("model", job.model);
+    form.set("prompt", this.buildEditPrompt(job));
+    form.set("size", job.size);
+    form.set("quality", job.quality);
+    form.set("background", job.background);
+    form.set("output_format", job.outputFormat);
+    form.set("n", String(Math.max(1, job.candidateCount)));
+
+    for (const input of baseAndReferenceInputs) {
+      const resolvedPath = this.resolveEditInputPath(input.path, ctx.outDir);
+      const imageBytes = await this.readEditInputBytes(resolvedPath, job.targetId);
+      const imageData = new Uint8Array(imageBytes);
+
+      if (baseAndReferenceInputs.length === 1) {
+        form.append(
+          "image",
+          new Blob([imageData], { type: this.mimeTypeForPath(resolvedPath) }),
+          path.basename(resolvedPath),
+        );
+      } else {
+        form.append(
+          "image[]",
+          new Blob([imageData], { type: this.mimeTypeForPath(resolvedPath) }),
+          path.basename(resolvedPath),
+        );
+      }
+    }
+
+    if (maskInputs.length > 0) {
+      const maskPath = this.resolveEditInputPath(maskInputs[0].path, ctx.outDir);
+      const maskBytes = await this.readEditInputBytes(maskPath, job.targetId);
+      const maskData = new Uint8Array(maskBytes);
+      form.append(
+        "mask",
+        new Blob([maskData], { type: this.mimeTypeForPath(maskPath) }),
+        path.basename(maskPath),
+      );
+    }
+
+    return fetchImpl(this.editsEndpoint, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: form,
+    });
+  }
+
+  private resolveEditInputPath(inputPath: string, outDir: string): string {
+    if (path.isAbsolute(inputPath)) {
+      return inputPath;
+    }
+    return path.resolve(outDir, inputPath);
+  }
+
+  private async readEditInputBytes(
+    inputPath: string,
+    targetId: string,
+  ): Promise<Buffer> {
+    try {
+      return await readFile(inputPath);
+    } catch (error) {
+      throw new ProviderError({
+        provider: this.name,
+        code: "openai_edit_input_unreadable",
+        message: `Failed to read edit input "${inputPath}" for target "${targetId}".`,
+        actionable:
+          "Ensure edit input files exist and paths are correct relative to --out (or absolute).",
+        cause: error,
+      });
+    }
+  }
+
+  private buildEditPrompt(job: ProviderJob): string {
+    const instruction = job.target.edit?.instruction?.trim();
+    const preserveCompositionHint = job.target.edit?.preserveComposition
+      ? "Preserve composition and camera framing unless the instruction explicitly changes them."
+      : "";
+
+    if (!instruction) {
+      return [job.prompt, preserveCompositionHint].filter(Boolean).join("\n\n");
+    }
+
+    return [
+      instruction,
+      preserveCompositionHint,
+      "Target style/output requirements:",
+      job.prompt,
+    ]
+      .filter(Boolean)
+      .join("\n\n");
+  }
+
+  private mimeTypeForPath(filePath: string): string {
+    const ext = path.extname(filePath).toLowerCase();
+    if (ext === ".jpg" || ext === ".jpeg") return "image/jpeg";
+    if (ext === ".webp") return "image/webp";
+    if (ext === ".gif") return "image/gif";
+    if (ext === ".bmp") return "image/bmp";
+    if (ext === ".svg") return "image/svg+xml";
+    return DEFAULT_EDIT_IMAGE_MIME_TYPE;
   }
 
   private async resolveImageBytes(

@@ -218,6 +218,7 @@ Top-level fields:
 - `pack`: `{ id, version, license, author }` (required)
 - `providers`: `{ default, openai?, nano?, local? }` (required)
 - `styleKits[]` (required)
+- `consistencyGroups[]` (optional)
 - `evaluationProfiles[]` (required)
 - `atlas` options for packing defaults and per-group overrides
 - `targets[]` (required)
@@ -255,6 +256,14 @@ Minimal example:
       "palettePath": "style/fantasy/palette.txt",
       "referenceImages": [],
       "lightingModel": "top-left key with warm fill"
+    }
+  ],
+  "consistencyGroups": [
+    {
+      "id": "player-family",
+      "description": "Shared protagonist style and silhouette rules.",
+      "styleKitId": "fantasy-topdown",
+      "referenceImages": []
     }
   ],
   "evaluationProfiles": [

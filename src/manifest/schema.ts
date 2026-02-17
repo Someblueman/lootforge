@@ -233,6 +233,13 @@ export const ManifestStyleKitSchema = z.object({
   negativeRulesPath: nonEmptyString.optional(),
 });
 
+export const ManifestConsistencyGroupSchema = z.object({
+  id: nonEmptyString,
+  description: nonEmptyString.optional(),
+  styleKitId: nonEmptyString.optional(),
+  referenceImages: z.array(nonEmptyString).default([]),
+});
+
 export const ManifestEvaluationProfileSchema = z.object({
   id: nonEmptyString,
   hardGates: z
@@ -274,6 +281,7 @@ export const ManifestV2Schema = z.object({
   pack: ManifestPackSchema,
   providers: ManifestProvidersSchema,
   styleKits: z.array(ManifestStyleKitSchema).min(1),
+  consistencyGroups: z.array(ManifestConsistencyGroupSchema).optional(),
   evaluationProfiles: z.array(ManifestEvaluationProfileSchema).min(1),
   atlas: ManifestAtlasSchema.optional(),
   targets: z.array(ManifestTargetSchema).min(1),

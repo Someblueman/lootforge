@@ -49,6 +49,13 @@ export interface ManifestStyleKit {
   negativeRulesPath?: string;
 }
 
+export interface ManifestConsistencyGroup {
+  id: string;
+  description?: string;
+  styleKitId?: string;
+  referenceImages: string[];
+}
+
 export interface ManifestEvaluationProfile {
   id: string;
   hardGates?: {
@@ -178,6 +185,7 @@ export interface ManifestV2 {
   pack: ManifestPack;
   providers: ManifestProviders;
   styleKits: ManifestStyleKit[];
+  consistencyGroups?: ManifestConsistencyGroup[];
   evaluationProfiles: ManifestEvaluationProfile[];
   atlas?: ManifestAtlasOptions;
   targets: ManifestTarget[];

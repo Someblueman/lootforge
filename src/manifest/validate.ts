@@ -19,6 +19,7 @@ import type {
   PalettePolicy,
   ResizeVariant,
 } from "../providers/types.js";
+import { normalizeTargetOutPath } from "../shared/paths.js";
 import { safeParseManifestV2 } from "./schema.js";
 import type {
   ManifestEvaluationProfile,
@@ -200,7 +201,17 @@ function collectSemanticIssues(manifest: ManifestV2): ValidationIssue[] {
 
   manifest.targets.forEach((target, index) => {
     const id = target.id.trim();
-    const out = target.out.trim();
+    let normalizedOut: string | undefined;
+    try {
+      normalizedOut = normalizeTargetOutPath(target.out);
+    } catch (error) {
+      issues.push({
+        level: "error",
+        code: "invalid_target_out_path",
+        path: `targets[${index}].out`,
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
 
     if (seenTargetIds.has(id)) {
       issues.push({
@@ -213,15 +224,18 @@ function collectSemanticIssues(manifest: ManifestV2): ValidationIssue[] {
       seenTargetIds.add(id);
     }
 
-    if (seenOutPaths.has(out)) {
-      issues.push({
-        level: "error",
-        code: "duplicate_target_out",
-        path: `targets[${index}].out`,
-        message: `Duplicate output path "${out}".`,
-      });
-    } else {
-      seenOutPaths.add(out);
+    if (normalizedOut) {
+      const outDedupeKey = normalizedOut.toLowerCase();
+      if (seenOutPaths.has(outDedupeKey)) {
+        issues.push({
+          level: "error",
+          code: "duplicate_target_out",
+          path: `targets[${index}].out`,
+          message: `Duplicate output path "${normalizedOut}" (case-insensitive normalized match).`,
+        });
+      } else {
+        seenOutPaths.add(outDedupeKey);
+      }
     }
 
     if (!styleKitIds.has(target.styleKitId)) {
@@ -359,7 +373,8 @@ function collectSemanticIssues(manifest: ManifestV2): ValidationIssue[] {
     }
 
     const outputFormat = normalizeOutputFormatAlias(
-      target.generationPolicy?.outputFormat ?? path.extname(target.out).replace(".", ""),
+      target.generationPolicy?.outputFormat ??
+        path.extname(normalizedOut ?? target.out).replace(".", ""),
     );
     const alphaRequired = target.runtimeSpec?.alphaRequired === true || target.acceptance?.alpha === true;
     if (alphaRequired && outputFormat === "jpeg") {
@@ -388,6 +403,19 @@ function normalizeTargetForGeneration(params: {
   generationDisabled?: boolean;
   catalogDisabled?: boolean;
 }): PlannedTarget {
+  const id = params.idOverride ?? params.target.id.trim();
+  const rawOut = params.outOverride ?? params.target.out;
+  let out: string;
+  try {
+    out = normalizeTargetOutPath(rawOut);
+  } catch (error) {
+    throw new Error(
+      `Target "${id}" has invalid output path "${rawOut}": ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+  }
+
   const provider = params.target.provider ?? params.defaultProvider;
   const model = resolveTargetModel(params.manifest, params.target, provider);
   const atlasGroup = params.target.atlasGroup?.trim() || null;
@@ -421,9 +449,9 @@ function normalizeTargetForGeneration(params: {
   };
 
   const normalized: PlannedTarget = {
-    id: params.idOverride ?? params.target.id.trim(),
+    id,
     kind: params.target.kind.trim(),
-    out: params.outOverride ?? params.target.out.trim(),
+    out,
     atlasGroup,
     styleKitId: params.target.styleKitId,
     consistencyGroup: params.target.consistencyGroup,
@@ -472,8 +500,9 @@ function expandSpritesheetTarget(params: {
   styleKit: ManifestV2["styleKits"][number];
   evalProfile: ManifestEvaluationProfile;
 }): PlannedTarget[] {
-  const outExt = path.extname(params.target.out) || ".png";
-  const outBase = path.basename(params.target.out, outExt);
+  const normalizedSheetOut = normalizeTargetOutPath(params.target.out);
+  const outExt = path.extname(normalizedSheetOut) || ".png";
+  const outBase = path.basename(normalizedSheetOut, outExt);
   const frameTargets: PlannedTarget[] = [];
   const animations: NonNullable<PlannedTarget["spritesheet"]>["animations"] = [];
 
@@ -503,7 +532,7 @@ function expandSpritesheetTarget(params: {
 
     for (let frameIndex = 0; frameIndex < animation.count; frameIndex += 1) {
       const frameId = `${params.target.id}.${animationName}.${frameIndex}`;
-      const frameOut = path.join(
+      const frameOut = path.posix.join(
         "__frames",
         params.target.id,
         `${outBase}__${animationName}_${String(frameIndex).padStart(2, "0")}${outExt}`,

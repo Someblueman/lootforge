@@ -1,12 +1,9 @@
 import path from "node:path";
 
-import {
-  assertImageAcceptanceReport,
-  runImageAcceptanceChecks,
-} from "../../checks/imageAcceptance.js";
+import { runImageAcceptanceChecks } from "../../checks/imageAcceptance.js";
 import { loadManifestSource } from "../../manifest/load.js";
 import { normalizeManifestTargets, validateManifestSource } from "../../manifest/validate.js";
-import type { ValidationReport } from "../../manifest/types.js";
+import type { ManifestV2, ValidationReport } from "../../manifest/types.js";
 import { getErrorMessage, CliError } from "../../shared/errors.js";
 import { writeJsonFile } from "../../shared/fs.js";
 import { resolveManifestPath, resolveOutDir, resolveStagePathLayout } from "../../shared/paths.js";
@@ -54,14 +51,47 @@ export async function runValidateCommand(
 
   let report: ValidationReport;
   let imageAcceptanceReportPath: string | undefined;
+  let manifest: ManifestV2 | undefined;
 
   try {
     const source = await loadManifestSource(args.manifestPath);
     const validation = validateManifestSource(source);
-    report = validation.report;
+    report = {
+      ...validation.report,
+      issues: [...validation.report.issues],
+    };
+    manifest = validation.manifest;
+  } catch (error) {
+    report = {
+      manifestPath: args.manifestPath,
+      generatedAt: new Date().toISOString(),
+      ok: false,
+      errors: 1,
+      warnings: 0,
+      targetCount: 0,
+      issues: [
+        {
+          level: "error",
+          code: "manifest_load_failed",
+          path: "$",
+          message: getErrorMessage(error),
+        },
+      ],
+    };
+    await writeJsonFile(reportPath, report);
+    const strictFailure = args.strict && report.errors > 0;
+    return {
+      report,
+      reportPath,
+      imageAcceptanceReportPath,
+      strict: args.strict,
+      exitCode: strictFailure ? 1 : 0,
+    };
+  }
 
-    if (args.checkImages && validation.manifest) {
-      const targets = normalizeManifestTargets(validation.manifest);
+  if (args.checkImages && manifest) {
+    try {
+      const targets = normalizeManifestTargets(manifest);
       const layout = resolveStagePathLayout(args.outDir);
       const imagesDir = args.imagesDir ?? layout.processedImagesDir;
       const acceptanceReport = await runImageAcceptanceChecks({
@@ -87,32 +117,18 @@ export async function runValidateCommand(
           })),
         ),
       );
-
-      report.errors = report.issues.filter((issue) => issue.level === "error").length;
-      report.warnings = report.issues.filter((issue) => issue.level === "warning").length;
-      report.ok = report.errors === 0;
-
-      if (args.strict) {
-        assertImageAcceptanceReport(acceptanceReport);
-      }
+    } catch (error) {
+      report.issues.push({
+        level: "error",
+        code: "image_acceptance_check_failed",
+        path: "$",
+        message: getErrorMessage(error),
+      });
     }
-  } catch (error) {
-    report = {
-      manifestPath: args.manifestPath,
-      generatedAt: new Date().toISOString(),
-      ok: false,
-      errors: 1,
-      warnings: 0,
-      targetCount: 0,
-      issues: [
-        {
-          level: "error",
-          code: "manifest_load_failed",
-          path: "$",
-          message: getErrorMessage(error),
-        },
-      ],
-    };
+
+    report.errors = report.issues.filter((issue) => issue.level === "error").length;
+    report.warnings = report.issues.filter((issue) => issue.level === "warning").length;
+    report.ok = report.errors === 0;
   }
 
   await writeJsonFile(reportPath, report);

@@ -5,6 +5,7 @@ import sharp from "sharp";
 
 import type { PlannedTarget } from "../providers/types.js";
 import { normalizeOutputFormatAlias } from "../providers/types.js";
+import { normalizeTargetOutPath, resolvePathWithinDir } from "../shared/paths.js";
 
 const SIZE_PATTERN = /^(\d+)x(\d+)$/i;
 const DEFAULT_PALETTE_COMPLIANCE_MIN = 0.98;
@@ -250,15 +251,35 @@ export async function evaluateImageAcceptance(
   target: PlannedTarget,
   imagesDir: string,
 ): Promise<ImageAcceptanceItemReport> {
-  const imagePath = path.join(imagesDir, target.out);
   const report: ImageAcceptanceItemReport = {
     targetId: target.id,
     out: target.out,
-    imagePath,
+    imagePath: "",
     exists: false,
     issues: [],
     metrics: {},
   };
+
+  let imagePath: string;
+  try {
+    const normalizedOut = normalizeTargetOutPath(target.out);
+    report.out = normalizedOut;
+    imagePath = resolvePathWithinDir(
+      imagesDir,
+      normalizedOut,
+      `accepted image for target "${target.id}"`,
+    );
+    report.imagePath = imagePath;
+  } catch (error) {
+    report.issues.push({
+      level: "error",
+      code: "invalid_target_out_path",
+      targetId: target.id,
+      imagePath: path.join(imagesDir, target.out),
+      message: error instanceof Error ? error.message : String(error),
+    });
+    return report;
+  }
 
   let inspected: InspectedImage;
   try {

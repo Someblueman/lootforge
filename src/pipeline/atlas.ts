@@ -5,7 +5,11 @@ import { spawnSync } from "node:child_process";
 import sharp from "sharp";
 
 import type { ManifestAtlasGroupOptions, ManifestV2 } from "../manifest/types.js";
-import { resolveStagePathLayout } from "../shared/paths.js";
+import {
+  normalizeTargetOutPath,
+  resolvePathWithinDir,
+  resolveStagePathLayout,
+} from "../shared/paths.js";
 
 interface PlannedTarget {
   id: string;
@@ -209,7 +213,22 @@ export async function runAtlasPipeline(
 
   const indexRaw = await readFile(targetsIndexPath, "utf8");
   const index = parsePlannedIndex(indexRaw, targetsIndexPath);
-  const targets = Array.isArray(index.targets) ? index.targets : [];
+  const targets = (Array.isArray(index.targets) ? index.targets : []).map(
+    (target, targetIndex) => {
+      try {
+        return {
+          ...target,
+          out: normalizeTargetOutPath(target.out),
+        };
+      } catch (error) {
+        throw new Error(
+          `targets[${targetIndex}].out is invalid: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+      }
+    },
+  );
   const atlasConfig = await readManifestAtlasOptions(manifestPath);
 
   const manifestItems: AtlasManifestItem[] = targets
@@ -219,13 +238,13 @@ export async function runAtlasPipeline(
       return {
         id: target.id,
         kind: target.kind || "asset",
-      // Runtime compatibility mirror remains /assets/images in this release.
-      url: `/assets/images/${target.out}`,
-      atlasGroup: target.atlasGroup ?? null,
-      alphaRequired:
-        target.runtimeSpec?.alphaRequired ?? target.acceptance?.alpha === true,
-      previewWidth: target.runtimeSpec?.previewWidth ?? expectedSize.width,
-      previewHeight: target.runtimeSpec?.previewHeight ?? expectedSize.height,
+        // Runtime compatibility mirror remains /assets/images in this release.
+        url: `/assets/images/${target.out}`,
+        atlasGroup: target.atlasGroup ?? null,
+        alphaRequired:
+          target.runtimeSpec?.alphaRequired ?? target.acceptance?.alpha === true,
+        previewWidth: target.runtimeSpec?.previewWidth ?? expectedSize.width,
+        previewHeight: target.runtimeSpec?.previewHeight ?? expectedSize.height,
       };
     });
 
@@ -261,7 +280,11 @@ export async function runAtlasPipeline(
     for (const [groupId, groupTargets] of groups) {
       const inputPaths: string[] = [];
       for (const target of groupTargets) {
-        const imagePath = path.join(imagesDir, target.out);
+        const imagePath = resolvePathWithinDir(
+          imagesDir,
+          target.out,
+          `atlas image for target "${target.id}"`,
+        );
         if (await fileExists(imagePath)) {
           inputPaths.push(imagePath);
         }
@@ -330,7 +353,11 @@ export async function runAtlasPipeline(
   } else if (groups.size > 0) {
     for (const groupTargets of groups.values()) {
       for (const target of groupTargets) {
-        const imagePath = path.join(imagesDir, target.out);
+        const imagePath = resolvePathWithinDir(
+          imagesDir,
+          target.out,
+          `atlas image for target "${target.id}"`,
+        );
         if (!(await fileExists(imagePath))) continue;
 
         const bundleId = sanitizeBundleId(target.id);
@@ -338,7 +365,11 @@ export async function runAtlasPipeline(
         let atlasData: Record<string, unknown>;
         let bundleTargets = [target.id];
 
-        const sheetMetaPath = path.join(imagesDir, animationMetadataPathForOut(target.out));
+        const sheetMetaPath = resolvePathWithinDir(
+          imagesDir,
+          animationMetadataPathForOut(target.out),
+          `atlas metadata for target "${target.id}"`,
+        );
         if (target.kind === "spritesheet" && (await fileExists(sheetMetaPath))) {
           const raw = await readFile(sheetMetaPath, "utf8");
           const parsed = JSON.parse(raw) as {

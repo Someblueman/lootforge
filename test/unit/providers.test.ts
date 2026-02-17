@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildStructuredPrompt,
+  createProviderJob,
   createDeterministicJobId,
   getTargetPostProcessPolicy,
   normalizeGenerationPolicyForProvider,
@@ -171,5 +172,19 @@ describe("providers helpers", () => {
     expect(result.issues.some((issue) => issue.code === "jpg_transparency_normalized")).toBe(
       true,
     );
+  });
+
+  it("createProviderJob rejects unsafe target output paths", () => {
+    expect(() =>
+      createProviderJob({
+        provider: "openai",
+        target: {
+          ...baseTarget,
+          out: "../../../../escape.png",
+        },
+        model: "gpt-image-1",
+        imagesDir: "/tmp/lootforge",
+      }),
+    ).toThrow(/output path|escapes|relative/i);
   });
 });

@@ -1,6 +1,7 @@
 import path from "node:path";
 
 import { runPackagePipeline } from "../../pipeline/package.js";
+import { resolveStagePathLayout } from "../../shared/paths.js";
 
 export interface PackageCommandResult {
   packDir: string;
@@ -22,8 +23,9 @@ function readArgValue(argv: string[], name: string): string | undefined {
 
 export async function runPackageCommand(argv: string[]): Promise<PackageCommandResult> {
   const outDir = path.resolve(readArgValue(argv, "out") ?? process.cwd());
+  const layout = resolveStagePathLayout(outDir);
   const manifestPath = path.resolve(
-    readArgValue(argv, "manifest") ?? path.join(process.cwd(), "assets/imagegen/manifest.json"),
+    readArgValue(argv, "manifest") ?? path.join(layout.imagegenDir, "manifest.json"),
   );
   const indexPath = readArgValue(argv, "index");
   const strict = parseBooleanArg(readArgValue(argv, "strict") ?? "true");

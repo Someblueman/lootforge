@@ -7,7 +7,11 @@ import { runImageAcceptanceChecks, assertImageAcceptanceReport } from "../checks
 import { buildCatalog } from "../output/catalog.js";
 import { getTargetPostProcessPolicy, PlannedTarget } from "../providers/types.js";
 import { writeJsonFile } from "../shared/fs.js";
-import { resolveStagePathLayout } from "../shared/paths.js";
+import {
+  normalizeTargetOutPath,
+  resolvePathWithinDir,
+  resolveStagePathLayout,
+} from "../shared/paths.js";
 
 interface TargetsIndexShape {
   targets?: PlannedTarget[];
@@ -395,7 +399,11 @@ async function assembleSpritesheetTarget(params: {
   }> = [];
 
   for (const frameTarget of orderedFrames) {
-    const framePath = path.join(params.processedImagesDir, frameTarget.out);
+    const framePath = resolvePathWithinDir(
+      params.processedImagesDir,
+      frameTarget.out,
+      `spritesheet frame for target "${frameTarget.id}"`,
+    );
     const image = sharp(framePath, { failOn: "none" });
     const metadata = await image.metadata();
     if (!metadata.width || !metadata.height) {
@@ -483,8 +491,16 @@ async function assembleSpritesheetTarget(params: {
     .png({ compressionLevel: 9 })
     .toBuffer();
 
-  const processedSheetPath = path.join(params.processedImagesDir, params.sheetTarget.out);
-  const legacySheetPath = path.join(params.legacyImagesDir, params.sheetTarget.out);
+  const processedSheetPath = resolvePathWithinDir(
+    params.processedImagesDir,
+    params.sheetTarget.out,
+    `spritesheet output for target "${params.sheetTarget.id}"`,
+  );
+  const legacySheetPath = resolvePathWithinDir(
+    params.legacyImagesDir,
+    params.sheetTarget.out,
+    `legacy spritesheet output for target "${params.sheetTarget.id}"`,
+  );
   await mkdir(path.dirname(processedSheetPath), { recursive: true });
   await writeFile(processedSheetPath, sheetBuffer);
   if (params.mirrorLegacy) {
@@ -524,7 +540,22 @@ export async function runProcessPipeline(
 
   const rawIndex = await readFile(targetsIndexPath, "utf8");
   const index = parseTargetsIndex(rawIndex, targetsIndexPath);
-  const targets = Array.isArray(index.targets) ? index.targets : [];
+  const targets = (Array.isArray(index.targets) ? index.targets : []).map(
+    (target, targetIndex) => {
+      try {
+        return {
+          ...target,
+          out: normalizeTargetOutPath(target.out),
+        };
+      } catch (error) {
+        throw new Error(
+          `targets[${targetIndex}].out is invalid: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+      }
+    },
+  );
   const generationTargets = targets.filter((target) => target.generationDisabled !== true);
   const spritesheetSheetTargets = targets.filter((target) => target.spritesheet?.isSheet === true);
 
@@ -535,9 +566,21 @@ export async function runProcessPipeline(
 
   let variantCount = 0;
   for (const target of generationTargets) {
-    const rawImagePath = path.join(layout.rawDir, target.out);
-    const processedImagePath = path.join(layout.processedImagesDir, target.out);
-    const legacyImagePath = path.join(layout.legacyImagesDir, target.out);
+    const rawImagePath = resolvePathWithinDir(
+      layout.rawDir,
+      target.out,
+      `raw image for target "${target.id}"`,
+    );
+    const processedImagePath = resolvePathWithinDir(
+      layout.processedImagesDir,
+      target.out,
+      `processed image for target "${target.id}"`,
+    );
+    const legacyImagePath = resolvePathWithinDir(
+      layout.legacyImagesDir,
+      target.out,
+      `legacy image for target "${target.id}"`,
+    );
 
     // eslint-disable-next-line no-await-in-loop
     const result = await processSingleTarget({

@@ -189,6 +189,15 @@ export interface AuxiliaryMapPolicy {
   aoFromLuma?: boolean;
 }
 
+export interface TargetScoreWeights {
+  readability?: number;
+  fileSize?: number;
+  consistency?: number;
+  clip?: number;
+  lpips?: number;
+  ssim?: number;
+}
+
 export interface PlannedTarget {
   id: string;
   kind?: string;
@@ -199,6 +208,7 @@ export interface PlannedTarget {
   generationMode?: GenerationMode;
   evaluationProfileId?: string;
   scoringProfile?: string;
+  scoreWeights?: TargetScoreWeights;
   tileable?: boolean;
   seamThreshold?: number;
   seamStripPx?: number;
@@ -309,6 +319,7 @@ export interface CandidateScoreRecord {
   reasons: string[];
   components?: Record<string, number>;
   metrics?: Record<string, number>;
+  warnings?: string[];
   selected?: boolean;
 }
 

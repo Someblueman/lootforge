@@ -119,6 +119,58 @@ describe("manifest normalization", () => {
     ).toBe(true);
   });
 
+  it("rejects unsafe target output paths that escape the output root", () => {
+    const manifest: ManifestV2 = {
+      ...BASE_MANIFEST,
+      targets: [
+        {
+          ...BASE_MANIFEST.targets[0],
+          out: "../../outside.png",
+        },
+      ],
+    };
+
+    const validation = validateManifestSource({
+      manifestPath: "/tmp/manifest.json",
+      raw: JSON.stringify(manifest),
+      data: manifest,
+    });
+
+    expect(validation.report.errors).toBeGreaterThan(0);
+    expect(
+      validation.report.issues.some((issue) => issue.code === "invalid_target_out_path"),
+    ).toBe(true);
+  });
+
+  it("treats normalized case-insensitive output path collisions as duplicates", () => {
+    const manifest: ManifestV2 = {
+      ...BASE_MANIFEST,
+      targets: [
+        {
+          ...BASE_MANIFEST.targets[0],
+          id: "hero-upper",
+          out: "Sprites/Hero.png",
+        },
+        {
+          ...BASE_MANIFEST.targets[0],
+          id: "hero-lower",
+          out: "sprites\\hero.png",
+        },
+      ],
+    };
+
+    const validation = validateManifestSource({
+      manifestPath: "/tmp/manifest.json",
+      raw: JSON.stringify(manifest),
+      data: manifest,
+    });
+
+    expect(validation.report.errors).toBeGreaterThan(0);
+    expect(
+      validation.report.issues.some((issue) => issue.code === "duplicate_target_out"),
+    ).toBe(true);
+  });
+
   it("expands spritesheet targets into frame jobs plus assemble target", () => {
     const manifest: ManifestV2 = {
       ...BASE_MANIFEST,

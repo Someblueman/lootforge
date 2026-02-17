@@ -30,6 +30,8 @@ export interface StagePathLayout {
   provenanceDir: string;
 }
 
+const WINDOWS_ABSOLUTE_PATH_PATTERN = /^[a-zA-Z]:[\\/]/;
+
 export function resolveStagePathLayout(outDir: string): StagePathLayout {
   const root = path.resolve(outDir);
   const imagegenSuffix = path.join("assets", "imagegen");
@@ -51,6 +53,58 @@ export function resolveStagePathLayout(outDir: string): StagePathLayout {
     checksDir: path.join(root, CHECKS_RELATIVE_DIR),
     provenanceDir: path.join(root, PROVENANCE_RELATIVE_DIR),
   };
+}
+
+export function normalizeTargetOutPath(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    throw new Error("Target output path must be a non-empty string.");
+  }
+
+  if (trimmed.includes("\0")) {
+    throw new Error(`Target output path "${value}" contains a null byte.`);
+  }
+
+  if (path.isAbsolute(trimmed) || WINDOWS_ABSOLUTE_PATH_PATTERN.test(trimmed)) {
+    throw new Error(`Target output path "${value}" must be relative.`);
+  }
+
+  const normalized = path.posix.normalize(trimmed.replaceAll("\\", "/"));
+  const withoutDotPrefix = normalized.startsWith("./") ? normalized.slice(2) : normalized;
+  if (!withoutDotPrefix || withoutDotPrefix === ".") {
+    throw new Error(`Target output path "${value}" resolved to an empty path.`);
+  }
+
+  if (withoutDotPrefix === ".." || withoutDotPrefix.startsWith("../")) {
+    throw new Error(`Target output path "${value}" escapes the output root.`);
+  }
+
+  return withoutDotPrefix;
+}
+
+export function resolvePathWithinDir(
+  baseDir: string,
+  targetOutPath: string,
+  label: string = "path",
+): string {
+  const normalizedOut = normalizeTargetOutPath(targetOutPath);
+  const resolvedBase = path.resolve(baseDir);
+  const resolvedPath = path.resolve(
+    resolvedBase,
+    normalizedOut.split("/").join(path.sep),
+  );
+  const relativeToBase = path.relative(resolvedBase, resolvedPath);
+  if (
+    relativeToBase.length === 0 ||
+    relativeToBase.startsWith("..") ||
+    path.isAbsolute(relativeToBase)
+  ) {
+    throw new Error(
+      `Unsafe ${label} "${targetOutPath}" resolves outside ${resolvedBase}.`,
+    );
+  }
+
+  return resolvedPath;
 }
 
 export function resolveManifestPath(

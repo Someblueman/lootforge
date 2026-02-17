@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
-import path from "node:path";
+
+import { resolvePathWithinDir } from "../shared/paths.js";
 
 export const PROVIDER_NAMES = ["openai", "nano", "local"] as const;
 export const KNOWN_STYLE_PRESETS = [
@@ -697,7 +698,11 @@ export function createProviderJob(params: CreateJobParams): ProviderJob {
     targetId: params.target.id,
     targetOut: params.target.out,
     prompt,
-    outPath: path.join(params.imagesDir, params.target.out),
+    outPath: resolvePathWithinDir(
+      params.imagesDir,
+      params.target.out,
+      `provider output for target "${params.target.id}"`,
+    ),
     inputHash,
     size: normalized.policy.size,
     quality: normalized.policy.quality,

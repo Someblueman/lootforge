@@ -1,6 +1,8 @@
 import { stat } from "node:fs/promises";
 import path from "node:path";
 
+import { normalizeTargetOutPath, resolvePathWithinDir } from "../shared/paths.js";
+
 export interface CatalogTarget {
   id: string;
   kind?: string;
@@ -72,7 +74,12 @@ export async function buildCatalog(
       continue;
     }
 
-    const filePath = path.join(imagesDir, target.out);
+    const normalizedOut = normalizeTargetOutPath(target.out);
+    const filePath = resolvePathWithinDir(
+      imagesDir,
+      normalizedOut,
+      `catalog image for target "${target.id}"`,
+    );
     const expectedSize = parseSize(target.acceptance?.size);
     let exists = false;
     let sizeBytes = 0;
@@ -86,8 +93,8 @@ export async function buildCatalog(
       sizeBytes = 0;
     }
 
-    const ext = path.extname(target.out);
-    const base = target.out.slice(0, target.out.length - ext.length);
+    const ext = path.extname(normalizedOut);
+    const base = normalizedOut.slice(0, normalizedOut.length - ext.length);
     const maps =
       target.auxiliaryMaps &&
       (target.auxiliaryMaps.normalFromHeight ||
@@ -110,8 +117,8 @@ export async function buildCatalog(
       id: target.id,
       kind: target.kind ?? "asset",
       atlasGroup: target.atlasGroup ?? null,
-      out: target.out,
-      url: `/assets/images/${target.out}`,
+      out: normalizedOut,
+      url: `/assets/images/${normalizedOut}`,
       alphaRequired:
         target.runtimeSpec?.alphaRequired ?? target.acceptance?.alpha === true,
       previewWidth: target.runtimeSpec?.previewWidth ?? expectedSize.width,

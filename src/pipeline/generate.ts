@@ -19,7 +19,7 @@ import {
   ProviderSelection,
   sha256Hex,
 } from "../providers/types.js";
-import { resolveStagePathLayout } from "../shared/paths.js";
+import { normalizeTargetOutPath, resolveStagePathLayout } from "../shared/paths.js";
 
 export interface GeneratePipelineOptions {
   outDir: string;
@@ -169,7 +169,14 @@ export async function runGeneratePipeline(
         left.target.id.localeCompare(right.target.id),
       );
       let nextTask = 0;
-      let lastRunAt = 0;
+      let nextScheduledStartAt = 0;
+      const reserveWaitMs = (task: TargetTask): number => {
+        const minDelayMs = computeProviderDelayMs(task, provider.capabilities.minDelayMs);
+        const nowMs = Date.now();
+        const scheduledStart = Math.max(nowMs, nextScheduledStartAt);
+        nextScheduledStartAt = scheduledStart + minDelayMs;
+        return Math.max(0, scheduledStart - nowMs);
+      };
 
       const workers: Promise<void>[] = [];
       for (let workerIndex = 0; workerIndex < providerConcurrency; workerIndex += 1) {
@@ -180,12 +187,10 @@ export async function runGeneratePipeline(
               nextTask += 1;
               const task = queue[currentIndex];
 
-              const minDelayMs = computeProviderDelayMs(task, provider.capabilities.minDelayMs);
-              const waitMs = Math.max(0, lastRunAt + minDelayMs - Date.now());
+              const waitMs = reserveWaitMs(task);
               if (waitMs > 0) {
                 await delay(waitMs);
               }
-              lastRunAt = Date.now();
 
               const progressIndex = task.targetIndex;
               options.onProgress?.({
@@ -326,12 +331,25 @@ function normalizeTargets(index: TargetsIndexShape, filePath: string): PlannedTa
     if (typeof target.out !== "string" || target.out.trim() === "") {
       throw new Error(`targets[${targetIndex}].out must be a non-empty string`);
     }
+    let normalizedOut: string;
+    try {
+      normalizedOut = normalizeTargetOutPath(target.out);
+    } catch (error) {
+      throw new Error(
+        `targets[${targetIndex}].out is invalid: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
     if (typeof target.promptSpec?.primary !== "string") {
       throw new Error(
         `targets[${targetIndex}].promptSpec.primary must be a string`,
       );
     }
-    return target;
+    return {
+      ...target,
+      out: normalizedOut,
+    };
   });
 }
 

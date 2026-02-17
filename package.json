@@ -14,7 +14,7 @@
     "test": "vitest run --passWithNoTests",
     "test:unit": "vitest run test/unit --passWithNoTests",
     "test:integration": "vitest run test/integration --passWithNoTests",
-    "lint": "node -e \"console.log('lint placeholder: ok')\"",
+    "lint": "tsc --noEmit -p tsconfig.json",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {

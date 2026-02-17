@@ -201,6 +201,21 @@ Assembles shareable outputs under:
 Runs hard/soft quality scoring and writes:
 - `<out>/checks/eval-report.json`
 
+Optional CLIP/LPIPS/SSIM adapter execution:
+- Enable adapters with:
+  - `LOOTFORGE_ENABLE_CLIP_ADAPTER=1`
+  - `LOOTFORGE_ENABLE_LPIPS_ADAPTER=1`
+  - `LOOTFORGE_ENABLE_SSIM_ADAPTER=1`
+- Configure each enabled adapter with either:
+  - `LOOTFORGE_<NAME>_ADAPTER_CMD` (shell command that reads JSON from stdin and writes JSON to stdout), or
+  - `LOOTFORGE_<NAME>_ADAPTER_URL` (HTTP endpoint accepting JSON POST and returning JSON)
+- Adapter response contract:
+  - `{"metrics":{"alignment":0.82},"score":5}` or flat numeric JSON fields
+  - `score` is used as additive soft-score bonus/penalty in eval ranking
+- Timeout controls:
+  - per-adapter: `LOOTFORGE_<NAME>_ADAPTER_TIMEOUT_MS`
+  - global fallback: `LOOTFORGE_ADAPTER_TIMEOUT_MS`
+
 ### `lootforge review`
 
 Builds a review artifact from eval data:
@@ -328,6 +343,14 @@ Stage outputs during generation flow:
 - `OPENAI_API_KEY`: required for OpenAI generation
 - `GEMINI_API_KEY`: required for Nano generation
 - `LOCAL_DIFFUSION_BASE_URL`: optional for local diffusion adapter (default `http://127.0.0.1:8188`)
+- `LOOTFORGE_ENABLE_CLIP_ADAPTER`: enable CLIP adapter execution in `lootforge eval`
+- `LOOTFORGE_CLIP_ADAPTER_CMD` or `LOOTFORGE_CLIP_ADAPTER_URL`: CLIP adapter runner
+- `LOOTFORGE_ENABLE_LPIPS_ADAPTER`: enable LPIPS adapter execution in `lootforge eval`
+- `LOOTFORGE_LPIPS_ADAPTER_CMD` or `LOOTFORGE_LPIPS_ADAPTER_URL`: LPIPS adapter runner
+- `LOOTFORGE_ENABLE_SSIM_ADAPTER`: enable SSIM adapter execution in `lootforge eval`
+- `LOOTFORGE_SSIM_ADAPTER_CMD` or `LOOTFORGE_SSIM_ADAPTER_URL`: SSIM adapter runner
+- `LOOTFORGE_ADAPTER_TIMEOUT_MS`: global timeout for eval adapters (ms)
+- `LOOTFORGE_<NAME>_ADAPTER_TIMEOUT_MS`: per-adapter timeout override (ms)
 
 No network keys are required for `init`, `plan`, `validate`, `atlas`, or `package`.
 

@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import path from "node:path";
 
 import { ZodIssue } from "zod";
@@ -19,9 +20,10 @@ import type {
   PalettePolicy,
   ResizeVariant,
 } from "../providers/types.js";
-import { normalizeTargetOutPath } from "../shared/paths.js";
+import { normalizeManifestAssetPath, normalizeTargetOutPath } from "../shared/paths.js";
 import { safeParseManifestV2 } from "./schema.js";
 import type {
+  ManifestConsistencyGroup,
   ManifestEvaluationProfile,
   ManifestPostProcess,
   ManifestSource,
@@ -54,7 +56,7 @@ export function validateManifestSource(
     issues.push(...parsed.error.issues.map(toSchemaValidationIssue));
   } else {
     manifest = parsed.data as ManifestV2;
-    issues.push(...collectSemanticIssues(manifest));
+    issues.push(...collectSemanticIssues(manifest, source.manifestPath));
   }
 
   const errors = issues.filter((issue) => issue.level === "error").length;
@@ -77,6 +79,10 @@ export function validateManifestSource(
 export function normalizeManifestTargets(manifest: ManifestV2): PlannedTarget[] {
   const defaultProvider = manifest.providers?.default ?? "openai";
   const styleKitById = new Map(manifest.styleKits.map((kit) => [kit.id, kit]));
+  const consistencyGroupById = new Map(
+    (manifest.consistencyGroups ?? []).map((group) => [group.id, group]),
+  );
+  const hasConsistencyGroups = consistencyGroupById.size > 0;
   const evaluationById = new Map(
     manifest.evaluationProfiles.map((profile) => [profile.id, profile]),
   );
@@ -85,6 +91,7 @@ export function normalizeManifestTargets(manifest: ManifestV2): PlannedTarget[] 
 
   for (const target of manifest.targets) {
     const styleKit = styleKitById.get(target.styleKitId);
+    const consistencyGroup = consistencyGroupById.get(target.consistencyGroup);
     const evalProfile = evaluationById.get(target.evaluationProfileId);
 
     if (!styleKit) {
@@ -99,12 +106,28 @@ export function normalizeManifestTargets(manifest: ManifestV2): PlannedTarget[] 
       );
     }
 
+    if (hasConsistencyGroups && !consistencyGroup) {
+      throw new Error(
+        `Target "${target.id}" references missing consistencyGroup "${target.consistencyGroup}".`,
+      );
+    }
+
+    if (
+      consistencyGroup?.styleKitId &&
+      consistencyGroup.styleKitId !== target.styleKitId
+    ) {
+      throw new Error(
+        `Target "${target.id}" uses styleKitId "${target.styleKitId}" but consistency group "${consistencyGroup.id}" is bound to "${consistencyGroup.styleKitId}".`,
+      );
+    }
+
     if (target.kind === "spritesheet") {
       const expanded = expandSpritesheetTarget({
         manifest,
         target,
         defaultProvider,
         styleKit,
+        consistencyGroup,
         evalProfile,
       });
       targets.push(...expanded);
@@ -117,6 +140,7 @@ export function normalizeManifestTargets(manifest: ManifestV2): PlannedTarget[] 
         target,
         defaultProvider,
         styleKit,
+        consistencyGroup,
         evalProfile,
       }),
     );
@@ -164,8 +188,12 @@ export function createPlanArtifacts(
   };
 }
 
-function collectSemanticIssues(manifest: ManifestV2): ValidationIssue[] {
+function collectSemanticIssues(
+  manifest: ManifestV2,
+  manifestPath: string,
+): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
+  const manifestDir = path.dirname(path.resolve(manifestPath));
   const seenTargetIds = new Set<string>();
   const seenOutPaths = new Set<string>();
 
@@ -180,6 +208,82 @@ function collectSemanticIssues(manifest: ManifestV2): ValidationIssue[] {
       });
     } else {
       styleKitIds.add(kit.id);
+    }
+
+    checkManifestAssetPath({
+      issues,
+      manifestDir,
+      value: kit.rulesPath,
+      issuePath: `styleKits[${index}].rulesPath`,
+      label: `styleKits[${index}] rulesPath`,
+    });
+
+    if (kit.palettePath) {
+      checkManifestAssetPath({
+        issues,
+        manifestDir,
+        value: kit.palettePath,
+        issuePath: `styleKits[${index}].palettePath`,
+        label: `styleKits[${index}] palettePath`,
+      });
+    }
+
+    if (kit.negativeRulesPath) {
+      checkManifestAssetPath({
+        issues,
+        manifestDir,
+        value: kit.negativeRulesPath,
+        issuePath: `styleKits[${index}].negativeRulesPath`,
+        label: `styleKits[${index}] negativeRulesPath`,
+      });
+    }
+
+    for (const [referenceIndex, referencePath] of kit.referenceImages.entries()) {
+      checkManifestAssetPath({
+        issues,
+        manifestDir,
+        value: referencePath,
+        issuePath: `styleKits[${index}].referenceImages[${referenceIndex}]`,
+        label: `styleKits[${index}] referenceImages[${referenceIndex}]`,
+      });
+    }
+  });
+
+  const consistencyGroups = manifest.consistencyGroups ?? [];
+  const consistencyGroupIds = new Set<string>();
+  const consistencyGroupById = new Map<string, ManifestConsistencyGroup>();
+  const seenConsistencyGroups = new Set<string>();
+
+  consistencyGroups.forEach((group, index) => {
+    if (consistencyGroupIds.has(group.id)) {
+      issues.push({
+        level: "error",
+        code: "duplicate_consistency_group_id",
+        path: `consistencyGroups[${index}].id`,
+        message: `Duplicate consistency group id "${group.id}".`,
+      });
+    } else {
+      consistencyGroupIds.add(group.id);
+      consistencyGroupById.set(group.id, group);
+    }
+
+    if (group.styleKitId && !styleKitIds.has(group.styleKitId)) {
+      issues.push({
+        level: "error",
+        code: "missing_style_kit",
+        path: `consistencyGroups[${index}].styleKitId`,
+        message: `Consistency group "${group.id}" references unknown style kit "${group.styleKitId}".`,
+      });
+    }
+
+    for (const [referenceIndex, referencePath] of group.referenceImages.entries()) {
+      checkManifestAssetPath({
+        issues,
+        manifestDir,
+        value: referencePath,
+        issuePath: `consistencyGroups[${index}].referenceImages[${referenceIndex}]`,
+        label: `consistencyGroups[${index}] referenceImages[${referenceIndex}]`,
+      });
     }
   });
 
@@ -254,6 +358,31 @@ function collectSemanticIssues(manifest: ManifestV2): ValidationIssue[] {
         path: `targets[${index}].evaluationProfileId`,
         message: `Unknown evaluation profile "${target.evaluationProfileId}".`,
       });
+    }
+
+    if (consistencyGroups.length > 0) {
+      const consistencyGroup = consistencyGroupById.get(target.consistencyGroup);
+      if (!consistencyGroup) {
+        issues.push({
+          level: "error",
+          code: "missing_consistency_group",
+          path: `targets[${index}].consistencyGroup`,
+          message: `Unknown consistency group "${target.consistencyGroup}".`,
+        });
+      } else {
+        seenConsistencyGroups.add(consistencyGroup.id);
+        if (
+          consistencyGroup.styleKitId &&
+          consistencyGroup.styleKitId !== target.styleKitId
+        ) {
+          issues.push({
+            level: "error",
+            code: "consistency_group_style_kit_mismatch",
+            path: `targets[${index}].styleKitId`,
+            message: `Target "${target.id}" uses style kit "${target.styleKitId}" but consistency group "${consistencyGroup.id}" is bound to "${consistencyGroup.styleKitId}".`,
+          });
+        }
+      }
     }
 
     const policySize = target.generationPolicy?.size ?? target.acceptance?.size;
@@ -387,7 +516,54 @@ function collectSemanticIssues(manifest: ManifestV2): ValidationIssue[] {
     }
   });
 
+  for (const [index, group] of consistencyGroups.entries()) {
+    if (!seenConsistencyGroups.has(group.id)) {
+      issues.push({
+        level: "warning",
+        code: "unused_consistency_group",
+        path: `consistencyGroups[${index}].id`,
+        message: `Consistency group "${group.id}" is defined but not referenced by any target.`,
+      });
+    }
+  }
+
   return issues;
+}
+
+function checkManifestAssetPath(params: {
+  issues: ValidationIssue[];
+  manifestDir: string;
+  value: string;
+  issuePath: string;
+  label: string;
+}): string | undefined {
+  let normalized: string;
+  try {
+    normalized = normalizeManifestAssetPath(params.value);
+  } catch (error) {
+    params.issues.push({
+      level: "error",
+      code: "invalid_manifest_asset_path",
+      path: params.issuePath,
+      message: error instanceof Error ? error.message : String(error),
+    });
+    return undefined;
+  }
+
+  const resolvedPath = path.resolve(
+    params.manifestDir,
+    normalized.split("/").join(path.sep),
+  );
+  if (!existsSync(resolvedPath)) {
+    params.issues.push({
+      level: "warning",
+      code: "missing_manifest_asset",
+      path: params.issuePath,
+      message: `${params.label} points to "${normalized}", but no file exists at "${resolvedPath}".`,
+    });
+  }
+
+  return normalized;
 }
 
 function normalizeTargetForGeneration(params: {
@@ -395,6 +571,7 @@ function normalizeTargetForGeneration(params: {
   target: ManifestTarget;
   defaultProvider: ProviderName;
   styleKit: ManifestV2["styleKits"][number];
+  consistencyGroup?: ManifestConsistencyGroup;
   evalProfile: ManifestEvaluationProfile;
   promptOverride?: PromptSpec;
   idOverride?: string;
@@ -424,7 +601,8 @@ function normalizeTargetForGeneration(params: {
     mergeStyleKitPrompt({
       promptSpec: normalizePromptSpecFromTarget(params.target),
       styleKit: params.styleKit,
-      consistencyGroup: params.target.consistencyGroup,
+      consistencyGroupId: params.target.consistencyGroup,
+      consistencyGroup: params.consistencyGroup,
     });
 
   const normalizedPolicy = normalizeGenerationPolicyForProvider(
@@ -498,6 +676,7 @@ function expandSpritesheetTarget(params: {
   target: ManifestTarget;
   defaultProvider: ProviderName;
   styleKit: ManifestV2["styleKits"][number];
+  consistencyGroup?: ManifestConsistencyGroup;
   evalProfile: ManifestEvaluationProfile;
 }): PlannedTarget[] {
   const normalizedSheetOut = normalizeTargetOutPath(params.target.out);
@@ -518,7 +697,8 @@ function expandSpritesheetTarget(params: {
             useCase: DEFAULT_STYLE_USE_CASE,
           },
     styleKit: params.styleKit,
-    consistencyGroup: params.target.consistencyGroup,
+    consistencyGroupId: params.target.consistencyGroup,
+    consistencyGroup: params.consistencyGroup,
   });
 
   for (const [animationName, animation] of entries) {
@@ -540,7 +720,8 @@ function expandSpritesheetTarget(params: {
       const framePrompt = mergeStyleKitPrompt({
         promptSpec: normalizePromptSpec(animation.prompt),
         styleKit: params.styleKit,
-        consistencyGroup: params.target.consistencyGroup,
+        consistencyGroupId: params.target.consistencyGroup,
+        consistencyGroup: params.consistencyGroup,
       });
       framePrompt.primary = [
         framePrompt.primary,
@@ -554,6 +735,7 @@ function expandSpritesheetTarget(params: {
           target: params.target,
           defaultProvider: params.defaultProvider,
           styleKit: params.styleKit,
+          consistencyGroup: params.consistencyGroup,
           evalProfile: params.evalProfile,
           promptOverride: framePrompt,
           idOverride: frameId,
@@ -578,6 +760,7 @@ function expandSpritesheetTarget(params: {
     target: params.target,
     defaultProvider: params.defaultProvider,
     styleKit: params.styleKit,
+    consistencyGroup: params.consistencyGroup,
     evalProfile: params.evalProfile,
     promptOverride: defaultSheetPrompt,
     generationDisabled: true,
@@ -629,10 +812,17 @@ function normalizePromptSpec(prompt: ManifestTarget["prompt"]): PromptSpec {
 function mergeStyleKitPrompt(params: {
   promptSpec: PromptSpec;
   styleKit: ManifestV2["styleKits"][number];
-  consistencyGroup: string;
+  consistencyGroupId: string;
+  consistencyGroup?: ManifestConsistencyGroup;
 }): PromptSpec {
   const references = params.styleKit.referenceImages.length
     ? `Reference images: ${params.styleKit.referenceImages.join(", ")}.`
+    : "";
+  const consistencyDescription = params.consistencyGroup?.description
+    ? `Consistency notes: ${params.consistencyGroup.description}.`
+    : "";
+  const consistencyReferences = params.consistencyGroup?.referenceImages.length
+    ? `Consistency references: ${params.consistencyGroup.referenceImages.join(", ")}.`
     : "";
   const styleHint = `Apply style kit (${params.styleKit.id}) rules from ${params.styleKit.rulesPath}.`;
   const lightingHint = `Lighting model: ${params.styleKit.lightingModel}.`;
@@ -646,7 +836,9 @@ function mergeStyleKitPrompt(params: {
     lighting: [params.promptSpec.lighting, lightingHint].filter(Boolean).join(" "),
     constraints: [
       params.promptSpec.constraints,
-      `Consistency group: ${params.consistencyGroup}.`,
+      `Consistency group: ${params.consistencyGroupId}.`,
+      consistencyDescription,
+      consistencyReferences,
       references,
       paletteHint,
     ]

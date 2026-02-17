@@ -14,6 +14,11 @@
   - `referenceImages[]`
   - `lightingModel`
   - `negativeRulesPath?`
+- `consistencyGroups[]` (optional)
+  - `id`
+  - `description?`
+  - `styleKitId?`
+  - `referenceImages[]`
 - `evaluationProfiles[]` (required, at least one)
   - `id`
   - `hardGates?`: `{ requireAlpha?, maxFileSizeKB?, seamThreshold?, seamStripPx?, paletteComplianceMin? }`
@@ -81,6 +86,14 @@ Planner behavior:
       "palettePath": "style/fantasy/palette.txt",
       "referenceImages": [],
       "lightingModel": "top-left key with warm fill"
+    }
+  ],
+  "consistencyGroups": [
+    {
+      "id": "player-family",
+      "description": "Shared protagonist style and silhouette constraints.",
+      "styleKitId": "fantasy-topdown",
+      "referenceImages": []
     }
   ],
   "evaluationProfiles": [

@@ -441,7 +441,11 @@ async function runTaskWithFallback(params: {
           runResult.candidateOutputs?.map((candidate) => candidate.outputPath) ??
           [runResult.outputPath];
 
-        const candidateSelection = await scoreCandidateImages(params.task.target, candidatePaths);
+        const candidateSelection = await scoreCandidateImages(
+          params.task.target,
+          candidatePaths,
+          { outDir: params.outDir },
+        );
         const bestPath = candidateSelection.bestPath;
         if (bestPath !== job.outPath) {
           await cp(bestPath, job.outPath, { force: true });

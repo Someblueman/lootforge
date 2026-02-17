@@ -636,6 +636,7 @@ function normalizeTargetForGeneration(params: {
     generationMode: params.target.generationMode ?? "text",
     evaluationProfileId: params.target.evaluationProfileId,
     scoringProfile: params.target.scoringProfile ?? params.target.evaluationProfileId,
+    ...(params.evalProfile.scoreWeights ? { scoreWeights: params.evalProfile.scoreWeights } : {}),
     tileable: params.target.tileable,
     seamThreshold:
       params.target.seamThreshold ?? params.evalProfile.hardGates?.seamThreshold,

@@ -2,6 +2,7 @@ import { stat } from "node:fs/promises";
 
 import sharp from "sharp";
 
+import { runEnabledSoftAdapters } from "./softAdapters.js";
 import type { CandidateScoreRecord, PlannedTarget } from "../providers/types.js";
 
 const SIZE_PATTERN = /^(\d+)x(\d+)$/i;
@@ -19,6 +20,19 @@ interface CandidateInspection {
   distinctColors?: number;
   paletteCompliance?: number;
   histogram: number[];
+}
+
+interface NormalizedScoreWeights {
+  readability: number;
+  fileSize: number;
+  consistency: number;
+  clip: number;
+  lpips: number;
+  ssim: number;
+}
+
+export interface ScoreCandidateImagesOptions {
+  outDir?: string;
 }
 
 function parseSize(size: string | undefined): { width: number; height: number } | undefined {
@@ -212,6 +226,7 @@ async function inspectCandidate(target: PlannedTarget, outputPath: string): Prom
 export async function scoreCandidateImages(
   target: PlannedTarget,
   outputPaths: string[],
+  options: ScoreCandidateImagesOptions = {},
 ): Promise<{ bestPath: string; scores: CandidateScoreRecord[] }> {
   if (outputPaths.length === 0) {
     throw new Error(`No candidate outputs available for target "${target.id}".`);
@@ -226,6 +241,28 @@ export async function scoreCandidateImages(
       : undefined;
 
   const center = centroidHistogram(inspections.map((inspection) => inspection.histogram));
+  const scoreWeights = resolveScoreWeights(target);
+  const outDir = options.outDir;
+  const softAdapterByOutputPath = new Map<
+    string,
+    Awaited<ReturnType<typeof runEnabledSoftAdapters>>
+  >();
+
+  if (outDir) {
+    const softResults = await Promise.all(
+      inspections.map(async (inspection) => ({
+        outputPath: inspection.outputPath,
+        result: await runEnabledSoftAdapters({
+          target,
+          imagePath: inspection.outputPath,
+          outDir,
+        }),
+      })),
+    );
+    for (const row of softResults) {
+      softAdapterByOutputPath.set(row.outputPath, row.result);
+    }
+  }
 
   const scored: CandidateScoreRecord[] = [];
 
@@ -233,6 +270,7 @@ export async function scoreCandidateImages(
     const reasons: string[] = [];
     const components: Record<string, number> = {};
     const metrics: Record<string, number> = {};
+    const warnings: string[] = [];
     let score = 0;
     let passedAcceptance = true;
 
@@ -265,18 +303,20 @@ export async function scoreCandidateImages(
     if (typeof maxBytes === "number") {
       if (inspection.sizeBytes > maxBytes) {
         passedAcceptance = false;
-        const penalty = 600 + Math.round((inspection.sizeBytes - maxBytes) / 2048);
+        const penaltyBase = 600 + Math.round((inspection.sizeBytes - maxBytes) / 2048);
+        const penalty = Math.round(penaltyBase * scoreWeights.fileSize);
         components.fileSizePenalty = -penalty;
         score -= penalty;
         reasons.push("file_too_large");
       } else {
-        const reward = Math.round((maxBytes - inspection.sizeBytes) / 2048);
+        const rewardBase = Math.round((maxBytes - inspection.sizeBytes) / 2048);
+        const reward = Math.round(rewardBase * scoreWeights.fileSize);
         components.fileSizeReward = reward;
         score += reward;
       }
     }
 
-    const readabilityReward = Math.round(inspection.edgeStdev * 2);
+    const readabilityReward = Math.round(inspection.edgeStdev * 2 * scoreWeights.readability);
     components.readabilityReward = readabilityReward;
     score += readabilityReward;
     metrics.edgeStdev = inspection.edgeStdev;
@@ -291,7 +331,9 @@ export async function scoreCandidateImages(
         score -= penalty;
         reasons.push("tile_seam_exceeded");
       } else {
-        const reward = Math.round((threshold - inspection.seamScore) * 2);
+        const reward = Math.round(
+          (threshold - inspection.seamScore) * 2 * scoreWeights.consistency,
+        );
         components.seamReward = reward;
         score += reward;
       }
@@ -330,9 +372,35 @@ export async function scoreCandidateImages(
 
     const consistencyDistance = histogramDistance(inspection.histogram, center);
     metrics.consistencyDistance = consistencyDistance;
-    const consistencyReward = Math.round((1 - Math.min(1, consistencyDistance)) * 40);
+    const consistencyReward = Math.round(
+      (1 - Math.min(1, consistencyDistance)) * 40 * scoreWeights.consistency,
+    );
     components.consistencyReward = consistencyReward;
     score += consistencyReward;
+
+    const softAdapterResult = softAdapterByOutputPath.get(inspection.outputPath);
+    if (softAdapterResult) {
+      for (const adapterName of softAdapterResult.adapterNames) {
+        const adapterMetrics = softAdapterResult.adapterMetrics[adapterName];
+        if (adapterMetrics) {
+          for (const [metricName, metricValue] of Object.entries(adapterMetrics)) {
+            metrics[`${adapterName}.${metricName}`] = metricValue;
+          }
+        }
+
+        const rawAdapterScore = softAdapterResult.adapterScores[adapterName];
+        if (typeof rawAdapterScore === "number" && Number.isFinite(rawAdapterScore)) {
+          const weightedAdapterScore = Math.round(
+            rawAdapterScore * resolveAdapterWeight(scoreWeights, adapterName),
+          );
+          components[`${adapterName}AdapterScore`] = weightedAdapterScore;
+          metrics[`${adapterName}.rawScore`] = rawAdapterScore;
+          score += weightedAdapterScore;
+        }
+      }
+
+      warnings.push(...softAdapterResult.warnings);
+    }
 
     scored.push({
       outputPath: inspection.outputPath,
@@ -341,6 +409,7 @@ export async function scoreCandidateImages(
       reasons,
       components,
       metrics,
+      ...(warnings.length > 0 ? { warnings } : {}),
       selected: false,
     });
   }
@@ -361,4 +430,38 @@ export async function scoreCandidateImages(
     bestPath: scored[0].outputPath,
     scores: scored,
   };
+}
+
+function resolveScoreWeights(target: PlannedTarget): NormalizedScoreWeights {
+  return {
+    readability: normalizeWeight(target.scoreWeights?.readability),
+    fileSize: normalizeWeight(target.scoreWeights?.fileSize),
+    consistency: normalizeWeight(target.scoreWeights?.consistency),
+    clip: normalizeWeight(target.scoreWeights?.clip),
+    lpips: normalizeWeight(target.scoreWeights?.lpips),
+    ssim: normalizeWeight(target.scoreWeights?.ssim),
+  };
+}
+
+function resolveAdapterWeight(
+  scoreWeights: NormalizedScoreWeights,
+  adapterName: "clip" | "lpips" | "ssim",
+): number {
+  if (adapterName === "clip") {
+    return scoreWeights.clip;
+  }
+  if (adapterName === "lpips") {
+    return scoreWeights.lpips;
+  }
+  return scoreWeights.ssim;
+}
+
+function normalizeWeight(value: number | undefined): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return 1;
+  }
+  if (value < 0) {
+    return 0;
+  }
+  return value;
 }

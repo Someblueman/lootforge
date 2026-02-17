@@ -80,6 +80,7 @@ describe("manifest normalization", () => {
     expect(artifacts.targets[0].promptSpec.style).toContain("default-kit");
     expect(artifacts.targets[0].promptSpec.constraints).toContain("Consistency group: hero-family");
     expect(artifacts.targets[0].promptSpec.constraints).toContain("Consistency notes:");
+    expect(artifacts.targets[0].scoreWeights?.readability).toBe(1);
   });
 
   it("normalizes numeric postProcess resize with default lanczos3 algorithm", () => {

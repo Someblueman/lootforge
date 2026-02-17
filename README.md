@@ -374,4 +374,4 @@ Release roadmap:
 - `0.5.0`: team scale and integration maturity (CI regressions + broader runtime export presets)
 - `1.0.0`: GA contract stabilization and public operational readiness
 
-See `docs/ROADMAP.md` for detailed scope, exit criteria, and cross-version trackers.
+See `docs/ROADMAP.md` for detailed scope, gap audit, `Upcoming` vs `Future` queues, exit criteria, and cross-version trackers.

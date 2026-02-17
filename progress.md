@@ -7,3 +7,4 @@ Current scope: rewrite LootForge for the strongest asset-generation pipeline out
   - `npm test` ✅
   - `npm run build` ✅
 - 2026-02-17: Added versioned public release roadmap (`docs/ROADMAP.md`) covering `0.2.0` through `1.0.0`.
+- 2026-02-17: Added roadmap gap audit + explicit `Upcoming`/`Future` release queues to support public release planning.

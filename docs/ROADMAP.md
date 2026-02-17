@@ -144,8 +144,63 @@ These run continuously across versions and should be reviewed per milestone:
   - setup time for first successful pack,
   - number of manual manifest edits required per pack iteration.
 
-## Immediate Next Tasks (post-merge queue)
-- Define `0.2.0` issue set from this roadmap and label them in tracker.
-- Implement `styleKits[].palettePath` auto-application fallback.
-- Add `regen-by-edit` command path with provenance preservation.
-- Add seam-heal optional pass for tile targets.
+## Gap Audit (Code + Internet Research, 2026-02-17)
+The following gaps were audited across codebase state and current external guidance for provider/API evolution, CI confidence, asset pipeline quality, and public release readiness.
+
+| Area | Gap | Target Release | Priority |
+|---|---|---|---|
+| Edit workflows | Missing dedicated `regenerate/edit` CLI path with provenance-safe flow | `0.2.0` | P0 |
+| Review quality transparency | Review output still lacks full per-target score-component breakdown | `0.2.0` | P0 |
+| Palette defaults | `styleKits[].palettePath` is validated but not auto-applied to target quantize defaults | `0.2.0` | P0 |
+| Tile reliability | Seam scoring exists; seam-heal pass and wrap-grid validation are still missing | `0.2.0` | P0 |
+| Adapter operability | Adapter health/status reporting needs explicit configured/active/failed section and reference runner docs | `0.2.0` | P1 |
+| Provider parity | OpenAI edit-first exists; Nano/Gemini edit-first parity is still missing | `0.3.0` | P0 |
+| Consistency drift control | No group-level LPIPS/CLIP outlier scoring + drift warnings by consistency group | `0.3.0` | P1 |
+| Per-kind scoring presets | Per-kind score weighting presets and scoring profile overrides are incomplete | `0.3.0` | P1 |
+| Local production contract | Missing explicit ControlNet role contract and LoRA metadata/provenance schema | `0.4.0` | P0 |
+| Throughput architecture | Missing persisted queue/backpressure separation for GPU generation vs CPU post-processing | `0.4.0` | P1 |
+| CI and confidence | No enforced CI workflows/required checks/coverage thresholds/fixture regression dashboards | `0.5.0` | P0 |
+| Runtime exports | Unity/Godot-ready presets and richer runtime metadata are still incomplete | `0.5.0` | P1 |
+| Cost/rate governance | Missing explicit provider budget telemetry, adaptive throttling, and draft-vs-final cost controls | `0.5.0` | P1 |
+| Public release operations | Missing release checklist, onboarding guide, migration/version policy, security/compliance/support runbooks | `1.0.0` | P0 |
+
+## Upcoming (Execution Queue)
+These items should be actively planned and ticketed now.
+
+### `0.2.0` Upcoming (Public Beta Foundation)
+- Implement `lootforge regenerate --edit` command path and preserve selection/provenance semantics.
+- Add score-component detail blocks to review output and ensure eval/review explainability parity.
+- Apply `styleKits[].palettePath` defaults when target palette policy is unset.
+- Add seam-heal optional pass for tile targets and wrap-grid validation checks.
+- Add adapter health section to eval report and ship adapter contract docs/examples.
+
+### `0.3.0` Upcoming (Control and Consistency)
+- Implement Nano/Gemini edit-first parity (where supported) with tests.
+- Add consistency-group drift/outlier scoring using CLIP/LPIPS signals.
+- Introduce per-kind scoring presets and manifest-level scoring profile overrides.
+- Add aggregate group-level review/eval warnings and ranking influence controls.
+
+## Future (After Upcoming)
+These are high-impact but should follow once `0.2.0` and `0.3.0` stabilize.
+
+### `0.4.0` Future (Local Production Path)
+- Define and enforce ControlNet input role contract (pose/edge/depth/segmentation).
+- Add LoRA/model-variant metadata in manifest and provenance capture for reproducibility.
+- Introduce queue architecture that separates generation workers (GPU-bound) from post-process workers (CPU-bound).
+
+### `0.5.0` Future (Team Scale and Integrations)
+- Add CI fixture packs, regression dashboards, and thresholded quality gates.
+- Add provider budget/rate telemetry and draft-vs-final operational controls.
+- Expand runtime export presets and metadata for Unity/Godot integration.
+
+### `1.0.0` Future (General Availability)
+- Publish compatibility matrix, migration policy, and deprecation process.
+- Publish security/secrets/compliance and licensing documentation.
+- Publish release operations playbook (release checklist, support runbook, onboarding path).
+
+## Research Notes
+The gap priorities above were informed by current provider/platform and release-practice references, including:
+- OpenAI image generation docs and model lifecycle/rate-limit guidance.
+- Google Gemini image model release updates and API behavior.
+- TexturePacker CLI contract and Phaser atlas/runtime loader guidance.
+- CI/release readiness references for required checks, coverage, regression fixtures, and onboarding/support playbooks.

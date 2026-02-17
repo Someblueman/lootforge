@@ -26,6 +26,14 @@ const BASE_MANIFEST: ManifestV2 = {
       lightingModel: "top-left key with soft ambient fill",
     },
   ],
+  consistencyGroups: [
+    {
+      id: "hero-family",
+      description: "Shared playable hero line with matching silhouette language.",
+      styleKitId: "default-kit",
+      referenceImages: ["style/default/hero-ref.png"],
+    },
+  ],
   evaluationProfiles: [
     {
       id: "sprite-quality",
@@ -71,6 +79,7 @@ describe("manifest normalization", () => {
     const artifacts = createPlanArtifacts(BASE_MANIFEST, "/tmp/manifest.json");
     expect(artifacts.targets[0].promptSpec.style).toContain("default-kit");
     expect(artifacts.targets[0].promptSpec.constraints).toContain("Consistency group: hero-family");
+    expect(artifacts.targets[0].promptSpec.constraints).toContain("Consistency notes:");
   });
 
   it("normalizes numeric postProcess resize with default lanczos3 algorithm", () => {
@@ -168,6 +177,101 @@ describe("manifest normalization", () => {
     expect(validation.report.errors).toBeGreaterThan(0);
     expect(
       validation.report.issues.some((issue) => issue.code === "duplicate_target_out"),
+    ).toBe(true);
+  });
+
+  it("rejects unknown consistency groups when consistency groups are declared", () => {
+    const manifest: ManifestV2 = {
+      ...BASE_MANIFEST,
+      targets: [
+        {
+          ...BASE_MANIFEST.targets[0],
+          consistencyGroup: "missing-group",
+        },
+      ],
+    };
+
+    const validation = validateManifestSource({
+      manifestPath: "/tmp/manifest.json",
+      raw: JSON.stringify(manifest),
+      data: manifest,
+    });
+
+    expect(validation.report.errors).toBeGreaterThan(0);
+    expect(
+      validation.report.issues.some((issue) => issue.code === "missing_consistency_group"),
+    ).toBe(true);
+  });
+
+  it("rejects consistency group style-kit mismatches", () => {
+    const manifest: ManifestV2 = {
+      ...BASE_MANIFEST,
+      styleKits: [
+        ...BASE_MANIFEST.styleKits,
+        {
+          id: "alt-kit",
+          rulesPath: "style/alt/style.md",
+          palettePath: "style/alt/palette.txt",
+          referenceImages: [],
+          lightingModel: "studio top light",
+        },
+      ],
+      consistencyGroups: [
+        {
+          id: "hero-family",
+          description: "Locked group",
+          styleKitId: "alt-kit",
+          referenceImages: [],
+        },
+      ],
+    };
+
+    const validation = validateManifestSource({
+      manifestPath: "/tmp/manifest.json",
+      raw: JSON.stringify(manifest),
+      data: manifest,
+    });
+
+    expect(validation.report.errors).toBeGreaterThan(0);
+    expect(
+      validation.report.issues.some(
+        (issue) => issue.code === "consistency_group_style_kit_mismatch",
+      ),
+    ).toBe(true);
+  });
+
+  it("reports unsafe manifest asset paths", () => {
+    const manifest: ManifestV2 = {
+      ...BASE_MANIFEST,
+      styleKits: [
+        {
+          ...BASE_MANIFEST.styleKits[0],
+          rulesPath: "../escape.md",
+        },
+      ],
+    };
+
+    const validation = validateManifestSource({
+      manifestPath: "/tmp/manifest.json",
+      raw: JSON.stringify(manifest),
+      data: manifest,
+    });
+
+    expect(validation.report.errors).toBeGreaterThan(0);
+    expect(
+      validation.report.issues.some((issue) => issue.code === "invalid_manifest_asset_path"),
+    ).toBe(true);
+  });
+
+  it("warns when manifest-referenced style assets are missing", () => {
+    const validation = validateManifestSource({
+      manifestPath: "/tmp/manifest.json",
+      raw: JSON.stringify(BASE_MANIFEST),
+      data: BASE_MANIFEST,
+    });
+
+    expect(
+      validation.report.issues.some((issue) => issue.code === "missing_manifest_asset"),
     ).toBe(true);
   });
 

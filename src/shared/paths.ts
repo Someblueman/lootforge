@@ -55,31 +55,39 @@ export function resolveStagePathLayout(outDir: string): StagePathLayout {
   };
 }
 
-export function normalizeTargetOutPath(value: string): string {
+function normalizeRelativeProjectPath(value: string, label: string): string {
   const trimmed = value.trim();
   if (!trimmed) {
-    throw new Error("Target output path must be a non-empty string.");
+    throw new Error(`${label} must be a non-empty string.`);
   }
 
   if (trimmed.includes("\0")) {
-    throw new Error(`Target output path "${value}" contains a null byte.`);
+    throw new Error(`${label} "${value}" contains a null byte.`);
   }
 
   if (path.isAbsolute(trimmed) || WINDOWS_ABSOLUTE_PATH_PATTERN.test(trimmed)) {
-    throw new Error(`Target output path "${value}" must be relative.`);
+    throw new Error(`${label} "${value}" must be relative.`);
   }
 
   const normalized = path.posix.normalize(trimmed.replaceAll("\\", "/"));
   const withoutDotPrefix = normalized.startsWith("./") ? normalized.slice(2) : normalized;
   if (!withoutDotPrefix || withoutDotPrefix === ".") {
-    throw new Error(`Target output path "${value}" resolved to an empty path.`);
+    throw new Error(`${label} "${value}" resolved to an empty path.`);
   }
 
   if (withoutDotPrefix === ".." || withoutDotPrefix.startsWith("../")) {
-    throw new Error(`Target output path "${value}" escapes the output root.`);
+    throw new Error(`${label} "${value}" escapes the output root.`);
   }
 
   return withoutDotPrefix;
+}
+
+export function normalizeTargetOutPath(value: string): string {
+  return normalizeRelativeProjectPath(value, "Target output path");
+}
+
+export function normalizeManifestAssetPath(value: string): string {
+  return normalizeRelativeProjectPath(value, "Manifest asset path");
 }
 
 export function resolvePathWithinDir(

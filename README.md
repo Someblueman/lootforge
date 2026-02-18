@@ -277,7 +277,9 @@ Per target:
 - `prompt` (string or structured object) for non-spritesheet targets
 - `provider?` (`openai|nano|local`)
 - `acceptance`: `{ size, alpha, maxFileSizeKB }`
-- optional generation/runtime fields (`generationPolicy`, `postProcess`, `runtimeSpec`, `model`, `edit`, `auxiliaryMaps`, `palette`, `tileable`, `seamThreshold`)
+- optional generation/runtime fields (`generationPolicy`, `postProcess`, `runtimeSpec`, `model`, `edit`, `auxiliaryMaps`, `palette`, `tileable`, `seamThreshold`, `seamStripPx`, `seamHeal`, `wrapGrid`)
+- `seamHeal`: optional pass for tileables (`enabled`, `stripPx`, `strength`) applied during process before final encode.
+- `wrapGrid`: optional per-cell tile validation (`columns`, `rows`, optional seam thresholds) enforced in image acceptance.
 - `kind: "spritesheet"` targets define `animations` and are expanded/assembled by the pipeline
 
 Minimal example:

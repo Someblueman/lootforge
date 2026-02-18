@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, writeFile, access } from "node:fs/promises";
+import { mkdtemp, mkdir, writeFile, access, readFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
@@ -137,5 +137,75 @@ describe("process -> atlas -> package integration", () => {
     });
 
     expect(await exists(packageResult.zipPath)).toBe(true);
+  });
+
+  test("applies seam-heal pass for tile targets before acceptance gating", async () => {
+    const tempRoot = await mkdtemp(path.join(os.tmpdir(), "lootforge-process-seam-heal-"));
+    const outDir = path.join(tempRoot, "work");
+    const indexPath = path.join(outDir, "jobs", "targets-index.json");
+    const rawImagePath = path.join(outDir, "assets", "imagegen", "raw", "tile.png");
+
+    await mkdir(path.dirname(indexPath), { recursive: true });
+    await mkdir(path.dirname(rawImagePath), { recursive: true });
+
+    await writeFile(
+      indexPath,
+      `${JSON.stringify(
+        {
+          targets: [
+            {
+              id: "tile",
+              kind: "tile",
+              out: "tile.png",
+              promptSpec: { primary: "tile texture" },
+              generationPolicy: {
+                outputFormat: "png",
+                background: "opaque",
+              },
+              acceptance: { size: "8x8", alpha: false, maxFileSizeKB: 256 },
+              tileable: true,
+              seamThreshold: 8,
+              seamStripPx: 1,
+              seamHeal: {
+                enabled: true,
+                stripPx: 1,
+                strength: 1,
+              },
+            },
+          ],
+        },
+        null,
+        2,
+      )}\n`,
+      "utf8",
+    );
+
+    const width = 8;
+    const height = 8;
+    const channels = 4;
+    const raw = Buffer.alloc(width * height * channels, 0);
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        const index = (y * width + x) * channels;
+        raw[index] = x === 0 ? 255 : 32;
+        raw[index + 1] = 0;
+        raw[index + 2] = x === width - 1 ? 255 : 32;
+        raw[index + 3] = 255;
+      }
+    }
+
+    await sharp(raw, { raw: { width, height, channels } }).png().toFile(rawImagePath);
+
+    const result = await runProcessPipeline({
+      outDir,
+      targetsIndexPath: indexPath,
+      strict: true,
+      mirrorLegacyImages: false,
+    });
+
+    const reportRaw = await readFile(result.acceptanceReportPath, "utf8");
+    const report = JSON.parse(reportRaw) as { errors: number; items: Array<{ metrics?: { seamScore?: number } }> };
+    expect(report.errors).toBe(0);
+    expect((report.items[0]?.metrics?.seamScore ?? Number.POSITIVE_INFINITY)).toBeLessThanOrEqual(8);
   });
 });

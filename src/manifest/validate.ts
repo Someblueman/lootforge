@@ -466,6 +466,47 @@ function collectSemanticIssues(
       });
     }
 
+    if (target.seamHeal && target.tileable !== true) {
+      issues.push({
+        level: "warning",
+        code: "seam_heal_without_tileable",
+        path: `targets[${index}].seamHeal`,
+        message: "seamHeal is configured but target.tileable is not enabled.",
+      });
+    }
+
+    if (target.wrapGrid) {
+      if (target.tileable !== true) {
+        issues.push({
+          level: "warning",
+          code: "wrap_grid_without_tileable",
+          path: `targets[${index}].wrapGrid`,
+          message: "wrapGrid is configured but target.tileable is not enabled.",
+        });
+      }
+
+      const validationSize = resolveWrapGridValidationSize(target);
+      if (!validationSize) {
+        issues.push({
+          level: "warning",
+          code: "wrap_grid_size_unresolved",
+          path: `targets[${index}].wrapGrid`,
+          message:
+            "wrapGrid checks require acceptance.size, generationPolicy.size, or postProcess.resizeTo to resolve final dimensions.",
+        });
+      } else if (
+        validationSize.width % target.wrapGrid.columns !== 0 ||
+        validationSize.height % target.wrapGrid.rows !== 0
+      ) {
+        issues.push({
+          level: "error",
+          code: "wrap_grid_size_mismatch",
+          path: `targets[${index}].wrapGrid`,
+          message: `Resolved size ${validationSize.width}x${validationSize.height} is not divisible by wrapGrid ${target.wrapGrid.columns}x${target.wrapGrid.rows}.`,
+        });
+      }
+    }
+
     if (target.generationMode === "edit-first" && (!target.edit || !target.edit.inputs?.length)) {
       issues.push({
         level: "warning",
@@ -644,6 +685,8 @@ function normalizeTargetForGeneration(params: {
       params.target.acceptance?.maxFileSizeKB ?? params.evalProfile.hardGates?.maxFileSizeKB,
   };
   const palette = resolveTargetPalettePolicy(params.target, params.styleKitPaletteDefault);
+  const seamHeal = normalizeSeamHealPolicy(params.target, params.evalProfile);
+  const wrapGrid = normalizeWrapGridPolicy(params.target, params.evalProfile);
 
   const normalized: PlannedTarget = {
     id,
@@ -660,6 +703,8 @@ function normalizeTargetForGeneration(params: {
     seamThreshold:
       params.target.seamThreshold ?? params.evalProfile.hardGates?.seamThreshold,
     seamStripPx: params.target.seamStripPx ?? params.evalProfile.hardGates?.seamStripPx,
+    ...(seamHeal ? { seamHeal } : {}),
+    ...(wrapGrid ? { wrapGrid } : {}),
     ...(palette ? { palette } : {}),
     acceptance,
     runtimeSpec: {
@@ -979,6 +1024,47 @@ function normalizePalettePolicy(target: ManifestTarget): PalettePolicy | undefin
   };
 }
 
+function normalizeSeamHealPolicy(
+  target: ManifestTarget,
+  evalProfile: ManifestEvaluationProfile,
+): PlannedTarget["seamHeal"] | undefined {
+  const seamHeal = target.seamHeal;
+  if (!seamHeal) {
+    return undefined;
+  }
+
+  const stripPx = seamHeal.stripPx ?? target.seamStripPx ?? evalProfile.hardGates?.seamStripPx;
+  return {
+    enabled: seamHeal.enabled ?? true,
+    ...(typeof stripPx === "number" ? { stripPx: Math.max(1, Math.round(stripPx)) } : {}),
+    ...(typeof seamHeal.strength === "number"
+      ? { strength: Math.max(0, Math.min(1, seamHeal.strength)) }
+      : {}),
+  };
+}
+
+function normalizeWrapGridPolicy(
+  target: ManifestTarget,
+  evalProfile: ManifestEvaluationProfile,
+): PlannedTarget["wrapGrid"] | undefined {
+  const wrapGrid = target.wrapGrid;
+  if (!wrapGrid) {
+    return undefined;
+  }
+
+  const seamThreshold =
+    wrapGrid.seamThreshold ?? target.seamThreshold ?? evalProfile.hardGates?.seamThreshold;
+  const seamStripPx =
+    wrapGrid.seamStripPx ?? target.seamStripPx ?? evalProfile.hardGates?.seamStripPx;
+
+  return {
+    columns: Math.max(1, Math.round(wrapGrid.columns)),
+    rows: Math.max(1, Math.round(wrapGrid.rows)),
+    ...(typeof seamThreshold === "number" ? { seamThreshold } : {}),
+    ...(typeof seamStripPx === "number" ? { seamStripPx: Math.max(1, Math.round(seamStripPx)) } : {}),
+  };
+}
+
 function resolveTargetPalettePolicy(
   target: ManifestTarget,
   styleKitPaletteDefault?: PalettePolicy,
@@ -1199,6 +1285,15 @@ function parseResizeTo(
   }
 
   return undefined;
+}
+
+function resolveWrapGridValidationSize(
+  target: ManifestTarget,
+): { width: number; height: number } | undefined {
+  return parseResizeTo(
+    target.postProcess?.resizeTo,
+    target.acceptance?.size ?? target.generationPolicy?.size,
+  );
 }
 
 function parseSize(size: string | undefined): { width: number; height: number } | undefined {

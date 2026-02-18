@@ -8,7 +8,9 @@ import type {
   PostProcessPolicy,
   PromptSpec,
   ProviderName,
+  SeamHealPolicy,
   TargetEditSpec,
+  WrapGridPolicy,
 } from "../providers/types.js";
 
 export type ManifestVersion = "next";
@@ -166,6 +168,8 @@ export interface ManifestTarget {
   tileable?: boolean;
   seamThreshold?: number;
   seamStripPx?: number;
+  seamHeal?: SeamHealPolicy;
+  wrapGrid?: WrapGridPolicy;
   palette?: PalettePolicy;
   prompt?: ManifestPrompt;
   promptSpec?: PromptSpec;

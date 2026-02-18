@@ -12,6 +12,7 @@ import {
   resolvePathWithinDir,
   resolveStagePathLayout,
 } from "../shared/paths.js";
+import { applySeamHeal } from "./seamHeal.js";
 
 interface TargetsIndexShape {
   targets?: PlannedTarget[];
@@ -249,6 +250,8 @@ async function processSingleTarget(params: {
   if (outlineConfig?.size) {
     outputBuffer = await applyOutline(outputBuffer, outlineConfig.size, outlineConfig.color);
   }
+
+  outputBuffer = await applySeamHeal(outputBuffer, params.target);
 
   const quantizeConfig = postProcess.operations?.quantize;
   const paletteColors = quantizeConfig?.colors ?? postProcess.pngPaletteColors;

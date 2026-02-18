@@ -2,7 +2,7 @@
 
 LootForge is a manifest-driven CLI for generating and packaging runtime-ready game image assets.
 
-Current version: `0.1.0`
+Current version: `0.2.0`
 
 ## Quickstart in 2 Minutes
 
@@ -46,6 +46,55 @@ That means it produces:
 - Pixel-level acceptance checks with JSON report output
 - Atlas stage with optional TexturePacker integration plus reproducibility artifacts
 - Pack assembly with runtime manifests and review artifacts
+
+## Showcase: What LootForge Output Looks Like
+
+The following visuals were generated from the repo showcase flow in `examples/showcase/`.
+
+### 1) Edit-first regenerate loop
+
+Re-run only one approved asset with a targeted art-direction instruction, then compare before/after plus a pixel-change heatmap:
+
+```bash
+node dist/cli/index.js regenerate \
+  --out .tmp/showcase-0.2.0 \
+  --provider openai \
+  --edit true \
+  --ids hero-idle \
+  --instruction "Keep silhouette and palette, improve readability and rim light."
+```
+
+![Edit-first regenerate before and after](docs/showcase/0.2.0/01-edit-loop.png)
+
+### 2) Seam-healed tile reliability
+
+This visual runs a seam stress test (intentional edge corruption) and then applies LootForge seam-heal processing:
+
+```bash
+node dist/cli/index.js process --out .tmp/showcase-0.2.0 --strict true
+```
+
+![Raw tile repeat vs seam-healed repeat](docs/showcase/0.2.0/02-seam-heal.png)
+
+### 3) One pipeline -> multi-runtime pack
+
+Package the same processed assets for multiple runtime manifests:
+
+```bash
+node dist/cli/index.js package \
+  --manifest examples/showcase/retro-fantasy/manifest.json \
+  --out .tmp/showcase-0.2.0 \
+  --runtimes pixi,unity \
+  --strict false
+```
+
+![Pack preview with multi-runtime outputs](docs/showcase/0.2.0/03-pack-preview.png)
+
+To regenerate these showcase images end-to-end:
+
+```bash
+bash examples/showcase/generate-showcase.sh
+```
 
 ## Requirements
 
@@ -411,14 +460,15 @@ Scripts:
 
 ## Status / Roadmap
 
-`0.1.0` is an early foundation release.
+`0.2.0` (`Emberforge`) is the public beta foundation release.
 
 Release roadmap:
-- `0.2.0`: public beta foundation (edit/regenerate workflow, score transparency, tile/palette reliability)
-- `0.3.0`: control and consistency upgrades (group-level drift scoring, provider edit parity)
-- `0.4.0`: local production path (ControlNet contracts + LoRA/provenance maturity)
-- `0.5.0`: team scale and integration maturity (CI regressions + broader runtime export presets)
-- `1.0.0`: GA contract stabilization and public operational readiness
+- `0.2.0` (`Emberforge`): public beta foundation (edit/regenerate workflow, score transparency, tile/palette reliability)
+- `0.3.0` (`Tempered Steel`): control and consistency upgrades (group-level drift scoring, provider edit parity)
+- `0.4.0` (`Anvilheart`): local production path (ControlNet contracts + LoRA/provenance maturity)
+- `0.5.0` (`Runesmelter`): team scale and integration maturity (CI regressions + broader runtime export presets)
+- `1.0.0` (`Mythic Foundry`): GA contract stabilization and public operational readiness
 
 See `docs/ROADMAP.md` for detailed scope, per-version `Upcoming` vs `Future` queues, exit criteria, and cross-version trackers.
 See `docs/ENGINE_TARGETING.md` for framework market/compatibility analysis and runtime export strategy.
+See `CHANGELOG.md` for versioned release notes and `docs/RELEASE_WORKFLOW.md` for release/changelog/showcase maintenance.

@@ -1,0 +1,291 @@
+{
+  "version": "next",
+  "pack": {
+    "id": "showcase-retro-fantasy",
+    "version": "0.2.0",
+    "license": "UNLICENSED",
+    "author": "LootForge"
+  },
+  "providers": {
+    "default": "openai",
+    "openai": {
+      "model": "gpt-image-1"
+    }
+  },
+  "styleKits": [
+    {
+      "id": "retro-fantasy",
+      "rulesPath": "style.md",
+      "palettePath": "palette.txt",
+      "referenceImages": [],
+      "lightingModel": "torch-lit tavern interior with warm key light and cool ambient shadows"
+    }
+  ],
+  "consistencyGroups": [
+    {
+      "id": "retro-party",
+      "description": "Shared 16-bit style language for hero, tiles, icons, and locations.",
+      "styleKitId": "retro-fantasy",
+      "referenceImages": []
+    }
+  ],
+  "evaluationProfiles": [
+    {
+      "id": "sprite-ui-quality",
+      "hardGates": {
+        "requireAlpha": false,
+        "maxFileSizeKB": 2048,
+        "seamThreshold": 90,
+        "seamStripPx": 4
+      },
+      "scoreWeights": {
+        "readability": 1.2,
+        "fileSize": 0.3,
+        "consistency": 0.9
+      }
+    },
+    {
+      "id": "tile-quality",
+      "hardGates": {
+        "requireAlpha": false,
+        "maxFileSizeKB": 2048,
+        "seamThreshold": 90,
+        "seamStripPx": 4
+      },
+      "scoreWeights": {
+        "readability": 0.8,
+        "fileSize": 0.2,
+        "consistency": 1.3
+      }
+    },
+    {
+      "id": "background-quality",
+      "hardGates": {
+        "requireAlpha": false,
+        "maxFileSizeKB": 4096
+      },
+      "scoreWeights": {
+        "readability": 0.9,
+        "fileSize": 0.1,
+        "consistency": 0.8
+      }
+    }
+  ],
+  "atlas": {
+    "padding": 2,
+    "trim": false,
+    "bleed": 1,
+    "multipack": false,
+    "maxWidth": 2048,
+    "maxHeight": 2048
+  },
+  "targets": [
+    {
+      "id": "hero-idle",
+      "kind": "sprite",
+      "out": "hero-idle.png",
+      "atlasGroup": "actors",
+      "styleKitId": "retro-fantasy",
+      "consistencyGroup": "retro-party",
+      "evaluationProfileId": "sprite-ui-quality",
+      "generationMode": "text",
+      "promptSpec": {
+        "useCase": "Playable character idle frame for an action RPG",
+        "primary": "Retro fantasy knight hero with a glowing rune blade, centered idle pose, expressive silhouette",
+        "style": "16-bit SNES-era pixel art with hand-painted lighting",
+        "composition": "single full-body character, centered, readable at thumbnail size",
+        "palette": "warm bronze armor, teal cloak, crimson accents, cobalt shadows",
+        "constraints": "single character only, no text, no logo"
+      },
+      "generationPolicy": {
+        "size": "1024x1024",
+        "outputFormat": "png",
+        "quality": "high",
+        "background": "transparent",
+        "candidates": 2,
+        "maxRetries": 1
+      },
+      "postProcess": {
+        "resizeTo": "512x512",
+        "algorithm": "nearest",
+        "stripMetadata": true,
+        "operations": {
+          "quantize": {
+            "colors": 128,
+            "dither": 0.45
+          },
+          "outline": {
+            "size": 2,
+            "color": "#120f14"
+          }
+        }
+      },
+      "acceptance": {
+        "size": "512x512",
+        "alpha": false,
+        "maxFileSizeKB": 2048
+      },
+      "palette": {
+        "mode": "max-colors",
+        "maxColors": 180,
+        "dither": 0.45
+      }
+    },
+    {
+      "id": "dungeon-tile",
+      "kind": "tile",
+      "out": "dungeon-tile.png",
+      "atlasGroup": "terrain",
+      "styleKitId": "retro-fantasy",
+      "consistencyGroup": "retro-party",
+      "evaluationProfileId": "tile-quality",
+      "generationMode": "text",
+      "promptSpec": {
+        "useCase": "Seamless dungeon floor tile for top-down game maps",
+        "primary": "Top-down dungeon stone tile with cracked mossy bricks, fully seamless texture",
+        "style": "retro fantasy pixel art",
+        "composition": "flat orthographic texture, no perspective",
+        "constraints": "tile must repeat perfectly edge-to-edge"
+      },
+      "generationPolicy": {
+        "size": "1024x1024",
+        "outputFormat": "png",
+        "quality": "high",
+        "background": "opaque",
+        "candidates": 1,
+        "maxRetries": 1
+      },
+      "postProcess": {
+        "resizeTo": "512x512",
+        "algorithm": "nearest",
+        "stripMetadata": true,
+        "operations": {
+          "quantize": {
+            "colors": 96,
+            "dither": 0.35
+          }
+        }
+      },
+      "acceptance": {
+        "size": "512x512",
+        "alpha": false,
+        "maxFileSizeKB": 2048
+      },
+      "tileable": true,
+      "seamThreshold": 90,
+      "seamStripPx": 4,
+      "seamHeal": {
+        "enabled": true,
+        "stripPx": 4,
+        "strength": 0.85
+      },
+      "wrapGrid": {
+        "columns": 8,
+        "rows": 8,
+        "seamThreshold": 90,
+        "seamStripPx": 2
+      },
+      "palette": {
+        "mode": "max-colors",
+        "maxColors": 96,
+        "dither": 0.35
+      }
+    },
+    {
+      "id": "ui-relic-icon",
+      "kind": "icon",
+      "out": "ui-relic-icon.png",
+      "atlasGroup": "ui",
+      "styleKitId": "retro-fantasy",
+      "consistencyGroup": "retro-party",
+      "evaluationProfileId": "sprite-ui-quality",
+      "generationMode": "text",
+      "promptSpec": {
+        "useCase": "Inventory icon for legendary loot",
+        "primary": "Ancient crystal relic icon with gold frame and arcane glow",
+        "style": "clean high-contrast retro pixel iconography",
+        "composition": "single centered icon on transparent background",
+        "constraints": "no text, no border crop"
+      },
+      "generationPolicy": {
+        "size": "1024x1024",
+        "outputFormat": "png",
+        "quality": "high",
+        "background": "transparent",
+        "candidates": 1,
+        "maxRetries": 1
+      },
+      "postProcess": {
+        "resizeTo": "512x512",
+        "algorithm": "nearest",
+        "stripMetadata": true,
+        "operations": {
+          "quantize": {
+            "colors": 96,
+            "dither": 0.4
+          },
+          "outline": {
+            "size": 2,
+            "color": "#130f16"
+          }
+        }
+      },
+      "acceptance": {
+        "size": "512x512",
+        "alpha": false,
+        "maxFileSizeKB": 2048
+      },
+      "palette": {
+        "mode": "max-colors",
+        "maxColors": 96,
+        "dither": 0.4
+      }
+    },
+    {
+      "id": "tavern-hub-bg",
+      "kind": "background",
+      "out": "tavern-hub-bg.png",
+      "styleKitId": "retro-fantasy",
+      "consistencyGroup": "retro-party",
+      "evaluationProfileId": "background-quality",
+      "generationMode": "text",
+      "promptSpec": {
+        "useCase": "Hub screen environment art",
+        "primary": "Cozy fantasy tavern interior with fireplace, potion shelves, and glowing lanterns",
+        "style": "retro fantasy pixel art with rich atmosphere",
+        "composition": "wide scene with readable foreground/midground/background separation",
+        "lighting": "warm highlights, cool shadow pockets",
+        "constraints": "no characters, no text"
+      },
+      "generationPolicy": {
+        "size": "1024x1024",
+        "outputFormat": "png",
+        "quality": "high",
+        "background": "opaque",
+        "candidates": 1,
+        "maxRetries": 1
+      },
+      "postProcess": {
+        "resizeTo": "1024x1024",
+        "algorithm": "lanczos3",
+        "stripMetadata": true,
+        "operations": {
+          "quantize": {
+            "colors": 256,
+            "dither": 0.15
+          }
+        }
+      },
+      "acceptance": {
+        "size": "1024x1024",
+        "alpha": false,
+        "maxFileSizeKB": 4096
+      },
+      "palette": {
+        "mode": "max-colors",
+        "maxColors": 256,
+        "dither": 0.15
+      }
+    }
+  ]
+}

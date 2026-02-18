@@ -36,15 +36,15 @@ Move LootForge from a strong early foundation (`0.1.x`) to a dependable, public-
 - Prefer composable interfaces (CLI + API + MCP wrapper) over product-specific UI coupling.
 
 ## Version Plan
-| Version | Theme | Outcome |
-|---|---|---|
-| `0.2.0` | Public Beta Foundation | Stable quality gates + practical edit workflows for teams |
-| `0.3.0` | Control and Consistency | Stronger content control, repeatability, and candidate quality |
-| `0.4.0` | Local Production Path | Serious local diffusion path (ControlNet/LoRA workflow) |
-| `0.5.0` | Team Scale and Integrations | CI/regression dashboards + multi-engine packaging maturity |
-| `1.0.0` | General Availability | Public release with compatibility promises and ops docs |
+| Version | Codename | Theme | Outcome |
+|---|---|---|---|
+| `0.2.0` | `Emberforge` | Public Beta Foundation | Stable quality gates + practical edit workflows for teams |
+| `0.3.0` | `Tempered Steel` | Control and Consistency | Stronger content control, repeatability, and candidate quality |
+| `0.4.0` | `Anvilheart` | Local Production Path | Serious local diffusion path (ControlNet/LoRA workflow) |
+| `0.5.0` | `Runesmelter` | Team Scale and Integrations | CI/regression dashboards + multi-engine packaging maturity |
+| `1.0.0` | `Mythic Foundry` | General Availability | Public release with compatibility promises and ops docs |
 
-## `0.2.0` Public Beta Foundation
+## `0.2.0` Public Beta Foundation (`Emberforge`)
 Focus: close the biggest usability/control gaps for day-to-day production use.
 
 ### Scope
@@ -66,7 +66,7 @@ Focus: close the biggest usability/control gaps for day-to-day production use.
 - Eval and review artifacts expose enough detail to explain why a candidate won.
 - Tile/palette policies are applied consistently from style kit defaults.
 
-## `0.3.0` Control and Consistency
+## `0.3.0` Control and Consistency (`Tempered Steel`)
 Focus: improve artistic consistency and ranking quality beyond heuristics.
 
 ### Scope
@@ -86,7 +86,7 @@ Focus: improve artistic consistency and ranking quality beyond heuristics.
 - Consistency drift is visible and actionable at group and pack levels.
 - OpenAI and Nano edit-first flows are both supported and documented.
 
-## `0.4.0` Local Production Path
+## `0.4.0` Local Production Path (`Anvilheart`)
 Focus: deliver high-control local workflows for repeatable professional packs.
 
 ### Scope
@@ -104,7 +104,7 @@ Focus: deliver high-control local workflows for repeatable professional packs.
 - Local path can produce repeatable packs with structural controls enabled.
 - Provenance is sufficient to reproduce a pack’s generation conditions.
 
-## `0.5.0` Team Scale and Integrations
+## `0.5.0` Team Scale and Integrations (`Runesmelter`)
 Focus: team operations, CI confidence, and runtime integration maturity.
 
 ### Scope
@@ -122,7 +122,7 @@ Focus: team operations, CI confidence, and runtime integration maturity.
 - CI can reject quality regressions automatically and explain why.
 - Pack outputs are straightforward to consume across target engines.
 
-## `1.0.0` General Availability
+## `1.0.0` General Availability (`Mythic Foundry`)
 Focus: stable public contract and operational readiness.
 
 ### Scope
@@ -165,7 +165,7 @@ These run continuously across versions and should be reviewed per milestone:
 ## Upcoming (Execution Queue)
 These items should be actively planned and ticketed now.
 
-### `0.2.0` Upcoming (Public Beta Foundation)
+### `0.2.0` Upcoming (Public Beta Foundation / `Emberforge`)
 - Scope complete; no remaining upcoming items in `0.2.0`.
 
 Completed 2026-02-18 in this release track:
@@ -176,7 +176,7 @@ Completed 2026-02-18 in this release track:
 - Applied `styleKits[].palettePath` defaults when target palette policy is unset.
 - Added baseline CI/security workflows for PRs and pushes.
 
-### `0.3.0` Upcoming (Control and Consistency)
+### `0.3.0` Upcoming (Control and Consistency / `Tempered Steel`)
 - Harden path safety for edit/adapters:
   - enforce in-root normalization for `edit.inputs` paths before provider uploads and adapter payload expansion.
 - Add versioned stage-artifact contract tests:
@@ -230,7 +230,7 @@ Completed 2026-02-18 in this release track:
 ## Future (After Upcoming)
 These are high-impact but should follow once `0.2.0` and `0.3.0` stabilize.
 
-### `0.4.0` Future (Local Production Path)
+### `0.4.0` Future (Local Production Path / `Anvilheart`)
 - Implement first-class ControlNet execution for local diffusion:
   - map `targets[].controlImage` + `targets[].controlMode` to provider payloads for Canny/Depth/OpenPose.
 - Add dual-guidance local conditioning workflows:
@@ -245,7 +245,7 @@ These are high-impact but should follow once `0.2.0` and `0.3.0` stabilize.
 - Publish local provider payload parity docs for ComfyUI/A1111-compatible mappings:
   - control, style references, hires-fix, and LoRA field mapping expectations.
 
-### `0.5.0` Future (Team Scale and Integrations)
+### `0.5.0` Future (Team Scale and Integrations / `Runesmelter`)
 - Add CI fixture packs, regression dashboards, and thresholded quality gates.
 - Add quality/latency operating profiles:
   - publish `fast`, `balanced`, and `high-fidelity` presets with explicit candidate-count, refinement-pass, and adapter-eval behavior.
@@ -264,7 +264,7 @@ These are high-impact but should follow once `0.2.0` and `0.3.0` stabilize.
 - Add visual review workspace improvements:
   - thumbnail-first candidate browsing with side-by-side comparison and provenance/decision linkage.
 
-### `1.0.0` Future (General Availability)
+### `1.0.0` Future (General Availability / `Mythic Foundry`)
 - Publish compatibility matrix, migration policy, and deprecation process.
 - Formalize adapter/plugin compatibility contracts:
   - versioned adapter I/O schema, compatibility guarantees, and deprecation path.

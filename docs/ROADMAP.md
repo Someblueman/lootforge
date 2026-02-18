@@ -24,6 +24,11 @@ Move LootForge from a strong early foundation (`0.1.x`) to a dependable, public-
 - Treat unsafe pathing and silent fallback behavior as release blockers.
 - Keep manifest/schema compatibility explicit and migration-friendly.
 
+## Product Parity Focus (OSS)
+- Prioritize functional parity with modern game-asset generators for request semantics, post-processing outputs, and automation interfaces.
+- Keep auth/subscription gating and credit metering out of core LootForge scope.
+- Prefer composable interfaces (CLI + API + MCP wrapper) over product-specific UI coupling.
+
 ## Version Plan
 | Version | Theme | Outcome |
 |---|---|---|
@@ -150,11 +155,16 @@ The following gaps were audited across codebase state and current external guida
 | Area | Gap | Target Release | Priority |
 |---|---|---|---|
 | Edit workflows | Missing dedicated `regenerate/edit` CLI path with provenance-safe flow | `0.2.0` | P0 |
+| API/MCP interface parity | No first-class service mode (HTTP API + MCP wrapper) for remote/agent-driven workflows | `0.2.0` | P0 |
+| Generation request contract parity | Missing canonical request schema for controls like pixel mode, pixel-perfect behavior, smart crop, aspect/resolution, and structured references | `0.2.0` | P0 |
 | Review quality transparency | Review output still lacks full per-target score-component breakdown | `0.2.0` | P0 |
 | Palette defaults | `styleKits[].palettePath` is validated but not auto-applied to target quantize defaults | `0.2.0` | P0 |
 | Tile reliability | Seam scoring exists; seam-heal pass and wrap-grid validation are still missing | `0.2.0` | P0 |
 | Adapter operability | Adapter health/status reporting needs explicit configured/active/failed section and reference runner docs | `0.2.0` | P1 |
 | Provider parity | OpenAI edit-first exists; Nano/Gemini edit-first parity is still missing | `0.3.0` | P0 |
+| Post-processing artifact parity | Missing explicit derived artifact contract (`raw`, `pixel`, `style_ref`) and smart-crop/pixel-perfect semantics as first-class outputs | `0.3.0` | P0 |
+| Model capability introspection | No provider capability endpoint/contract for model features (pixel support, high-res support, reference limits) | `0.3.0` | P1 |
+| Template pack orchestration parity | No built-in genre/perspective pack template orchestrator with dependency-aware style-reference chaining | `0.3.0` | P1 |
 | Consistency drift control | No group-level LPIPS/CLIP outlier scoring + drift warnings by consistency group | `0.3.0` | P1 |
 | Per-kind scoring presets | Per-kind score weighting presets and scoring profile overrides are incomplete | `0.3.0` | P1 |
 | Local production contract | Missing explicit ControlNet role contract and LoRA metadata/provenance schema | `0.4.0` | P0 |
@@ -169,6 +179,8 @@ These items should be actively planned and ticketed now.
 
 ### `0.2.0` Upcoming (Public Beta Foundation)
 - Implement `lootforge regenerate --edit` command path and preserve selection/provenance semantics.
+- Add optional service mode with stable HTTP generation endpoints and MCP wrapper compatibility (no auth/credit layer in core).
+- Define a canonical generation request contract and mapping layer between service requests and manifest/pipeline targets.
 - Add score-component detail blocks to review output and ensure eval/review explainability parity.
 - Apply `styleKits[].palettePath` defaults when target palette policy is unset.
 - Add seam-heal optional pass for tile targets and wrap-grid validation checks.
@@ -176,6 +188,9 @@ These items should be actively planned and ticketed now.
 
 ### `0.3.0` Upcoming (Control and Consistency)
 - Implement Nano/Gemini edit-first parity (where supported) with tests.
+- Implement first-class post-process semantics for pixel-perfect/smart-crop behaviors and emit explicit `raw`/`pixel`/`style_ref` artifact variants.
+- Add model capability introspection contract and endpoint for provider feature gating (pixel/high-res/references).
+- Add template-driven pack orchestration layer with dependency-aware style-reference chaining across generated assets.
 - Add consistency-group drift/outlier scoring using CLIP/LPIPS signals.
 - Introduce per-kind scoring presets and manifest-level scoring profile overrides.
 - Add aggregate group-level review/eval warnings and ranking influence controls.

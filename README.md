@@ -1,69 +1,74 @@
-# LootForge
+<p align="center">
+  <img src="docs/showcase/0.2.0/04-release-hero.png" alt="LootForge release banner" width="960" />
+</p>
 
-Manifest-driven CLI for generating, validating, and packaging runtime-ready game image assets.
+<h1 align="center">LootForge</h1>
 
-![LootForge release hero](docs/showcase/0.2.0/04-release-hero.png)
+<p align="center">
+  <strong>Manifest-driven CLI for generating, validating, and packaging runtime-ready game image assets.</strong>
+</p>
 
-Current version: `0.2.0` (`Emberforge`)
+<p align="center">
+  <a href="https://github.com/Someblueman/lootforge/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/Someblueman/lootforge/actions/workflows/ci.yml/badge.svg" /></a>
+  <a href="https://github.com/Someblueman/lootforge/actions/workflows/security.yml"><img alt="Security" src="https://github.com/Someblueman/lootforge/actions/workflows/security.yml/badge.svg" /></a>
+  <a href="https://github.com/Someblueman/lootforge/releases/tag/v0.2.0"><img alt="Release v0.2.0" src="https://img.shields.io/badge/release-v0.2.0-2f855a" /></a>
+  <a href="https://github.com/Someblueman/lootforge/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/Someblueman/lootforge?style=flat" /></a>
+</p>
 
-## At a Glance
+<p align="center"><code>Current version: 0.2.0 (Emberforge)</code></p>
 
-| Item | Detail |
-| --- | --- |
-| Pipeline | `init -> plan -> validate -> generate -> process -> atlas -> eval -> review -> select -> package` |
-| Inputs | One manifest with style kits, targets, evaluation profiles, and runtime packaging options |
-| Outputs | Deterministic artifacts, review reports, runtime manifests, and zip-ready packs |
-| Providers | `openai`, `nano`, `local`, or `auto` |
-| Focus | Reproducibility, inspectable scoring, and release-grade safety checks |
+## Quick Start
 
-## Quick Links
+Requirements: `node >=22`, `npm >=10`
 
-- [Quickstart in 2 Minutes](#quickstart-in-2-minutes)
-- [Quickstart (end-to-end)](#quickstart-end-to-end)
-- [CLI Commands](#cli-commands)
-- [Environment Variables](#environment-variables)
-- [Status / Roadmap](#status--roadmap)
-
-## Why LootForge
-
-Most image generators stop at `prompt -> image`.
-LootForge is built for `prompt -> image -> game runtime artifact`.
-
-Key outcomes:
-- Consistent output structure.
-- Deterministic job metadata and provenance.
-- Inspectable validation and quality reports.
-- Runtime-ready atlas/manifests and portable pack artifacts.
-
-## Features
-
-### Generation and control
-- `next` manifest schema with style kits, evaluation profiles, and spritesheet planning
-- Provider selection: `openai`, `nano`, `local`, or `auto`
-- Provider-aware normalization (`jpg -> jpeg`, transparent/background compatibility checks)
-- Deterministic job IDs keyed to normalized generation policy
-- Raw/processed pipeline stages (`generate -> process -> atlas -> package`)
-
-### Quality and selection
-- Multi-candidate generation with deterministic best-of scoring
-- Post-process operators (`trim`, `pad/extrude`, `quantize`, `outline`, `resizeVariants`)
-- Pixel-level acceptance checks with JSON report output
-
-### Packaging and runtime delivery
-- Atlas stage with optional TexturePacker integration plus reproducibility artifacts
-- Pack assembly with runtime manifests and review artifacts
-
-## Quickstart in 2 Minutes
-
+Install:
 ```bash
 npm install --cache .npm-cache
 npm run build
+```
+
+Run a local validation pass (no provider API keys required):
+```bash
 node bin/lootforge.js init --out .
 node bin/lootforge.js plan --manifest assets/imagegen/manifest.json --out assets/imagegen
 node bin/lootforge.js validate --manifest assets/imagegen/manifest.json --out assets/imagegen
 ```
 
-This exercises the planning + validation pipeline locally with no provider API keys.
+## Why LootForge
+
+Most image generators stop at `prompt -> image`.
+LootForge is designed for `prompt -> image -> game runtime artifact`.
+
+Key outcomes:
+- Consistent output structure
+- Deterministic job metadata and provenance
+- Inspectable validation and quality reports
+- Runtime-ready atlas/manifests and portable pack artifacts
+
+## Core Workflow
+
+`init -> plan -> validate -> generate -> process -> atlas -> eval -> review -> select -> package`
+
+## Core Capabilities
+
+- `next` manifest schema with style kits, evaluation profiles, and spritesheet planning
+- Provider selection: `openai`, `nano`, `local`, or `auto`
+- Provider-aware normalization (`jpg -> jpeg`, transparent/background compatibility checks)
+- Deterministic job IDs keyed to normalized generation policy
+- Multi-candidate generation with deterministic best-of scoring
+- Post-process operators (`trim`, `pad/extrude`, `quantize`, `outline`, `resizeVariants`)
+- Pixel-level acceptance checks with JSON report output
+- Atlas stage with optional TexturePacker integration plus reproducibility artifacts
+- Pack assembly with runtime manifests and review artifacts
+
+## Quick Links
+
+- [Showcase](#showcase-what-lootforge-output-looks-like)
+- [Quickstart (end-to-end)](#quickstart-end-to-end)
+- [CLI Commands](#cli-commands)
+- [Manifest Schema](#manifest-version-next)
+- [Environment Variables](#environment-variables)
+- [Status / Roadmap](#status--roadmap)
 
 ## Showcase: What LootForge Output Looks Like
 

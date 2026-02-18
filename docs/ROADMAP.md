@@ -151,9 +151,16 @@ These run continuously across versions and should be reviewed per milestone:
   - failed job retry success ratio,
   - adapter failure frequency,
   - deterministic rebuild consistency on locked targets.
+- Cost efficiency:
+  - provider calls per approved target,
+  - candidate count per approved target.
+- Operational diagnostics:
+  - run failure rate,
+  - mean time to diagnose failures from provenance/eval artifacts.
 - DX:
   - setup time for first successful pack,
-  - number of manual manifest edits required per pack iteration.
+  - number of manual manifest edits required per pack iteration,
+  - review minutes per approved target.
 
 ## Upcoming (Execution Queue)
 These items should be actively planned and ticketed now.
@@ -172,6 +179,12 @@ Completed 2026-02-18 in this release track:
 ### `0.3.0` Upcoming (Control and Consistency)
 - Harden path safety for edit/adapters:
   - enforce in-root normalization for `edit.inputs` paths before provider uploads and adapter payload expansion.
+- Add versioned stage-artifact contract tests:
+  - define authoritative contract schemas for `targets-index`, run provenance, acceptance report, eval report, and selection lock artifacts,
+  - add CI fixture-pack smoke tests that validate contract compatibility end-to-end.
+- Make provider configuration an enforced runtime contract:
+  - consistently apply manifest/env endpoint, timeout, retry, delay, and concurrency settings across all providers,
+  - add capability-claim parity checks so provider feature flags reflect actual runtime behavior.
 - Performance reliability follow-ups:
   - eliminate repeated candidate-image decode/stats passes during scoring,
   - run enabled soft adapters in parallel with deterministic result aggregation,
@@ -183,7 +196,31 @@ Completed 2026-02-18 in this release track:
 - Add optional service mode with stable HTTP generation endpoints and MCP wrapper compatibility (no auth/credit layer in core).
 - Define a canonical generation request contract and mapping layer between service requests and manifest/pipeline targets.
 - Implement Nano/Gemini edit-first parity (where supported) with tests.
+- Add automated VLM candidate grading gates:
+  - score candidates for silhouette clarity, framing/cutoff, and structural fidelity,
+  - discard candidates below manifest threshold (default `4/5`) before review output.
+- Add edge-aware quality scoring and hard-gate coverage:
+  - measure alpha-boundary sharpness, halo/bleed risk, and stray-pixel noise on transparent outputs,
+  - surface boundary-focused failure reasons in candidate scoring, eval, and review artifacts.
+- Expand acceptance from single-image checks to pack-level invariants:
+  - enforce pack-level runtime/output uniqueness and atlas grouping integrity checks,
+  - add spritesheet continuity checks (frame-to-frame silhouette/anchor drift),
+  - add optional texture-memory budget gates for pack outputs.
+- Add manifest schema scaffolding for directed synthesis controls:
+  - `targets[].controlImage`, `targets[].controlMode` (`canny|depth|openpose`),
+  - `styleKits[].styleReferenceImages`, `styleKits[].loraPath`, `styleKits[].loraStrength`,
+  - `generationPolicy.highQuality` and optional `generationPolicy.hiresFix` controls.
 - Implement first-class post-process semantics for pixel-perfect/smart-crop behaviors and emit explicit `raw`/`pixel`/`style_ref` artifact variants.
+- Harden pixel-perfect quantization behavior:
+  - deterministic nearest-color exact-palette mapping with alpha-safe handling,
+  - strict palette-enforcement mode for low-color sprite/pixel-art outputs.
+- Add coarse-to-fine candidate promotion controls:
+  - run lower-cost candidate generation/scoring first,
+  - promote top-K candidates into high-fidelity refinement passes only when quality gates justify extra compute.
+- Extend eval/review artifacts with VLM grade traceability:
+  - include per-candidate VLM rubric output, threshold decision, and rejection reasons.
+- Add manifest policy coverage checks:
+  - fail release gates when documented manifest policy fields are neither implemented nor marked as reserved.
 - Add model capability introspection contract and endpoint for provider feature gating (pixel/high-res/references).
 - Add template-driven pack orchestration layer with dependency-aware style-reference chaining across generated assets.
 - Add consistency-group drift/outlier scoring using CLIP/LPIPS signals.
@@ -194,16 +231,44 @@ Completed 2026-02-18 in this release track:
 These are high-impact but should follow once `0.2.0` and `0.3.0` stabilize.
 
 ### `0.4.0` Future (Local Production Path)
-- Define and enforce ControlNet input role contract (pose/edge/depth/segmentation).
-- Add LoRA/model-variant metadata in manifest and provenance capture for reproducibility.
-- Introduce queue architecture that separates generation workers (GPU-bound) from post-process workers (CPU-bound).
+- Implement first-class ControlNet execution for local diffusion:
+  - map `targets[].controlImage` + `targets[].controlMode` to provider payloads for Canny/Depth/OpenPose.
+- Add dual-guidance local conditioning workflows:
+  - combine structural ControlNet guidance with optional detail/edge guidance priors for boundary fidelity refinement.
+- Implement IP-Adapter image-prompt integration for local diffusion:
+  - pass `styleKits[].styleReferenceImages` separately from structural ControlNet guide inputs.
+- Implement two-pass Hires Fix workflows behind explicit high-quality policy flags:
+  - low-res generation -> latent upscale -> high-res denoise pass.
+- Implement LoRA loading from style-kit manifest configuration:
+  - support `styleKits[].loraPath` and `styleKits[].loraStrength`,
+  - capture model/control/LoRA provenance per output for reproducibility.
+- Publish local provider payload parity docs for ComfyUI/A1111-compatible mappings:
+  - control, style references, hires-fix, and LoRA field mapping expectations.
 
 ### `0.5.0` Future (Team Scale and Integrations)
 - Add CI fixture packs, regression dashboards, and thresholded quality gates.
+- Add quality/latency operating profiles:
+  - publish `fast`, `balanced`, and `high-fidelity` presets with explicit candidate-count, refinement-pass, and adapter-eval behavior.
+- Add golden-set quality harness and nightly regression gates:
+  - maintain curated target/reference packs and detect score-quality regressions across providers/models,
+  - add calibration loop outputs for score-weight tuning over time.
 - Add provider budget/rate telemetry and draft-vs-final operational controls.
+- Harden release-grade CI and supply-chain posture:
+  - publish coverage reports with thresholds for critical pipeline modules,
+  - pin workflow action revisions and emit SBOM + build provenance artifacts,
+  - add policy checks for insecure soft-adapter execution configuration.
 - Expand runtime export presets and metadata for Unity/Godot integration.
+- Add atlas-capacity planning and multipack spillover safeguards:
+  - compute safe atlas frame capacity with padding/extrusion/mip constraints before pack build,
+  - warn/fail on atlas overcommit and auto-spill frames to additional atlas pages when enabled.
+- Add visual review workspace improvements:
+  - thumbnail-first candidate browsing with side-by-side comparison and provenance/decision linkage.
 
 ### `1.0.0` Future (General Availability)
 - Publish compatibility matrix, migration policy, and deprecation process.
+- Formalize adapter/plugin compatibility contracts:
+  - versioned adapter I/O schema, compatibility guarantees, and deprecation path.
 - Publish security/secrets/compliance and licensing documentation.
 - Publish release operations playbook (release checklist, support runbook, onboarding path).
+- Enforce roadmap delivery traceability:
+  - require each release item to map to issue(s), PR(s), tests, and KPI deltas.

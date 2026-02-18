@@ -171,6 +171,29 @@ Example:
 lootforge generate --out assets/imagegen --provider nano --ids enemy-1,ui-icon-attack
 ```
 
+### `lootforge regenerate`
+
+Re-runs selected targets from selection-lock state, with dedicated edit-first flow support.
+
+Flags:
+- `--out <dir>`
+- `--index <path>` optional (default `<out>/jobs/targets-index.json`)
+- `--lock <path>` optional (default `<out>/locks/selection-lock.json`)
+- `--ids a,b,c` optional subset (default: all lock-approved targets)
+- `--edit true|false` (default: `true`)
+- `--instruction "<text>"` optional instruction override for edit mode
+- `--preserve-composition true|false` (default: `true`)
+- `--provider openai|nano|local|auto`
+
+Behavior:
+- Uses selection lock approved outputs as edit-base input (`role=base`) for each regenerated target.
+- Preserves lock provenance in `provenance/run.json` (`regenerationSource` metadata) for traceability.
+
+Example:
+```bash
+lootforge regenerate --out assets/imagegen --edit true --ids player-idle
+```
+
 ### `lootforge process`
 
 Reads raw outputs, applies post-processing and acceptance checks, and writes:
@@ -225,6 +248,7 @@ Optional CLIP/LPIPS/SSIM adapter execution:
 
 Builds a review artifact from eval data:
 - `<out>/review/review.html`
+- Includes per-target score breakdown details (candidate reasons/metrics + adapter components/metrics/warnings).
 
 ### `lootforge select`
 
@@ -242,6 +266,10 @@ Top-level fields:
 - `evaluationProfiles[]` (required)
 - `atlas` options for packing defaults and per-group overrides
 - `targets[]` (required)
+
+`styleKits[].palettePath` behavior:
+- When `target.palette` is unset, LootForge auto-loads colors from the style-kit palette file and applies them as the default exact palette policy.
+- An explicit `target.palette` always takes precedence over style-kit defaults.
 
 Per target:
 - `id`, `kind`, `out`, `atlasGroup?`, `styleKitId`, `consistencyGroup`, `evaluationProfileId`
@@ -381,5 +409,5 @@ Release roadmap:
 - `0.5.0`: team scale and integration maturity (CI regressions + broader runtime export presets)
 - `1.0.0`: GA contract stabilization and public operational readiness
 
-See `docs/ROADMAP.md` for detailed scope, gap audit, `Upcoming` vs `Future` queues, exit criteria, and cross-version trackers.
+See `docs/ROADMAP.md` for detailed scope, per-version `Upcoming` vs `Future` queues, exit criteria, and cross-version trackers.
 See `docs/ENGINE_TARGETING.md` for framework market/compatibility analysis and runtime export strategy.

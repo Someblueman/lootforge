@@ -25,6 +25,24 @@ export interface ProvenanceJobRecord {
     metrics?: Record<string, number>;
     selected?: boolean;
   }>;
+  generationMode?: "text" | "edit-first";
+  edit?: {
+    mode?: "edit" | "iterate";
+    instruction?: string;
+    inputs?: Array<{
+      path: string;
+      role?: "base" | "mask" | "reference";
+      fidelity?: "low" | "medium" | "high";
+    }>;
+    preserveComposition?: boolean;
+  };
+  regenerationSource?: {
+    mode: "selection-lock" | "selection-lock-edit";
+    selectionLockPath: string;
+    selectionLockGeneratedAt?: string;
+    lockInputHash: string;
+    lockSelectedOutputPath: string;
+  };
 }
 
 export interface RunProvenance {

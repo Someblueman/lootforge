@@ -1,3 +1,7 @@
+import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+
 import { describe, expect, it } from "vitest";
 
 import { createPlanArtifacts, validateManifestSource } from "../../src/manifest/validate.ts";
@@ -85,6 +89,33 @@ describe("manifest normalization", () => {
     expect(artifacts.targets[0].scoreWeights?.readability).toBe(1);
     expect(artifacts.targets[0].runtimeSpec?.anchorX).toBe(0.25);
     expect(artifacts.targets[0].runtimeSpec?.anchorY).toBe(0.75);
+  });
+
+  it("defaults target palette from style-kit palette files when target palette is unset", async () => {
+    const tempRoot = await mkdtemp(path.join(os.tmpdir(), "lootforge-style-kit-palette-"));
+    const styleDir = path.join(tempRoot, "style", "default");
+    await mkdir(styleDir, { recursive: true });
+    await writeFile(
+      path.join(styleDir, "palette.txt"),
+      [
+        "#112233",
+        "44AA55",
+        "255, 0, 170",
+        "GIMP Palette",
+        "Name: ignored",
+        "Columns: 4",
+      ].join("\n"),
+      "utf8",
+    );
+
+    const manifestPath = path.join(tempRoot, "manifest.json");
+    const artifacts = createPlanArtifacts(BASE_MANIFEST, manifestPath);
+
+    expect(artifacts.targets[0].palette).toEqual({
+      mode: "exact",
+      colors: ["#112233", "#44aa55", "#ff00aa"],
+      dither: undefined,
+    });
   });
 
   it("normalizes numeric postProcess resize with default lanczos3 algorithm", () => {

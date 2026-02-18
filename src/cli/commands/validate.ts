@@ -91,7 +91,9 @@ export async function runValidateCommand(
 
   if (args.checkImages && manifest) {
     try {
-      const targets = normalizeManifestTargets(manifest);
+      const targets = normalizeManifestTargets(manifest, {
+        manifestPath: args.manifestPath,
+      });
       const layout = resolveStagePathLayout(args.outDir);
       const imagesDir = args.imagesDir ?? layout.processedImagesDir;
       const acceptanceReport = await runImageAcceptanceChecks({

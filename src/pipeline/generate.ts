@@ -276,6 +276,9 @@ export async function runGeneratePipeline(
       skipped: result.skipped,
       candidateOutputs: result.candidateOutputs,
       candidateScores: result.candidateScores,
+      generationMode: result.generationMode,
+      edit: result.edit,
+      regenerationSource: result.regenerationSource,
     })),
     failures,
   });
@@ -419,6 +422,9 @@ async function runTaskWithFallback(params: {
           startedAt: nowIso(params.now),
           finishedAt: nowIso(params.now),
           skipped: true,
+          generationMode: params.task.target.generationMode,
+          edit: params.task.target.edit,
+          regenerationSource: params.task.target.regenerationSource,
           warnings: [
             `Skipped generation for ${job.targetId}; approved lock matched input hash.`,
           ],
@@ -458,6 +464,9 @@ async function runTaskWithFallback(params: {
           outputPath: job.outPath,
           bytesWritten: fileStat.size,
           candidateScores: candidateSelection.scores,
+          generationMode: params.task.target.generationMode,
+          edit: params.task.target.edit,
+          regenerationSource: params.task.target.regenerationSource,
         };
       } catch (error) {
         lastError = provider.normalizeError(error);

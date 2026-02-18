@@ -1,6 +1,6 @@
 # LootForge Public Release Roadmap
 
-Last updated: 2026-02-17
+Last updated: 2026-02-18
 
 ## Goal
 Move LootForge from a strong early foundation (`0.1.x`) to a dependable, public-facing release with:
@@ -17,6 +17,12 @@ Move LootForge from a strong early foundation (`0.1.x`) to a dependable, public-
 - External soft-adapter execution for CLIP/LPIPS/SSIM in eval.
 - Weighted candidate ranking using profile weights and adapter score contributions.
 - Selection lock + skip-locked generation path for deterministic no-regenerate flows.
+
+## `0.2.0` Progress Snapshot (2026-02-18)
+- Added dedicated `lootforge regenerate --edit` flow using approved selection-lock outputs as edit bases.
+- Added per-target score-component detail blocks in review output for eval/review explainability parity.
+- Added style-kit palette auto-ingest (`styleKits[].palettePath`) when target palette policy is unset.
+- Added enforced PR/push CI (`typecheck`, `test`, `build`) plus security workflows (dependency review, `npm audit`, CodeQL).
 
 ## Release Principles
 - Keep behavior deterministic unless explicitly marked stochastic.
@@ -149,44 +155,22 @@ These run continuously across versions and should be reviewed per milestone:
   - setup time for first successful pack,
   - number of manual manifest edits required per pack iteration.
 
-## Gap Audit (Code + Internet Research, 2026-02-17)
-The following gaps were audited across codebase state and current external guidance for provider/API evolution, CI confidence, asset pipeline quality, and public release readiness.
-
-| Area | Gap | Target Release | Priority |
-|---|---|---|---|
-| Edit workflows | Missing dedicated `regenerate/edit` CLI path with provenance-safe flow | `0.2.0` | P0 |
-| API/MCP interface parity | No first-class service mode (HTTP API + MCP wrapper) for remote/agent-driven workflows | `0.2.0` | P0 |
-| Generation request contract parity | Missing canonical request schema for controls like pixel mode, pixel-perfect behavior, smart crop, aspect/resolution, and structured references | `0.2.0` | P0 |
-| Review quality transparency | Review output still lacks full per-target score-component breakdown | `0.2.0` | P0 |
-| Palette defaults | `styleKits[].palettePath` is validated but not auto-applied to target quantize defaults | `0.2.0` | P0 |
-| Tile reliability | Seam scoring exists; seam-heal pass and wrap-grid validation are still missing | `0.2.0` | P0 |
-| Adapter operability | Adapter health/status reporting needs explicit configured/active/failed section and reference runner docs | `0.2.0` | P1 |
-| Provider parity | OpenAI edit-first exists; Nano/Gemini edit-first parity is still missing | `0.3.0` | P0 |
-| Post-processing artifact parity | Missing explicit derived artifact contract (`raw`, `pixel`, `style_ref`) and smart-crop/pixel-perfect semantics as first-class outputs | `0.3.0` | P0 |
-| Model capability introspection | No provider capability endpoint/contract for model features (pixel support, high-res support, reference limits) | `0.3.0` | P1 |
-| Template pack orchestration parity | No built-in genre/perspective pack template orchestrator with dependency-aware style-reference chaining | `0.3.0` | P1 |
-| Consistency drift control | No group-level LPIPS/CLIP outlier scoring + drift warnings by consistency group | `0.3.0` | P1 |
-| Per-kind scoring presets | Per-kind score weighting presets and scoring profile overrides are incomplete | `0.3.0` | P1 |
-| Local production contract | Missing explicit ControlNet role contract and LoRA metadata/provenance schema | `0.4.0` | P0 |
-| Throughput architecture | Missing persisted queue/backpressure separation for GPU generation vs CPU post-processing | `0.4.0` | P1 |
-| CI and confidence | No enforced CI workflows/required checks/coverage thresholds/fixture regression dashboards | `0.5.0` | P0 |
-| Runtime exports | Unity/Godot-ready presets and richer runtime metadata are still incomplete | `0.5.0` | P1 |
-| Cost/rate governance | Missing explicit provider budget telemetry, adaptive throttling, and draft-vs-final cost controls | `0.5.0` | P1 |
-| Public release operations | Missing release checklist, onboarding guide, migration/version policy, security/compliance/support runbooks | `1.0.0` | P0 |
-
 ## Upcoming (Execution Queue)
 These items should be actively planned and ticketed now.
 
 ### `0.2.0` Upcoming (Public Beta Foundation)
-- Implement `lootforge regenerate --edit` command path and preserve selection/provenance semantics.
-- Add optional service mode with stable HTTP generation endpoints and MCP wrapper compatibility (no auth/credit layer in core).
-- Define a canonical generation request contract and mapping layer between service requests and manifest/pipeline targets.
-- Add score-component detail blocks to review output and ensure eval/review explainability parity.
-- Apply `styleKits[].palettePath` defaults when target palette policy is unset.
 - Add seam-heal optional pass for tile targets and wrap-grid validation checks.
 - Add adapter health section to eval report and ship adapter contract docs/examples.
 
+Completed 2026-02-18 in this release track:
+- Added `lootforge regenerate --edit` command path and preserved selection/provenance semantics.
+- Added score-component detail blocks to review output.
+- Applied `styleKits[].palettePath` defaults when target palette policy is unset.
+- Added baseline CI/security workflows for PRs and pushes.
+
 ### `0.3.0` Upcoming (Control and Consistency)
+- Add optional service mode with stable HTTP generation endpoints and MCP wrapper compatibility (no auth/credit layer in core).
+- Define a canonical generation request contract and mapping layer between service requests and manifest/pipeline targets.
 - Implement Nano/Gemini edit-first parity (where supported) with tests.
 - Implement first-class post-process semantics for pixel-perfect/smart-crop behaviors and emit explicit `raw`/`pixel`/`style_ref` artifact variants.
 - Add model capability introspection contract and endpoint for provider feature gating (pixel/high-res/references).
@@ -212,10 +196,3 @@ These are high-impact but should follow once `0.2.0` and `0.3.0` stabilize.
 - Publish compatibility matrix, migration policy, and deprecation process.
 - Publish security/secrets/compliance and licensing documentation.
 - Publish release operations playbook (release checklist, support runbook, onboarding path).
-
-## Research Notes
-The gap priorities above were informed by current provider/platform and release-practice references, including:
-- OpenAI image generation docs and model lifecycle/rate-limit guidance.
-- Google Gemini image model release updates and API behavior.
-- TexturePacker CLI contract and Phaser atlas/runtime loader guidance.
-- CI/release readiness references for required checks, coverage, regression fixtures, and onboarding/support playbooks.

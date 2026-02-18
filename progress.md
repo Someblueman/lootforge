@@ -9,3 +9,8 @@ Current scope: rewrite LootForge for the strongest asset-generation pipeline out
 - 2026-02-17: Added versioned public release roadmap (`docs/ROADMAP.md`) covering `0.2.0` through `1.0.0`.
 - 2026-02-17: Added roadmap gap audit + explicit `Upcoming`/`Future` release queues to support public release planning.
 - 2026-02-17: Added multi-runtime packaging transpiler foundation (`phaser` baseline + optional `pixi`/`unity` manifests) and documented engine targeting strategy in `docs/ENGINE_TARGETING.md`.
+- 2026-02-18: Added GitHub Actions CI for PR/push validation (`typecheck`, `test`, `build`) plus security workflows (`dependency-review`, `npm audit`, `CodeQL`).
+- 2026-02-18: Picked up the next `0.2.0` roadmap item by auto-ingesting `styleKits[].palettePath` defaults into normalized target palette policy when `target.palette` is unset.
+- 2026-02-18: Extended review HTML with per-target score-component detail blocks for eval/review explainability parity.
+- 2026-02-18: Implemented `lootforge regenerate --edit` command flow that uses approved selection-lock outputs as edit bases and carries regeneration source metadata into run provenance.
+- 2026-02-18: Converted `docs/ROADMAP.md` to a release-only roadmap (no separate gap-audit section), with all remaining work tracked directly in `0.2.0`/`0.3.0`/`0.4.0`/`0.5.0`/`1.0.0` queues.

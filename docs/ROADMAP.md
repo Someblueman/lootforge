@@ -159,9 +159,10 @@ These run continuously across versions and should be reviewed per milestone:
 These items should be actively planned and ticketed now.
 
 ### `0.2.0` Upcoming (Public Beta Foundation)
-- Add adapter health section to eval report and ship adapter contract docs/examples.
+- Scope complete; no remaining upcoming items in `0.2.0`.
 
 Completed 2026-02-18 in this release track:
+- Added adapter health section to eval report (`configured`, `active`, `failed`) and shipped adapter contract docs/examples.
 - Added optional `seamHeal` processing pass for tileable targets and `wrapGrid` validation checks.
 - Added `lootforge regenerate --edit` command path and preserved selection/provenance semantics.
 - Added score-component detail blocks to review output.

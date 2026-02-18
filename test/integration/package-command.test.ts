@@ -117,4 +117,32 @@ describe("package command", () => {
     expect(await exists(path.join(result.packDir, "manifest", "pixi.json"))).toBe(true);
     expect(await exists(path.join(result.packDir, "manifest", "unity-import.json"))).toBe(true);
   });
+
+  test("allows acceptance errors when --strict is false", async () => {
+    const { outDir } = await createPackageFixture("lootforge-package-lenient-");
+    const indexPath = path.join(outDir, "jobs", "targets-index.json");
+    await writeFile(
+      indexPath,
+      `${JSON.stringify(
+        {
+          targets: [
+            {
+              id: "enemy",
+              kind: "sprite",
+              out: "enemy.png",
+              atlasGroup: null,
+              acceptance: { size: "64x64", alpha: true, maxFileSizeKB: 256 },
+              runtimeSpec: { anchorX: 0.25, anchorY: 0.75 },
+            },
+          ],
+        },
+        null,
+        2,
+      )}\n`,
+      "utf8",
+    );
+
+    const result = await runPackageCommand(["--out", outDir, "--strict", "false"]);
+    expect(await exists(result.zipPath)).toBe(true);
+  });
 });

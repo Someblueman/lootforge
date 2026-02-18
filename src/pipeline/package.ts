@@ -171,7 +171,7 @@ export async function runPackagePipeline(
   const acceptanceReport = await runImageAcceptanceChecks({
     targets,
     imagesDir: processedImagesDir,
-    strict: true,
+    strict,
   });
   assertImageAcceptanceReport(acceptanceReport);
 

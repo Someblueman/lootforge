@@ -228,6 +228,11 @@ Flags:
 
 Runs hard/soft quality scoring and writes:
 - `<out>/checks/eval-report.json`
+- `eval-report.json` includes adapter health telemetry:
+  - `adapterHealth.configured`: enabled adapters with command/URL configured
+  - `adapterHealth.active`: adapters that returned at least one successful result
+  - `adapterHealth.failed`: adapters that failed or were enabled but unconfigured
+  - `adapterHealth.adapters[]`: per-adapter mode, target attempt/success/fail counters, warnings
 
 Optional CLIP/LPIPS/SSIM adapter execution:
 - Enable adapters with:
@@ -243,6 +248,10 @@ Optional CLIP/LPIPS/SSIM adapter execution:
 - Timeout controls:
   - per-adapter: `LOOTFORGE_<NAME>_ADAPTER_TIMEOUT_MS`
   - global fallback: `LOOTFORGE_ADAPTER_TIMEOUT_MS`
+- Adapter contract reference and runnable examples:
+  - `docs/ADAPTER_CONTRACT.md`
+  - `examples/adapters/stdin-adapter-example.js`
+  - `examples/adapters/http-adapter-example.js`
 
 ### `lootforge review`
 

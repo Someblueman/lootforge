@@ -1,8 +1,57 @@
 # LootForge
 
-LootForge is a manifest-driven CLI for generating and packaging runtime-ready game image assets.
+Manifest-driven CLI for generating, validating, and packaging runtime-ready game image assets.
 
-Current version: `0.2.0`
+![LootForge release hero](docs/showcase/0.2.0/04-release-hero.png)
+
+Current version: `0.2.0` (`Emberforge`)
+
+## At a Glance
+
+| Item | Detail |
+| --- | --- |
+| Pipeline | `init -> plan -> validate -> generate -> process -> atlas -> eval -> review -> select -> package` |
+| Inputs | One manifest with style kits, targets, evaluation profiles, and runtime packaging options |
+| Outputs | Deterministic artifacts, review reports, runtime manifests, and zip-ready packs |
+| Providers | `openai`, `nano`, `local`, or `auto` |
+| Focus | Reproducibility, inspectable scoring, and release-grade safety checks |
+
+## Quick Links
+
+- [Quickstart in 2 Minutes](#quickstart-in-2-minutes)
+- [Quickstart (end-to-end)](#quickstart-end-to-end)
+- [CLI Commands](#cli-commands)
+- [Environment Variables](#environment-variables)
+- [Status / Roadmap](#status--roadmap)
+
+## Why LootForge
+
+Most image generators stop at `prompt -> image`.
+LootForge is built for `prompt -> image -> game runtime artifact`.
+
+Key outcomes:
+- Consistent output structure.
+- Deterministic job metadata and provenance.
+- Inspectable validation and quality reports.
+- Runtime-ready atlas/manifests and portable pack artifacts.
+
+## Features
+
+### Generation and control
+- `next` manifest schema with style kits, evaluation profiles, and spritesheet planning
+- Provider selection: `openai`, `nano`, `local`, or `auto`
+- Provider-aware normalization (`jpg -> jpeg`, transparent/background compatibility checks)
+- Deterministic job IDs keyed to normalized generation policy
+- Raw/processed pipeline stages (`generate -> process -> atlas -> package`)
+
+### Quality and selection
+- Multi-candidate generation with deterministic best-of scoring
+- Post-process operators (`trim`, `pad/extrude`, `quantize`, `outline`, `resizeVariants`)
+- Pixel-level acceptance checks with JSON report output
+
+### Packaging and runtime delivery
+- Atlas stage with optional TexturePacker integration plus reproducibility artifacts
+- Pack assembly with runtime manifests and review artifacts
 
 ## Quickstart in 2 Minutes
 
@@ -15,37 +64,6 @@ node bin/lootforge.js validate --manifest assets/imagegen/manifest.json --out as
 ```
 
 This exercises the planning + validation pipeline locally with no provider API keys.
-
-It is designed to:
-- plan generation jobs from a single manifest
-- run image generation with pluggable providers (OpenAI + Nano + Local adapter)
-- validate and bundle outputs into a portable asset pack
-- emit runtime manifests for Phaser plus optional Pixi/Unity exports from the same pack metadata
-
-## Why LootForge
-
-Most image generation tools stop at prompt -> image.
-LootForge focuses on prompt -> image -> game runtime artifact.
-
-That means it produces:
-- consistent file structure
-- deterministic job metadata
-- validation reports
-- atlas metadata
-- zip-ready pack outputs for sharing or CI
-
-## Features
-
-- `next` manifest schema with style kits, evaluation profiles, and spritesheet planning
-- Provider selection: `openai`, `nano`, `local`, or `auto`
-- Provider-aware normalization (`jpg -> jpeg`, transparent/background compatibility checks)
-- Deterministic job IDs keyed to normalized generation policy
-- Raw/processed pipeline stages (`generate -> process -> atlas -> package`)
-- Multi-candidate generation with deterministic best-of scoring
-- Post-process operators (`trim`, `pad/extrude`, `quantize`, `outline`, `resizeVariants`)
-- Pixel-level acceptance checks with JSON report output
-- Atlas stage with optional TexturePacker integration plus reproducibility artifacts
-- Pack assembly with runtime manifests and review artifacts
 
 ## Showcase: What LootForge Output Looks Like
 
@@ -163,9 +181,28 @@ node dist/cli/index.js package \
 
 ## CLI Commands
 
+The sections below focus on behavior, key outputs, and commonly used flags.
+For full option coverage, run `lootforge <command> --help`.
+
+### Command Summary
+
+| Command | Primary purpose | Main artifacts |
+| --- | --- | --- |
+| `init` | Scaffold manifest + workspace folders | `manifest.json`, `raw/`, `processed/`, `jobs/` |
+| `plan` | Validate manifest and emit provider job plans | `targets-index.json`, provider JSONL files |
+| `validate` | Run manifest and optional image acceptance checks | `validation-report.json`, optional acceptance report |
+| `generate` | Generate candidate images using selected provider(s) | Provider raw outputs + provenance |
+| `regenerate` | Re-run approved targets via edit-first lock flow | Updated generated assets + lock-linked provenance |
+| `process` | Apply post-processing and image acceptance | Processed catalog + acceptance report |
+| `atlas` | Build atlas artifacts and reproducibility config | Atlas manifest and optional sheet assets |
+| `eval` | Compute quality scoring and adapter telemetry | `eval-report.json` |
+| `review` | Render review artifact from eval outputs | `review/review.html` |
+| `select` | Materialize approved selections into lockfile | `locks/selection-lock.json` |
+| `package` | Assemble runtime-ready distributable packs | `dist/packs/*` + final zip |
+
 ### `lootforge init`
 
-Scaffolds:
+Scaffolds a starter workspace:
 - `assets/imagegen/manifest.json`
 - `assets/imagegen/raw/`
 - `assets/imagegen/processed/`
@@ -178,7 +215,7 @@ lootforge init --out .
 
 ### `lootforge plan`
 
-Validates manifest and writes planned jobs:
+Validates the manifest and writes planned jobs:
 - `<out>/jobs/targets-index.json`
 - `<out>/jobs/openai.jsonl`
 - `<out>/jobs/nano.jsonl`
@@ -191,11 +228,11 @@ lootforge plan --manifest assets/imagegen/manifest.json --out assets/imagegen
 
 ### `lootforge validate`
 
-Writes:
+Outputs:
 - `<out>/checks/validation-report.json`
-- optional `<out>/checks/image-acceptance-report.json`
+- Optional: `<out>/checks/image-acceptance-report.json`
 
-Flags:
+Key flags:
 - `--strict true|false` (default: `true`)
 - `--check-images true|false` (default: `false`)
 - `--images-dir <path>` optional override for acceptance checks
@@ -209,7 +246,7 @@ lootforge validate --manifest assets/imagegen/manifest.json --out assets/imagege
 
 Runs provider generation from planned targets index.
 
-Flags:
+Key flags:
 - `--out <dir>`
 - `--index <path>` optional (default `<out>/jobs/targets-index.json`)
 - `--provider openai|nano|local|auto`
@@ -224,7 +261,7 @@ lootforge generate --out assets/imagegen --provider nano --ids enemy-1,ui-icon-a
 
 Re-runs selected targets from selection-lock state, with dedicated edit-first flow support.
 
-Flags:
+Key flags:
 - `--out <dir>`
 - `--index <path>` optional (default `<out>/jobs/targets-index.json`)
 - `--lock <path>` optional (default `<out>/locks/selection-lock.json`)
@@ -247,7 +284,7 @@ lootforge regenerate --out assets/imagegen --edit true --ids player-idle
 
 Reads raw outputs, applies post-processing and acceptance checks, and writes:
 - `<out>/assets/imagegen/processed/images/*` (or `<out>/processed/images/*` when `out` is already `assets/imagegen`)
-- compatibility mirror: `<out>/assets/images/*`
+- Compatibility mirror: `<out>/assets/images/*`
 - `<out>/assets/imagegen/processed/catalog.json`
 - `<out>/checks/image-acceptance-report.json`
 
@@ -260,7 +297,12 @@ lootforge process --out assets/imagegen --strict true
 
 Reads generated images and atlas groups, then writes:
 - `<out>/assets/atlases/manifest.json`
-- optional atlas sheets/json when TexturePacker is available
+- Optional atlas sheets/json when TexturePacker is available
+
+Example:
+```bash
+lootforge atlas --out assets/imagegen
+```
 
 ### `lootforge package`
 
@@ -268,10 +310,16 @@ Assembles shareable outputs under:
 - `<out>/dist/packs/<pack-id>/...`
 - `<out>/dist/packs/game-asset-pack-<pack-id>.zip`
 
-Flags:
-- `--runtimes <list>` optional comma-separated runtime exports (`phaser,pixi,unity`).
-  - Phaser is always emitted as baseline compatibility.
-  - Example: `lootforge package --out assets/imagegen --runtimes pixi,unity`
+Key flags:
+- `--runtimes <list>` optional comma-separated runtime exports (`phaser,pixi,unity`)
+
+Notes:
+- Phaser manifest output is always emitted as baseline compatibility.
+
+Example:
+```bash
+lootforge package --out assets/imagegen --runtimes pixi,unity
+```
 
 ### `lootforge eval`
 
@@ -289,18 +337,23 @@ Optional CLIP/LPIPS/SSIM adapter execution:
   - `LOOTFORGE_ENABLE_LPIPS_ADAPTER=1`
   - `LOOTFORGE_ENABLE_SSIM_ADAPTER=1`
 - Configure each enabled adapter with either:
-  - `LOOTFORGE_<NAME>_ADAPTER_CMD` (shell command that reads JSON from stdin and writes JSON to stdout), or
+  - `LOOTFORGE_<NAME>_ADAPTER_CMD` (reads JSON from stdin and writes JSON to stdout)
   - `LOOTFORGE_<NAME>_ADAPTER_URL` (HTTP endpoint accepting JSON POST and returning JSON)
 - Adapter response contract:
   - `{"metrics":{"alignment":0.82},"score":5}` or flat numeric JSON fields
-  - `score` is used as additive soft-score bonus/penalty in eval ranking
+  - `score` is applied as additive soft-score bonus/penalty in eval ranking
 - Timeout controls:
-  - per-adapter: `LOOTFORGE_<NAME>_ADAPTER_TIMEOUT_MS`
-  - global fallback: `LOOTFORGE_ADAPTER_TIMEOUT_MS`
-- Adapter contract reference and runnable examples:
+  - Per-adapter: `LOOTFORGE_<NAME>_ADAPTER_TIMEOUT_MS`
+  - Global fallback: `LOOTFORGE_ADAPTER_TIMEOUT_MS`
+- Reference docs and runnable examples:
   - `docs/ADAPTER_CONTRACT.md`
   - `examples/adapters/stdin-adapter-example.js`
   - `examples/adapters/http-adapter-example.js`
+
+Example:
+```bash
+lootforge eval --out assets/imagegen --strict true
+```
 
 ### `lootforge review`
 
@@ -308,10 +361,20 @@ Builds a review artifact from eval data:
 - `<out>/review/review.html`
 - Includes per-target score breakdown details (candidate reasons/metrics + adapter components/metrics/warnings).
 
+Example:
+```bash
+lootforge review --out assets/imagegen
+```
+
 ### `lootforge select`
 
 Builds lockfile selections from provenance + eval:
 - `<out>/locks/selection-lock.json`
+
+Example:
+```bash
+lootforge select --out assets/imagegen
+```
 
 ## Manifest (`version: "next"`)
 
@@ -435,28 +498,43 @@ Stage outputs during generation flow:
 
 ## Environment Variables
 
+Provider keys:
 - `OPENAI_API_KEY`: required for OpenAI generation
 - `GEMINI_API_KEY`: required for Nano generation
-- `LOCAL_DIFFUSION_BASE_URL`: optional for local diffusion adapter (default `http://127.0.0.1:8188`)
+
+Local provider endpoint:
+- `LOCAL_DIFFUSION_BASE_URL`: optional local diffusion adapter endpoint (default `http://127.0.0.1:8188`)
+
+Eval adapter toggles:
 - `LOOTFORGE_ENABLE_CLIP_ADAPTER`: enable CLIP adapter execution in `lootforge eval`
-- `LOOTFORGE_CLIP_ADAPTER_CMD` or `LOOTFORGE_CLIP_ADAPTER_URL`: CLIP adapter runner
 - `LOOTFORGE_ENABLE_LPIPS_ADAPTER`: enable LPIPS adapter execution in `lootforge eval`
-- `LOOTFORGE_LPIPS_ADAPTER_CMD` or `LOOTFORGE_LPIPS_ADAPTER_URL`: LPIPS adapter runner
 - `LOOTFORGE_ENABLE_SSIM_ADAPTER`: enable SSIM adapter execution in `lootforge eval`
-- `LOOTFORGE_SSIM_ADAPTER_CMD` or `LOOTFORGE_SSIM_ADAPTER_URL`: SSIM adapter runner
-- `LOOTFORGE_ADAPTER_TIMEOUT_MS`: global timeout for eval adapters (ms)
+
+Eval adapter transports:
+- `LOOTFORGE_CLIP_ADAPTER_CMD` or `LOOTFORGE_CLIP_ADAPTER_URL`
+- `LOOTFORGE_LPIPS_ADAPTER_CMD` or `LOOTFORGE_LPIPS_ADAPTER_URL`
+- `LOOTFORGE_SSIM_ADAPTER_CMD` or `LOOTFORGE_SSIM_ADAPTER_URL`
+
+Eval adapter timeout controls:
+- `LOOTFORGE_ADAPTER_TIMEOUT_MS`: global timeout (ms)
 - `LOOTFORGE_<NAME>_ADAPTER_TIMEOUT_MS`: per-adapter timeout override (ms)
 
 No network keys are required for `init`, `plan`, `validate`, `atlas`, or `package`.
 
 ## Development
 
-Scripts:
+Local verification commands:
 - `npm run typecheck`
 - `npm run build`
 - `npm test`
 - `npm run test:unit`
 - `npm run test:integration`
+
+`0.3.0` release-train branch policy:
+- Keep `main` release-only until `0.3.0` is ready to cut.
+- Use `release/0.3` as the integration branch for ongoing work.
+- Branch feature work from `release/0.3` and PR back into `release/0.3`.
+- Release by PR `release/0.3 -> main`, then tag `v0.3.0`.
 
 ## Status / Roadmap
 

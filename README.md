@@ -20,7 +20,7 @@ It is designed to:
 - plan generation jobs from a single manifest
 - run image generation with pluggable providers (OpenAI + Nano + Local adapter)
 - validate and bundle outputs into a portable asset pack
-- emit Phaser-friendly manifests plus generic metadata
+- emit runtime manifests for Phaser plus optional Pixi/Unity exports from the same pack metadata
 
 ## Why LootForge
 
@@ -196,6 +196,11 @@ Assembles shareable outputs under:
 - `<out>/dist/packs/<pack-id>/...`
 - `<out>/dist/packs/game-asset-pack-<pack-id>.zip`
 
+Flags:
+- `--runtimes <list>` optional comma-separated runtime exports (`phaser,pixi,unity`).
+  - Phaser is always emitted as baseline compatibility.
+  - Example: `lootforge package --out assets/imagegen --runtimes pixi,unity`
+
 ### `lootforge eval`
 
 Runs hard/soft quality scoring and writes:
@@ -322,6 +327,8 @@ See also: `docs/manifest-schema.md`
 - `dist/packs/<pack-id>/assets/atlases/*`
 - `dist/packs/<pack-id>/manifest/asset-pack.json`
 - `dist/packs/<pack-id>/manifest/phaser.json`
+- `dist/packs/<pack-id>/manifest/pixi.json` (when requested via `--runtimes`)
+- `dist/packs/<pack-id>/manifest/unity-import.json` (when requested via `--runtimes`)
 - `dist/packs/<pack-id>/review/catalog.json`
 - `dist/packs/<pack-id>/review/contact-sheet.png`
 - `dist/packs/<pack-id>/provenance/run.json`
@@ -367,8 +374,12 @@ Scripts:
 
 `0.1.0` is an early foundation release.
 
-Planned follow-ups:
-- provider edit workflows and iterative refinement
-- expanded local diffusion/ControlNet integrations
-- deeper auxiliary map generation and runtime material pipelines
-- expanded runtime templates and loaders
+Release roadmap:
+- `0.2.0`: public beta foundation (edit/regenerate workflow, score transparency, tile/palette reliability)
+- `0.3.0`: control and consistency upgrades (group-level drift scoring, provider edit parity)
+- `0.4.0`: local production path (ControlNet contracts + LoRA/provenance maturity)
+- `0.5.0`: team scale and integration maturity (CI regressions + broader runtime export presets)
+- `1.0.0`: GA contract stabilization and public operational readiness
+
+See `docs/ROADMAP.md` for detailed scope, gap audit, `Upcoming` vs `Future` queues, exit criteria, and cross-version trackers.
+See `docs/ENGINE_TARGETING.md` for framework market/compatibility analysis and runtime export strategy.

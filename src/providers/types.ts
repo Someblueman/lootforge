@@ -247,6 +247,8 @@ export interface PlannedTarget {
     alphaRequired?: boolean;
     previewWidth?: number;
     previewHeight?: number;
+    anchorX?: number;
+    anchorY?: number;
   };
   promptSpec: PromptSpec;
   generationPolicy?: GenerationPolicy;

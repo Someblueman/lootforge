@@ -653,6 +653,12 @@ function normalizeTargetForGeneration(params: {
       ...(typeof params.target.runtimeSpec?.previewHeight === "number"
         ? { previewHeight: params.target.runtimeSpec.previewHeight }
         : {}),
+      ...(typeof params.target.runtimeSpec?.anchorX === "number"
+        ? { anchorX: params.target.runtimeSpec.anchorX }
+        : {}),
+      ...(typeof params.target.runtimeSpec?.anchorY === "number"
+        ? { anchorY: params.target.runtimeSpec.anchorY }
+        : {}),
     },
     provider,
     promptSpec,

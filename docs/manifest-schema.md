@@ -26,6 +26,10 @@
 - `atlas?`: atlas defaults + optional per-group overrides
 - `targets[]` (required)
 
+Style kit palette defaults:
+- If a target omits `palette`, LootForge will attempt to load `styleKits[].palettePath` and apply it as an exact palette policy.
+- If `targets[].palette` is provided, it overrides any style-kit palette default.
+
 ## Target contract
 
 Required on every target:

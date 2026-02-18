@@ -9,6 +9,7 @@ import { runInitCommand } from "./commands/init.js";
 import { runPackageCommand } from "./commands/package.js";
 import { runPlanCommand } from "./commands/plan.js";
 import { runProcessCommand } from "./commands/process.js";
+import { runRegenerateCommand } from "./commands/regenerate.js";
 import { runReviewCommand } from "./commands/review.js";
 import { runSelectCommand } from "./commands/select.js";
 import { runValidateCommand } from "./commands/validate.js";
@@ -59,6 +60,14 @@ export async function main(argv: string[]): Promise<number> {
       const result = await runProcessCommand(rest);
       process.stdout.write(
         `Processed ${result.processedCount} asset(s) (${result.variantCount} variant(s)) -> ${result.catalogPath}\nChecks: ${result.acceptanceReportPath}\n`,
+      );
+      return 0;
+    }
+
+    if (command === "regenerate") {
+      const result = await runRegenerateCommand(rest);
+      process.stdout.write(
+        `Regenerated ${result.jobs} job(s) for ${result.targetsRegenerated.length} target(s). Run ${result.runId} -> ${result.provenancePath}.\n`,
       );
       return 0;
     }
@@ -123,6 +132,7 @@ function writeUsage(stream: "stdout" | "stderr"): void {
       "  plan                         Validate manifest and write jobs outputs",
       "  validate                     Validate manifest and write report",
       "  generate                     Execute generation pipeline from targets index",
+      "  regenerate                   Re-run selected lock-approved targets (supports --edit flow)",
       "  process                      Post-process raw assets into processed runtime outputs",
       "  eval                         Run hard/soft quality evaluation over processed outputs",
       "  review                       Build HTML review artifact from eval report",
@@ -140,6 +150,9 @@ function writeUsage(stream: "stdout" | "stderr"): void {
       "  --ids <a,b,c>                Optional target id filter for generate",
       "  --lock <path>                Selection lock file path (generate/select)",
       "  --skip-locked <true|false>   Skip regeneration for approved locked targets",
+      "  --edit <true|false>          Force edit-first regenerate mode (default true)",
+      "  --instruction <text>         Optional edit instruction override for regenerate --edit",
+      "  --preserve-composition <true|false>  Preserve composition during regenerate --edit (default true)",
       "  --images-dir <path>          Processed images directory override for eval/validate",
       "  --report <path>              Eval report output path override",
       "  --eval <path>                Eval report path for review/select",

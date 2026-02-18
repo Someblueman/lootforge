@@ -183,6 +183,14 @@ export interface TargetEditSpec {
   preserveComposition?: boolean;
 }
 
+export interface RegenerationSource {
+  mode: "selection-lock" | "selection-lock-edit";
+  selectionLockPath: string;
+  selectionLockGeneratedAt?: string;
+  lockInputHash: string;
+  lockSelectedOutputPath: string;
+}
+
 export interface AuxiliaryMapPolicy {
   normalFromHeight?: boolean;
   specularFromLuma?: boolean;
@@ -256,6 +264,7 @@ export interface PlannedTarget {
   provider?: ProviderName;
   model?: string;
   edit?: TargetEditSpec;
+  regenerationSource?: RegenerationSource;
   auxiliaryMaps?: AuxiliaryMapPolicy;
 }
 
@@ -338,6 +347,9 @@ export interface ProviderRunResult {
   skipped?: boolean;
   candidateOutputs?: ProviderCandidateOutput[];
   candidateScores?: CandidateScoreRecord[];
+  generationMode?: GenerationMode;
+  edit?: TargetEditSpec;
+  regenerationSource?: RegenerationSource;
   warnings?: string[];
 }
 

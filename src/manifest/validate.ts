@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 import { ZodIssue } from "zod";
@@ -27,6 +27,7 @@ import type {
   ManifestEvaluationProfile,
   ManifestPostProcess,
   ManifestSource,
+  ManifestStyleKit,
   ManifestTarget,
   ManifestV2,
   ManifestValidationResult,
@@ -42,6 +43,10 @@ const DEFAULT_STYLE_USE_CASE = "game-asset";
 
 export interface ValidateManifestOptions {
   now?: () => Date;
+}
+
+export interface NormalizeManifestTargetsOptions {
+  manifestPath?: string;
 }
 
 export function validateManifestSource(
@@ -76,9 +81,16 @@ export function validateManifestSource(
   };
 }
 
-export function normalizeManifestTargets(manifest: ManifestV2): PlannedTarget[] {
+export function normalizeManifestTargets(
+  manifest: ManifestV2,
+  options: NormalizeManifestTargetsOptions = {},
+): PlannedTarget[] {
   const defaultProvider = manifest.providers?.default ?? "openai";
   const styleKitById = new Map(manifest.styleKits.map((kit) => [kit.id, kit]));
+  const styleKitPaletteDefaults = resolveStyleKitPaletteDefaults(
+    manifest.styleKits,
+    options.manifestPath,
+  );
   const consistencyGroupById = new Map(
     (manifest.consistencyGroups ?? []).map((group) => [group.id, group]),
   );
@@ -93,6 +105,9 @@ export function normalizeManifestTargets(manifest: ManifestV2): PlannedTarget[] 
     const styleKit = styleKitById.get(target.styleKitId);
     const consistencyGroup = consistencyGroupById.get(target.consistencyGroup);
     const evalProfile = evaluationById.get(target.evaluationProfileId);
+    const styleKitPaletteDefault = styleKit
+      ? styleKitPaletteDefaults.get(styleKit.id)
+      : undefined;
 
     if (!styleKit) {
       throw new Error(
@@ -127,6 +142,7 @@ export function normalizeManifestTargets(manifest: ManifestV2): PlannedTarget[] 
         target,
         defaultProvider,
         styleKit,
+        styleKitPaletteDefault,
         consistencyGroup,
         evalProfile,
       });
@@ -140,6 +156,7 @@ export function normalizeManifestTargets(manifest: ManifestV2): PlannedTarget[] 
         target,
         defaultProvider,
         styleKit,
+        styleKitPaletteDefault,
         consistencyGroup,
         evalProfile,
       }),
@@ -154,7 +171,7 @@ export function createPlanArtifacts(
   manifestPath: string,
   now?: () => Date,
 ): PlanArtifacts {
-  const targets = normalizeManifestTargets(manifest);
+  const targets = normalizeManifestTargets(manifest, { manifestPath });
   const openaiJobs: PlannedProviderJobSpec[] = [];
   const nanoJobs: PlannedProviderJobSpec[] = [];
   const localJobs: PlannedProviderJobSpec[] = [];
@@ -571,6 +588,7 @@ function normalizeTargetForGeneration(params: {
   target: ManifestTarget;
   defaultProvider: ProviderName;
   styleKit: ManifestV2["styleKits"][number];
+  styleKitPaletteDefault?: PalettePolicy;
   consistencyGroup?: ManifestConsistencyGroup;
   evalProfile: ManifestEvaluationProfile;
   promptOverride?: PromptSpec;
@@ -625,6 +643,7 @@ function normalizeTargetForGeneration(params: {
     maxFileSizeKB:
       params.target.acceptance?.maxFileSizeKB ?? params.evalProfile.hardGates?.maxFileSizeKB,
   };
+  const palette = resolveTargetPalettePolicy(params.target, params.styleKitPaletteDefault);
 
   const normalized: PlannedTarget = {
     id,
@@ -641,7 +660,7 @@ function normalizeTargetForGeneration(params: {
     seamThreshold:
       params.target.seamThreshold ?? params.evalProfile.hardGates?.seamThreshold,
     seamStripPx: params.target.seamStripPx ?? params.evalProfile.hardGates?.seamStripPx,
-    palette: normalizePalettePolicy(params.target),
+    ...(palette ? { palette } : {}),
     acceptance,
     runtimeSpec: {
       ...(typeof params.target.runtimeSpec?.alphaRequired === "boolean"
@@ -663,7 +682,7 @@ function normalizeTargetForGeneration(params: {
     provider,
     promptSpec,
     generationPolicy: normalizedPolicy.policy,
-    postProcess: resolvePostProcess(params.target),
+    postProcess: resolvePostProcess(params.target, palette),
     ...(params.target.edit ? { edit: params.target.edit } : {}),
     ...(params.target.auxiliaryMaps ? { auxiliaryMaps: params.target.auxiliaryMaps } : {}),
     ...(params.spritesheet ? { spritesheet: params.spritesheet } : {}),
@@ -683,6 +702,7 @@ function expandSpritesheetTarget(params: {
   target: ManifestTarget;
   defaultProvider: ProviderName;
   styleKit: ManifestV2["styleKits"][number];
+  styleKitPaletteDefault?: PalettePolicy;
   consistencyGroup?: ManifestConsistencyGroup;
   evalProfile: ManifestEvaluationProfile;
 }): PlannedTarget[] {
@@ -742,6 +762,7 @@ function expandSpritesheetTarget(params: {
           target: params.target,
           defaultProvider: params.defaultProvider,
           styleKit: params.styleKit,
+          styleKitPaletteDefault: params.styleKitPaletteDefault,
           consistencyGroup: params.consistencyGroup,
           evalProfile: params.evalProfile,
           promptOverride: framePrompt,
@@ -767,6 +788,7 @@ function expandSpritesheetTarget(params: {
     target: params.target,
     defaultProvider: params.defaultProvider,
     styleKit: params.styleKit,
+    styleKitPaletteDefault: params.styleKitPaletteDefault,
     consistencyGroup: params.consistencyGroup,
     evalProfile: params.evalProfile,
     promptOverride: defaultSheetPrompt,
@@ -886,7 +908,10 @@ function toNormalizedGenerationPolicy(target: ManifestTarget): NormalizedGenerat
   };
 }
 
-function resolvePostProcess(target: ManifestTarget): PostProcessPolicy | undefined {
+function resolvePostProcess(
+  target: ManifestTarget,
+  paletteOverride?: PalettePolicy,
+): PostProcessPolicy | undefined {
   const postProcess = target.postProcess;
   if (!postProcess) {
     return undefined;
@@ -909,7 +934,7 @@ function resolvePostProcess(target: ManifestTarget): PostProcessPolicy | undefin
       : {}),
   };
 
-  const normalizedPalette = normalizePalettePolicy(target);
+  const normalizedPalette = paletteOverride ?? normalizePalettePolicy(target);
   const paletteColors =
     normalizedPalette?.mode === "max-colors"
       ? normalizedPalette.maxColors
@@ -952,6 +977,161 @@ function normalizePalettePolicy(target: ManifestTarget): PalettePolicy | undefin
     maxColors: palette.maxColors,
     dither: palette.dither,
   };
+}
+
+function resolveTargetPalettePolicy(
+  target: ManifestTarget,
+  styleKitPaletteDefault?: PalettePolicy,
+): PalettePolicy | undefined {
+  const targetPalette = normalizePalettePolicy(target);
+  if (targetPalette) {
+    return targetPalette;
+  }
+
+  if (!styleKitPaletteDefault) {
+    return undefined;
+  }
+
+  if (styleKitPaletteDefault.mode === "exact") {
+    return {
+      mode: "exact",
+      colors: [...(styleKitPaletteDefault.colors ?? [])],
+      dither: styleKitPaletteDefault.dither,
+    };
+  }
+
+  return { ...styleKitPaletteDefault };
+}
+
+function resolveStyleKitPaletteDefaults(
+  styleKits: ManifestStyleKit[],
+  manifestPath?: string,
+): Map<string, PalettePolicy> {
+  const defaults = new Map<string, PalettePolicy>();
+  if (!manifestPath) {
+    return defaults;
+  }
+
+  const manifestDir = path.dirname(path.resolve(manifestPath));
+  for (const styleKit of styleKits) {
+    const palette = loadStyleKitPalettePolicy(styleKit, manifestDir);
+    if (palette) {
+      defaults.set(styleKit.id, palette);
+    }
+  }
+
+  return defaults;
+}
+
+function loadStyleKitPalettePolicy(
+  styleKit: ManifestStyleKit,
+  manifestDir: string,
+): PalettePolicy | undefined {
+  if (!styleKit.palettePath) {
+    return undefined;
+  }
+
+  let normalizedPalettePath: string;
+  try {
+    normalizedPalettePath = normalizeManifestAssetPath(styleKit.palettePath);
+  } catch {
+    return undefined;
+  }
+
+  const paletteFilePath = path.resolve(
+    manifestDir,
+    normalizedPalettePath.split("/").join(path.sep),
+  );
+  if (!existsSync(paletteFilePath)) {
+    return undefined;
+  }
+
+  let rawPalette = "";
+  try {
+    rawPalette = readFileSync(paletteFilePath, "utf8");
+  } catch {
+    return undefined;
+  }
+
+  const colors = parsePaletteFileColors(rawPalette);
+  if (colors.length === 0) {
+    return undefined;
+  }
+
+  return {
+    mode: "exact",
+    colors,
+  };
+}
+
+function parsePaletteFileColors(rawPalette: string): string[] {
+  const colors: string[] = [];
+  const seen = new Set<string>();
+
+  const append = (color: string): void => {
+    if (seen.has(color)) {
+      return;
+    }
+    seen.add(color);
+    colors.push(color);
+  };
+
+  for (const line of rawPalette.split(/\r?\n/u)) {
+    const trimmed = line.trim();
+    if (!trimmed) {
+      continue;
+    }
+
+    if (/^(gimp\s+palette|name:|columns:)/iu.test(trimmed)) {
+      continue;
+    }
+
+    const directHex = /^#?[0-9a-fA-F]{6}$/u.exec(trimmed);
+    if (directHex) {
+      append(normalizeHexColor(directHex[0]));
+      continue;
+    }
+
+    if (trimmed.startsWith("//") || trimmed.startsWith(";")) {
+      continue;
+    }
+
+    const rgbTriple =
+      /^\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})(?:\s+.*)?$/u.exec(trimmed) ??
+      /^\s*(\d{1,3})\s+(\d{1,3})\s+(\d{1,3})(?:\s+.*)?$/u.exec(trimmed);
+    if (rgbTriple) {
+      const r = Number.parseInt(rgbTriple[1], 10);
+      const g = Number.parseInt(rgbTriple[2], 10);
+      const b = Number.parseInt(rgbTriple[3], 10);
+      if (
+        Number.isFinite(r) &&
+        Number.isFinite(g) &&
+        Number.isFinite(b) &&
+        r >= 0 &&
+        r <= 255 &&
+        g >= 0 &&
+        g <= 255 &&
+        b >= 0 &&
+        b <= 255
+      ) {
+        append(rgbToHex(r, g, b));
+      }
+      continue;
+    }
+
+    const embeddedHex = /#?[0-9a-fA-F]{6}\b/u.exec(trimmed);
+    if (embeddedHex) {
+      append(normalizeHexColor(embeddedHex[0]));
+    }
+  }
+
+  return colors;
+}
+
+function rgbToHex(r: number, g: number, b: number): string {
+  return `#${r.toString(16).padStart(2, "0")}${g
+    .toString(16)
+    .padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
 }
 
 function resolveTargetModel(

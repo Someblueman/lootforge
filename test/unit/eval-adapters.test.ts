@@ -212,6 +212,33 @@ describe("eval adapters", () => {
 
     expect(result.report.adaptersUsed).toEqual(expect.arrayContaining(["clip", "lpips"]));
     expect(result.report.adapterWarnings).toHaveLength(0);
+    expect(result.report.adapterHealth.configured).toEqual(["clip", "lpips"]);
+    expect(result.report.adapterHealth.active).toEqual(["clip", "lpips"]);
+    expect(result.report.adapterHealth.failed).toEqual([]);
+    expect(result.report.adapterHealth.adapters).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: "clip",
+          configured: true,
+          active: true,
+          failed: false,
+          attemptedTargets: 1,
+          successfulTargets: 1,
+          failedTargets: 0,
+          warningCount: 0,
+        }),
+        expect.objectContaining({
+          name: "lpips",
+          configured: true,
+          active: true,
+          failed: false,
+          attemptedTargets: 1,
+          successfulTargets: 1,
+          failedTargets: 0,
+          warningCount: 0,
+        }),
+      ]),
+    );
     expect(result.report.targets).toHaveLength(1);
     expect(result.report.targets[0].adapterMetrics?.["clip.alignment"]).toBeCloseTo(0.82, 6);
     expect(result.report.targets[0].adapterMetrics?.["lpips.perceptual_distance"]).toBeCloseTo(
@@ -237,6 +264,22 @@ describe("eval adapters", () => {
 
     expect(result.report.adaptersUsed).toContain("clip");
     expect(result.report.adapterWarnings.length).toBeGreaterThan(0);
+    expect(result.report.adapterHealth.configured).toEqual([]);
+    expect(result.report.adapterHealth.active).toEqual([]);
+    expect(result.report.adapterHealth.failed).toEqual(["clip"]);
+    expect(result.report.adapterHealth.adapters).toEqual([
+      expect.objectContaining({
+        name: "clip",
+        mode: "unconfigured",
+        configured: false,
+        active: false,
+        failed: true,
+        attemptedTargets: 1,
+        successfulTargets: 0,
+        failedTargets: 1,
+        warningCount: 1,
+      }),
+    ]);
     expect(result.report.targets[0].adapterWarnings?.length).toBeGreaterThan(0);
     expect(result.report.targets[0].finalScore).toBe(40);
   });

@@ -139,6 +139,45 @@ describe("manifest normalization", () => {
     });
   });
 
+  it("normalizes seam-heal and wrap-grid target policies", () => {
+    const manifest: ManifestV2 = {
+      ...BASE_MANIFEST,
+      targets: [
+        {
+          ...BASE_MANIFEST.targets[0],
+          kind: "tile",
+          tileable: true,
+          seamThreshold: 10,
+          seamStripPx: 3,
+          seamHeal: {
+            strength: 0.8,
+          },
+          wrapGrid: {
+            columns: 4,
+            rows: 2,
+          },
+          acceptance: {
+            ...BASE_MANIFEST.targets[0].acceptance,
+            size: "64x32",
+          },
+        },
+      ],
+    };
+
+    const artifacts = createPlanArtifacts(manifest, "/tmp/manifest.json");
+    expect(artifacts.targets[0].seamHeal).toEqual({
+      enabled: true,
+      stripPx: 3,
+      strength: 0.8,
+    });
+    expect(artifacts.targets[0].wrapGrid).toEqual({
+      columns: 4,
+      rows: 2,
+      seamThreshold: 10,
+      seamStripPx: 3,
+    });
+  });
+
   it("reports invalid postProcess resize literals", () => {
     const manifest: ManifestV2 = {
       ...BASE_MANIFEST,
@@ -161,6 +200,38 @@ describe("manifest normalization", () => {
     expect(validation.report.errors).toBeGreaterThan(0);
     expect(
       validation.report.issues.some((issue) => issue.code === "invalid_postprocess_resize"),
+    ).toBe(true);
+  });
+
+  it("reports wrap-grid size mismatch when target dimensions do not divide evenly", () => {
+    const manifest: ManifestV2 = {
+      ...BASE_MANIFEST,
+      targets: [
+        {
+          ...BASE_MANIFEST.targets[0],
+          kind: "tile",
+          tileable: true,
+          wrapGrid: {
+            columns: 4,
+            rows: 3,
+          },
+          acceptance: {
+            ...BASE_MANIFEST.targets[0].acceptance,
+            size: "64x32",
+          },
+        },
+      ],
+    };
+
+    const validation = validateManifestSource({
+      manifestPath: "/tmp/manifest.json",
+      raw: JSON.stringify(manifest),
+      data: manifest,
+    });
+
+    expect(validation.report.errors).toBeGreaterThan(0);
+    expect(
+      validation.report.issues.some((issue) => issue.code === "wrap_grid_size_mismatch"),
     ).toBe(true);
   });
 

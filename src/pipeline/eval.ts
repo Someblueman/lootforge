@@ -6,7 +6,7 @@ import {
   runImageAcceptanceChecks,
 } from "../checks/imageAcceptance.js";
 import {
-  getEnabledSoftAdapterNames,
+  getEnabledSoftAdapterStatuses,
   runEnabledSoftAdapters,
 } from "../checks/softAdapters.js";
 import type { SoftAdapterName } from "../checks/softAdapters.js";
@@ -66,6 +66,23 @@ export interface EvalReport {
   failed: number;
   hardErrors: number;
   adaptersUsed: string[];
+  adapterHealth: {
+    configured: string[];
+    active: string[];
+    failed: string[];
+    adapters: Array<{
+      name: string;
+      mode: "command" | "http" | "unconfigured";
+      configured: boolean;
+      active: boolean;
+      failed: boolean;
+      attemptedTargets: number;
+      successfulTargets: number;
+      failedTargets: number;
+      warningCount: number;
+      warnings: string[];
+    }>;
+  };
   adapterWarnings: string[];
   targets: EvalTargetResult[];
 }
@@ -82,7 +99,8 @@ export async function runEvalPipeline(options: EvalPipelineOptions): Promise<Eva
   );
   const imagesDir = path.resolve(options.imagesDir ?? layout.processedImagesDir);
   const strict = options.strict ?? true;
-  const enabledAdapters = getEnabledSoftAdapterNames();
+  const adapterStatuses = getEnabledSoftAdapterStatuses();
+  const enabledAdapters = adapterStatuses.map((status) => status.name);
 
   const targets = await loadTargets(targetsIndexPath);
   const acceptance = await runImageAcceptanceChecks({
@@ -100,6 +118,26 @@ export async function runEvalPipeline(options: EvalPipelineOptions): Promise<Eva
   );
 
   const reportAdapterWarnings: string[] = [];
+  const adapterHealthByName = new Map<
+    SoftAdapterName,
+    EvalReport["adapterHealth"]["adapters"][number]
+  >(
+    adapterStatuses.map((status) => [
+      status.name,
+      {
+        name: status.name,
+        mode: status.mode,
+        configured: status.configured,
+        active: false,
+        failed: status.configured !== true,
+        attemptedTargets: 0,
+        successfulTargets: 0,
+        failedTargets: 0,
+        warningCount: 0,
+        warnings: [],
+      },
+    ]),
+  );
   const targetsById = new Map(targets.map((target) => [target.id, target]));
   const targetResults: EvalTargetResult[] = [];
 
@@ -123,6 +161,29 @@ export async function runEvalPipeline(options: EvalPipelineOptions): Promise<Eva
       });
 
       for (const adapterName of adapterResult.adapterNames) {
+        const health = adapterHealthByName.get(adapterName);
+        if (health) {
+          health.attemptedTargets += 1;
+        }
+      }
+
+      for (const adapterName of adapterResult.succeededAdapters) {
+        const health = adapterHealthByName.get(adapterName);
+        if (health) {
+          health.active = true;
+          health.successfulTargets += 1;
+        }
+      }
+
+      for (const adapterName of adapterResult.failedAdapters) {
+        const health = adapterHealthByName.get(adapterName);
+        if (health) {
+          health.failed = true;
+          health.failedTargets += 1;
+        }
+      }
+
+      for (const adapterName of adapterResult.adapterNames) {
         const metricsForAdapter = adapterResult.adapterMetrics[adapterName] ?? {};
         for (const [metricName, metricValue] of Object.entries(metricsForAdapter)) {
           adapterMetrics[`${adapterName}.${metricName}`] = metricValue;
@@ -141,6 +202,14 @@ export async function runEvalPipeline(options: EvalPipelineOptions): Promise<Eva
         const scopedWarning = `${item.targetId}: ${warning}`;
         adapterWarnings.push(warning);
         reportAdapterWarnings.push(scopedWarning);
+        const warningAdapter = parseAdapterWarningName(warning);
+        if (warningAdapter) {
+          const health = adapterHealthByName.get(warningAdapter);
+          if (health) {
+            health.warningCount += 1;
+            health.warnings.push(warning);
+          }
+        }
       }
     }
 
@@ -181,6 +250,9 @@ export async function runEvalPipeline(options: EvalPipelineOptions): Promise<Eva
     (count, target) => count + target.hardGateErrors.length,
     0,
   );
+  const adapterHealthEntries = Array.from(adapterHealthByName.values()).sort((left, right) =>
+    left.name.localeCompare(right.name),
+  );
 
   const report: EvalReport = {
     generatedAt: new Date().toISOString(),
@@ -191,6 +263,18 @@ export async function runEvalPipeline(options: EvalPipelineOptions): Promise<Eva
     failed,
     hardErrors,
     adaptersUsed: enabledAdapters,
+    adapterHealth: {
+      configured: adapterHealthEntries
+        .filter((adapter) => adapter.configured)
+        .map((adapter) => adapter.name),
+      active: adapterHealthEntries
+        .filter((adapter) => adapter.active)
+        .map((adapter) => adapter.name),
+      failed: adapterHealthEntries
+        .filter((adapter) => adapter.failed)
+        .map((adapter) => adapter.name),
+      adapters: adapterHealthEntries,
+    },
     adapterWarnings: reportAdapterWarnings,
     targets: targetResults,
   };
@@ -247,4 +331,12 @@ function normalizeWeight(value: number | undefined): number {
     return 0;
   }
   return value;
+}
+
+function parseAdapterWarningName(warning: string): SoftAdapterName | undefined {
+  const prefix = warning.split(":")[0]?.trim().toLowerCase();
+  if (prefix === "clip" || prefix === "lpips" || prefix === "ssim") {
+    return prefix;
+  }
+  return undefined;
 }

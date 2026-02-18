@@ -206,6 +206,19 @@ export interface TargetScoreWeights {
   ssim?: number;
 }
 
+export interface SeamHealPolicy {
+  enabled?: boolean;
+  stripPx?: number;
+  strength?: number;
+}
+
+export interface WrapGridPolicy {
+  columns: number;
+  rows: number;
+  seamThreshold?: number;
+  seamStripPx?: number;
+}
+
 export interface PlannedTarget {
   id: string;
   kind?: string;
@@ -220,6 +233,8 @@ export interface PlannedTarget {
   tileable?: boolean;
   seamThreshold?: number;
   seamStripPx?: number;
+  seamHeal?: SeamHealPolicy;
+  wrapGrid?: WrapGridPolicy;
   palette?: PalettePolicy;
   generationDisabled?: boolean;
   catalogDisabled?: boolean;

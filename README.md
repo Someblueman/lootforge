@@ -228,6 +228,11 @@ Flags:
 
 Runs hard/soft quality scoring and writes:
 - `<out>/checks/eval-report.json`
+- `eval-report.json` includes adapter health telemetry:
+  - `adapterHealth.configured`: enabled adapters with command/URL configured
+  - `adapterHealth.active`: adapters that returned at least one successful result
+  - `adapterHealth.failed`: adapters that failed or were enabled but unconfigured
+  - `adapterHealth.adapters[]`: per-adapter mode, target attempt/success/fail counters, warnings
 
 Optional CLIP/LPIPS/SSIM adapter execution:
 - Enable adapters with:
@@ -243,6 +248,10 @@ Optional CLIP/LPIPS/SSIM adapter execution:
 - Timeout controls:
   - per-adapter: `LOOTFORGE_<NAME>_ADAPTER_TIMEOUT_MS`
   - global fallback: `LOOTFORGE_ADAPTER_TIMEOUT_MS`
+- Adapter contract reference and runnable examples:
+  - `docs/ADAPTER_CONTRACT.md`
+  - `examples/adapters/stdin-adapter-example.js`
+  - `examples/adapters/http-adapter-example.js`
 
 ### `lootforge review`
 
@@ -277,7 +286,9 @@ Per target:
 - `prompt` (string or structured object) for non-spritesheet targets
 - `provider?` (`openai|nano|local`)
 - `acceptance`: `{ size, alpha, maxFileSizeKB }`
-- optional generation/runtime fields (`generationPolicy`, `postProcess`, `runtimeSpec`, `model`, `edit`, `auxiliaryMaps`, `palette`, `tileable`, `seamThreshold`)
+- optional generation/runtime fields (`generationPolicy`, `postProcess`, `runtimeSpec`, `model`, `edit`, `auxiliaryMaps`, `palette`, `tileable`, `seamThreshold`, `seamStripPx`, `seamHeal`, `wrapGrid`)
+- `seamHeal`: optional pass for tileables (`enabled`, `stripPx`, `strength`) applied during process before final encode.
+- `wrapGrid`: optional per-cell tile validation (`columns`, `rows`, optional seam thresholds) enforced in image acceptance.
 - `kind: "spritesheet"` targets define `animations` and are expanded/assembled by the pipeline
 
 Minimal example:

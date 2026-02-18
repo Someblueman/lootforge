@@ -159,16 +159,27 @@ These run continuously across versions and should be reviewed per milestone:
 These items should be actively planned and ticketed now.
 
 ### `0.2.0` Upcoming (Public Beta Foundation)
-- Add seam-heal optional pass for tile targets and wrap-grid validation checks.
-- Add adapter health section to eval report and ship adapter contract docs/examples.
+- Scope complete; no remaining upcoming items in `0.2.0`.
 
 Completed 2026-02-18 in this release track:
+- Added adapter health section to eval report (`configured`, `active`, `failed`) and shipped adapter contract docs/examples.
+- Added optional `seamHeal` processing pass for tileable targets and `wrapGrid` validation checks.
 - Added `lootforge regenerate --edit` command path and preserved selection/provenance semantics.
 - Added score-component detail blocks to review output.
 - Applied `styleKits[].palettePath` defaults when target palette policy is unset.
 - Added baseline CI/security workflows for PRs and pushes.
 
 ### `0.3.0` Upcoming (Control and Consistency)
+- Harden path safety for edit/adapters:
+  - enforce in-root normalization for `edit.inputs` paths before provider uploads and adapter payload expansion.
+- Performance reliability follow-ups:
+  - eliminate repeated candidate-image decode/stats passes during scoring,
+  - run enabled soft adapters in parallel with deterministic result aggregation,
+  - reduce repeated PNG decode work for resize variants and auxiliary map derivation.
+- Release-gate coverage hardening:
+  - add integration tests for generate fallback chains, approved lock skip/copy behavior, and candidate replacement selection,
+  - add direct unit coverage for generate CLI argument parsing and boolean flag handling,
+  - tighten CI test gates (fail if suites are missing, add coverage thresholds for critical paths).
 - Add optional service mode with stable HTTP generation endpoints and MCP wrapper compatibility (no auth/credit layer in core).
 - Define a canonical generation request contract and mapping layer between service requests and manifest/pipeline targets.
 - Implement Nano/Gemini edit-first parity (where supported) with tests.

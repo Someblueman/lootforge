@@ -19,7 +19,18 @@ export interface SoftAdapterRunResult {
   adapterNames: SoftAdapterName[];
   adapterMetrics: Partial<Record<SoftAdapterName, Record<string, number>>>;
   adapterScores: Partial<Record<SoftAdapterName, number>>;
+  succeededAdapters: SoftAdapterName[];
+  failedAdapters: SoftAdapterName[];
   warnings: string[];
+}
+
+export type SoftAdapterExecutionMode = "command" | "http" | "unconfigured";
+
+export interface SoftAdapterEnabledStatus {
+  name: SoftAdapterName;
+  configured: boolean;
+  mode: SoftAdapterExecutionMode;
+  timeoutMs: number;
 }
 
 interface SoftAdapterConfig {
@@ -53,6 +64,15 @@ export function getEnabledSoftAdapterNames(): SoftAdapterName[] {
   return getEnabledSoftAdapterConfigs().map((config) => config.name);
 }
 
+export function getEnabledSoftAdapterStatuses(): SoftAdapterEnabledStatus[] {
+  return getEnabledSoftAdapterConfigs().map((config) => ({
+    name: config.name,
+    configured: Boolean(config.command || config.url),
+    mode: config.command ? "command" : config.url ? "http" : "unconfigured",
+    timeoutMs: config.timeoutMs,
+  }));
+}
+
 export async function runEnabledSoftAdapters(
   input: SoftAdapterRunInput,
 ): Promise<SoftAdapterRunResult> {
@@ -62,6 +82,8 @@ export async function runEnabledSoftAdapters(
       adapterNames: [],
       adapterMetrics: {},
       adapterScores: {},
+      succeededAdapters: [],
+      failedAdapters: [],
       warnings: [],
     };
   }
@@ -69,6 +91,8 @@ export async function runEnabledSoftAdapters(
   const payload = buildSoftAdapterPayload(input);
   const adapterMetrics: Partial<Record<SoftAdapterName, Record<string, number>>> = {};
   const adapterScores: Partial<Record<SoftAdapterName, number>> = {};
+  const succeededAdapters: SoftAdapterName[] = [];
+  const failedAdapters: SoftAdapterName[] = [];
   const warnings: string[] = [];
 
   for (const config of configs) {
@@ -80,9 +104,11 @@ export async function runEnabledSoftAdapters(
       if (typeof response.score === "number" && Number.isFinite(response.score)) {
         adapterScores[config.name] = response.score;
       }
+      succeededAdapters.push(config.name);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       warnings.push(`${config.name}: ${message}`);
+      failedAdapters.push(config.name);
     }
   }
 
@@ -90,6 +116,8 @@ export async function runEnabledSoftAdapters(
     adapterNames: configs.map((config) => config.name),
     adapterMetrics,
     adapterScores,
+    succeededAdapters,
+    failedAdapters,
     warnings,
   };
 }

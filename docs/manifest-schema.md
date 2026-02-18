@@ -46,6 +46,8 @@ Optional quality controls:
 
 - `palette`: `{ mode: exact|max-colors, colors?, maxColors?, dither? }`
 - `tileable`, `seamThreshold`, `seamStripPx`
+- `seamHeal?`: `{ enabled?, stripPx?, strength? }` (optional edge blending pass for tileable targets)
+- `wrapGrid?`: `{ columns, rows, seamThreshold?, seamStripPx? }` (per-cell wrap validation gates)
 
 Generation + processing:
 

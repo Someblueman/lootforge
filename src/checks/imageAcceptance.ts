@@ -21,6 +21,10 @@ export interface ImageAcceptanceIssue {
 export interface ImageAcceptanceMetrics {
   seamScore?: number;
   seamStripPx?: number;
+  wrapGridColumns?: number;
+  wrapGridRows?: number;
+  wrapGridSeamScore?: number;
+  wrapGridSeamStripPx?: number;
   paletteCompliance?: number;
   distinctColors?: number;
 }
@@ -145,20 +149,33 @@ function computeSeamScore(
   inspected: InspectedImage,
   stripPx: number,
 ): number {
+  return computeSeamScoreForRegion(inspected, 0, 0, inspected.width, inspected.height, stripPx);
+}
+
+function computeSeamScoreForRegion(
+  inspected: InspectedImage,
+  startX: number,
+  startY: number,
+  regionWidth: number,
+  regionHeight: number,
+  stripPx: number,
+): number {
   const channels = inspected.channels;
-  const width = inspected.width;
-  const height = inspected.height;
-  const strip = Math.max(1, Math.min(stripPx, Math.floor(Math.min(width, height) / 2)));
+  const strip = Math.max(
+    1,
+    Math.min(stripPx, Math.floor(Math.min(regionWidth, regionHeight) / 2)),
+  );
 
   const mad = (a: number, b: number): number => Math.abs(a - b);
   let total = 0;
   let count = 0;
 
   // Left vs right strips.
-  for (let y = 0; y < height; y += 1) {
+  for (let y = 0; y < regionHeight; y += 1) {
     for (let x = 0; x < strip; x += 1) {
-      const leftIndex = (y * width + x) * channels;
-      const rightIndex = (y * width + (width - strip + x)) * channels;
+      const leftIndex = ((startY + y) * inspected.width + (startX + x)) * channels;
+      const rightIndex =
+        ((startY + y) * inspected.width + (startX + regionWidth - strip + x)) * channels;
       total += mad(inspected.raw[leftIndex], inspected.raw[rightIndex]);
       total += mad(inspected.raw[leftIndex + 1], inspected.raw[rightIndex + 1]);
       total += mad(inspected.raw[leftIndex + 2], inspected.raw[rightIndex + 2]);
@@ -168,13 +185,55 @@ function computeSeamScore(
 
   // Top vs bottom strips.
   for (let y = 0; y < strip; y += 1) {
-    for (let x = 0; x < width; x += 1) {
-      const topIndex = (y * width + x) * channels;
-      const bottomIndex = ((height - strip + y) * width + x) * channels;
+    for (let x = 0; x < regionWidth; x += 1) {
+      const topIndex = ((startY + y) * inspected.width + (startX + x)) * channels;
+      const bottomIndex =
+        ((startY + regionHeight - strip + y) * inspected.width + (startX + x)) * channels;
       total += mad(inspected.raw[topIndex], inspected.raw[bottomIndex]);
       total += mad(inspected.raw[topIndex + 1], inspected.raw[bottomIndex + 1]);
       total += mad(inspected.raw[topIndex + 2], inspected.raw[bottomIndex + 2]);
       count += 3;
+    }
+  }
+
+  if (count === 0) {
+    return 0;
+  }
+
+  return total / count;
+}
+
+function computeWrapGridSeamScore(
+  inspected: InspectedImage,
+  columns: number,
+  rows: number,
+  stripPx: number,
+): number | undefined {
+  if (
+    columns <= 0 ||
+    rows <= 0 ||
+    inspected.width % columns !== 0 ||
+    inspected.height % rows !== 0
+  ) {
+    return undefined;
+  }
+
+  const cellWidth = inspected.width / columns;
+  const cellHeight = inspected.height / rows;
+  let total = 0;
+  let count = 0;
+
+  for (let row = 0; row < rows; row += 1) {
+    for (let column = 0; column < columns; column += 1) {
+      total += computeSeamScoreForRegion(
+        inspected,
+        column * cellWidth,
+        row * cellHeight,
+        cellWidth,
+        cellHeight,
+        stripPx,
+      );
+      count += 1;
     }
   }
 
@@ -385,6 +444,46 @@ export async function evaluateImageAcceptance(
         imagePath,
         message: `Seam score ${seamScore.toFixed(2)} exceeds threshold ${threshold.toFixed(2)}.`,
       });
+    }
+  }
+
+  if (target.wrapGrid) {
+    const columns = target.wrapGrid.columns;
+    const rows = target.wrapGrid.rows;
+    report.metrics = {
+      ...report.metrics,
+      wrapGridColumns: columns,
+      wrapGridRows: rows,
+    };
+
+    if (inspected.width % columns !== 0 || inspected.height % rows !== 0) {
+      report.issues.push({
+        level: "error",
+        code: "wrap_grid_size_mismatch",
+        targetId: target.id,
+        imagePath,
+        message: `Image size ${inspected.width}x${inspected.height} is not divisible by wrapGrid ${columns}x${rows}.`,
+      });
+    } else {
+      const seamStripPx = target.wrapGrid.seamStripPx ?? target.seamStripPx ?? 4;
+      const seamScore = computeWrapGridSeamScore(inspected, columns, rows, seamStripPx);
+      if (typeof seamScore === "number") {
+        report.metrics = {
+          ...report.metrics,
+          wrapGridSeamScore: seamScore,
+          wrapGridSeamStripPx: seamStripPx,
+        };
+        const threshold = target.wrapGrid.seamThreshold ?? target.seamThreshold ?? 12;
+        if (seamScore > threshold) {
+          report.issues.push({
+            level: "error",
+            code: "wrap_grid_seam_exceeded",
+            targetId: target.id,
+            imagePath,
+            message: `Wrap-grid seam score ${seamScore.toFixed(2)} exceeds threshold ${threshold.toFixed(2)}.`,
+          });
+        }
+      }
     }
   }
 

@@ -149,6 +149,19 @@ export const ManifestSpriteAnimationSchema = z.object({
   pivot: animationPivotSchema.optional(),
 });
 
+export const ManifestSeamHealSchema = z.object({
+  enabled: z.boolean().optional(),
+  stripPx: z.number().int().min(1).max(64).optional(),
+  strength: z.number().min(0).max(1).optional(),
+});
+
+export const ManifestWrapGridSchema = z.object({
+  columns: z.number().int().min(1).max(128),
+  rows: z.number().int().min(1).max(128),
+  seamThreshold: z.number().min(0).max(255).optional(),
+  seamStripPx: z.number().int().min(1).max(64).optional(),
+});
+
 export const ManifestTargetSchema = z
   .object({
     id: nonEmptyString,
@@ -163,6 +176,8 @@ export const ManifestTargetSchema = z
     tileable: z.boolean().optional(),
     seamThreshold: z.number().min(0).max(255).optional(),
     seamStripPx: z.number().int().min(1).max(64).optional(),
+    seamHeal: ManifestSeamHealSchema.optional(),
+    wrapGrid: ManifestWrapGridSchema.optional(),
     palette: ManifestPalettePolicySchema.optional(),
     prompt: z.union([nonEmptyString, PromptSpecSchema]).optional(),
     promptSpec: PromptSpecSchema.optional(),

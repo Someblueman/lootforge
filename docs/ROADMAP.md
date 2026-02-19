@@ -188,6 +188,8 @@ Completed 2026-02-19 in this release track:
 - Add versioned stage-artifact contract tests:
   - define authoritative contract schemas for `targets-index`, run provenance, acceptance report, eval report, and selection lock artifacts,
   - add CI fixture-pack smoke tests that validate contract compatibility end-to-end.
+
+Remaining queued items:
 - Make provider configuration an enforced runtime contract:
   - consistently apply manifest/env endpoint, timeout, retry, delay, and concurrency settings across all providers,
   - add capability-claim parity checks so provider feature flags reflect actual runtime behavior.

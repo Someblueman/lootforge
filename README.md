@@ -537,6 +537,7 @@ Local verification commands:
 - `npm test`
 - `npm run test:unit`
 - `npm run test:integration`
+- `npm run test:coverage:critical`
 
 `0.3.0` release-train branch policy:
 - Keep `main` release-only until `0.3.0` is ready to cut.

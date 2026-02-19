@@ -177,6 +177,12 @@ Completed 2026-02-18 in this release track:
 - Added baseline CI/security workflows for PRs and pushes.
 
 ### `0.3.0` Upcoming (Control and Consistency / `Tempered Steel`)
+Completed 2026-02-19 in this release track:
+- Release-gate coverage hardening:
+  - added integration coverage for generate fallback chains, approved lock skip/copy behavior, and candidate replacement selection,
+  - added direct unit coverage for generate CLI arg parsing and boolean flag handling,
+  - tightened CI test gates to fail on missing unit/integration suites and enforce critical-path coverage thresholds.
+
 - Harden path safety for edit/adapters:
   - enforce in-root normalization for `edit.inputs` paths before provider uploads and adapter payload expansion.
 - Add versioned stage-artifact contract tests:
@@ -189,10 +195,6 @@ Completed 2026-02-18 in this release track:
   - eliminate repeated candidate-image decode/stats passes during scoring,
   - run enabled soft adapters in parallel with deterministic result aggregation,
   - reduce repeated PNG decode work for resize variants and auxiliary map derivation.
-- Release-gate coverage hardening:
-  - add integration tests for generate fallback chains, approved lock skip/copy behavior, and candidate replacement selection,
-  - add direct unit coverage for generate CLI argument parsing and boolean flag handling,
-  - tighten CI test gates (fail if suites are missing, add coverage thresholds for critical paths).
 - Add optional service mode with stable HTTP generation endpoints and MCP wrapper compatibility (no auth/credit layer in core).
 - Define a canonical generation request contract and mapping layer between service requests and manifest/pipeline targets.
 - Implement Nano/Gemini edit-first parity (where supported) with tests.

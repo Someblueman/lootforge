@@ -53,7 +53,8 @@ Key outcomes:
 
 - `next` manifest schema with style kits, evaluation profiles, and spritesheet planning
 - Provider selection: `openai`, `nano`, `local`, or `auto`
-- Provider-aware normalization (`jpg -> jpeg`, transparent/background compatibility checks)
+- Provider-aware normalization (`jpg -> jpeg`) with explicit unsupported-provider errors (no silent transparent fallback)
+- Enforced provider runtime contract (manifest/env endpoint, timeout, retry, delay, concurrency)
 - Deterministic job IDs keyed to normalized generation policy
 - Multi-candidate generation with deterministic best-of scoring
 - Post-process operators (`trim`, `pad/extrude`, `quantize`, `outline`, `resizeVariants`)
@@ -389,6 +390,8 @@ Top-level fields:
 - `version`: must be `next`
 - `pack`: `{ id, version, license, author }` (required)
 - `providers`: `{ default, openai?, nano?, local? }` (required)
+  - each provider may define runtime defaults: `endpoint`, `timeoutMs`, `maxRetries`, `minDelayMs`, `defaultConcurrency`
+  - `providers.local` may also define `baseUrl` (local endpoint alias)
 - `styleKits[]` (required)
 - `consistencyGroups[]` (optional)
 - `evaluationProfiles[]` (required)
@@ -402,7 +405,9 @@ Top-level fields:
 Per target:
 - `id`, `kind`, `out`, `atlasGroup?`, `styleKitId`, `consistencyGroup`, `evaluationProfileId`
 - `generationMode`: `text|edit-first`
+- `edit-first` mode requires a provider with `image-edits` support (`openai`/`local` today; `nano` edit parity is roadmap work)
 - `edit.inputs[].path`: when used, must resolve inside the active `--out` root at runtime (`generate`, `eval`, and `regenerate`)
+- `generationPolicy.background: "transparent"` requires a provider that supports transparent outputs (unsupported providers now fail validation)
 - `prompt` (string or structured object) for non-spritesheet targets
 - `provider?` (`openai|nano|local`)
 - `acceptance`: `{ size, alpha, maxFileSizeKB }`
@@ -479,6 +484,12 @@ Minimal example:
 
 See also: `docs/manifest-schema.md`
 
+Provider runtime precedence (`generate` / `regenerate`):
+- target-level `generationPolicy.maxRetries` overrides provider retry defaults
+- provider runtime defaults load from manifest `providers.<name>` config
+- environment overrides can replace provider runtime defaults without manifest edits
+- provider capability parity is enforced at startup (`supports(...)` must match declared capabilities)
+
 ## Output Contract
 
 `lootforge package` emits:
@@ -510,8 +521,26 @@ Provider keys:
 - `OPENAI_API_KEY`: required for OpenAI generation
 - `GEMINI_API_KEY`: required for Nano generation
 
-Local provider endpoint:
-- `LOCAL_DIFFUSION_BASE_URL`: optional local diffusion adapter endpoint (default `http://127.0.0.1:8188`)
+Provider runtime overrides (env wins over manifest provider config):
+- OpenAI:
+  - `LOOTFORGE_OPENAI_ENDPOINT` (or `OPENAI_IMAGES_ENDPOINT`)
+  - `LOOTFORGE_OPENAI_EDITS_ENDPOINT` (or `OPENAI_EDITS_ENDPOINT`)
+  - `LOOTFORGE_OPENAI_TIMEOUT_MS` (or `OPENAI_TIMEOUT_MS`)
+  - `LOOTFORGE_OPENAI_MAX_RETRIES` (or `OPENAI_MAX_RETRIES`)
+  - `LOOTFORGE_OPENAI_MIN_DELAY_MS` (or `OPENAI_MIN_DELAY_MS`)
+  - `LOOTFORGE_OPENAI_DEFAULT_CONCURRENCY` (or `OPENAI_DEFAULT_CONCURRENCY`)
+- Nano/Gemini:
+  - `LOOTFORGE_NANO_ENDPOINT` (or `GEMINI_API_BASE`)
+  - `LOOTFORGE_NANO_TIMEOUT_MS` (or `GEMINI_TIMEOUT_MS`)
+  - `LOOTFORGE_NANO_MAX_RETRIES` (or `GEMINI_MAX_RETRIES`)
+  - `LOOTFORGE_NANO_MIN_DELAY_MS` (or `GEMINI_MIN_DELAY_MS`)
+  - `LOOTFORGE_NANO_DEFAULT_CONCURRENCY` (or `GEMINI_DEFAULT_CONCURRENCY`)
+- Local diffusion:
+  - `LOOTFORGE_LOCAL_ENDPOINT` (or `LOCAL_DIFFUSION_BASE_URL`)
+  - `LOOTFORGE_LOCAL_TIMEOUT_MS` (or `LOCAL_DIFFUSION_TIMEOUT_MS`)
+  - `LOOTFORGE_LOCAL_MAX_RETRIES` (or `LOCAL_DIFFUSION_MAX_RETRIES`)
+  - `LOOTFORGE_LOCAL_MIN_DELAY_MS` (or `LOCAL_DIFFUSION_MIN_DELAY_MS`)
+  - `LOOTFORGE_LOCAL_DEFAULT_CONCURRENCY` (or `LOCAL_DIFFUSION_DEFAULT_CONCURRENCY`)
 
 Eval adapter toggles:
 - `LOOTFORGE_ENABLE_CLIP_ADAPTER`: enable CLIP adapter execution in `lootforge eval`

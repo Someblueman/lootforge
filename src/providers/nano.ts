@@ -2,6 +2,14 @@ import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import {
+  DEFAULT_PROVIDER_REQUEST_TIMEOUT_MS,
+  fetchWithTimeout,
+  normalizeNonNegativeInteger,
+  normalizePositiveInteger,
+  ProviderRequestTimeoutError,
+  toOptionalNonNegativeInteger,
+} from "./runtime.js";
+import {
   createProviderJob,
   GenerationProvider,
   nowIso,
@@ -23,6 +31,10 @@ const DEFAULT_NANO_MODEL = "gemini-2.5-flash-image";
 export interface NanoProviderOptions {
   model?: string;
   apiBase?: string;
+  timeoutMs?: number;
+  maxRetries?: number;
+  minDelayMs?: number;
+  defaultConcurrency?: number;
 }
 
 interface GeminiInlineData {
@@ -32,14 +44,30 @@ interface GeminiInlineData {
 
 export class NanoProvider implements GenerationProvider {
   readonly name = "nano" as const;
-  readonly capabilities: ProviderCapabilities = PROVIDER_CAPABILITIES.nano;
+  readonly capabilities: ProviderCapabilities;
 
   private readonly model: string;
   private readonly apiBase: string;
+  private readonly timeoutMs: number;
+  private readonly maxRetries?: number;
 
   constructor(options: NanoProviderOptions = {}) {
+    const defaults = PROVIDER_CAPABILITIES.nano;
+    this.capabilities = {
+      ...defaults,
+      defaultConcurrency: normalizePositiveInteger(
+        options.defaultConcurrency,
+        defaults.defaultConcurrency,
+      ),
+      minDelayMs: normalizeNonNegativeInteger(options.minDelayMs, defaults.minDelayMs),
+    };
     this.model = options.model ?? DEFAULT_NANO_MODEL;
     this.apiBase = options.apiBase ?? GEMINI_API_BASE;
+    this.timeoutMs = normalizePositiveInteger(
+      options.timeoutMs,
+      DEFAULT_PROVIDER_REQUEST_TIMEOUT_MS,
+    );
+    this.maxRetries = toOptionalNonNegativeInteger(options.maxRetries);
   }
 
   prepareJobs(targets: PlannedTarget[], ctx: ProviderPrepareContext): ProviderJob[] {
@@ -49,6 +77,9 @@ export class NanoProvider implements GenerationProvider {
         target,
         model: target.model ?? this.model,
         imagesDir: ctx.imagesDir,
+        defaults: {
+          maxRetries: this.maxRetries,
+        },
       }),
     );
   }
@@ -56,7 +87,7 @@ export class NanoProvider implements GenerationProvider {
   supports(feature: ProviderFeature): boolean {
     if (feature === "image-generation") return true;
     if (feature === "transparent-background") return false;
-    if (feature === "image-edits") return true;
+    if (feature === "image-edits") return false;
     if (feature === "multi-candidate") return true;
     if (feature === "controlnet") return false;
     return false;
@@ -119,7 +150,7 @@ export class NanoProvider implements GenerationProvider {
       const candidateOutputs: ProviderCandidateOutput[] = [];
       const count = Math.max(job.candidateCount, 1);
       for (let index = 0; index < count; index += 1) {
-        const response = await fetchImpl(endpoint, {
+        const response = await this.requestWithTimeout(fetchImpl, endpoint, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -231,6 +262,28 @@ export class NanoProvider implements GenerationProvider {
     }
 
     return undefined;
+  }
+
+  private async requestWithTimeout(
+    fetchImpl: typeof fetch,
+    input: Parameters<typeof fetch>[0],
+    init?: RequestInit,
+  ): Promise<Response> {
+    try {
+      return await fetchWithTimeout(fetchImpl, input, init, this.timeoutMs);
+    } catch (error) {
+      if (error instanceof ProviderRequestTimeoutError) {
+        throw new ProviderError({
+          provider: this.name,
+          code: "nano_request_timeout",
+          message: `Nano provider request timed out after ${error.timeoutMs}ms.`,
+          actionable:
+            "Increase providers.nano.timeoutMs or LOOTFORGE_NANO_TIMEOUT_MS and retry.",
+          cause: error,
+        });
+      }
+      throw error;
+    }
   }
 }
 

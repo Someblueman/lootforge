@@ -177,14 +177,11 @@ Completed 2026-02-18 in this release track:
 - Added baseline CI/security workflows for PRs and pushes.
 
 ### `0.3.0` Upcoming (Control and Consistency / `Tempered Steel`)
-- Harden path safety for edit/adapters:
-  - enforce in-root normalization for `edit.inputs` paths before provider uploads and adapter payload expansion.
-- Add versioned stage-artifact contract tests:
-  - define authoritative contract schemas for `targets-index`, run provenance, acceptance report, eval report, and selection lock artifacts,
-  - add CI fixture-pack smoke tests that validate contract compatibility end-to-end.
-- Make provider configuration an enforced runtime contract:
-  - consistently apply manifest/env endpoint, timeout, retry, delay, and concurrency settings across all providers,
-  - add capability-claim parity checks so provider feature flags reflect actual runtime behavior.
+Completed 2026-02-19 in this release track:
+- Hardened path safety for edit/adapters with in-root normalization for `edit.inputs` and lock/reference path expansion before provider/adapter use.
+- Added versioned stage-artifact contract schemas (`targets-index`, `provenance/run`, `acceptance-report`, `eval-report`, `selection-lock`) and fixture-pack smoke validation for `plan -> generate -> process -> eval -> review -> select`.
+- Enforced provider runtime contract loading from manifest/env for endpoint, timeout, retry, delay, and concurrency settings, plus capability-claim parity checks.
+
 - Performance reliability follow-ups:
   - eliminate repeated candidate-image decode/stats passes during scoring,
   - run enabled soft adapters in parallel with deterministic result aggregation,

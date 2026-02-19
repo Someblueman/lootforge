@@ -91,6 +91,29 @@ describe("manifest normalization", () => {
     expect(artifacts.targets[0].runtimeSpec?.anchorY).toBe(0.75);
   });
 
+  it("defaults generationPolicy.vlmGate threshold to 4", () => {
+    const manifest: ManifestV2 = {
+      ...BASE_MANIFEST,
+      targets: [
+        {
+          ...BASE_MANIFEST.targets[0],
+          generationPolicy: {
+            ...BASE_MANIFEST.targets[0].generationPolicy,
+            vlmGate: {
+              rubric: "Grade silhouette clarity and framing quality from 0 to 5.",
+            },
+          },
+        },
+      ],
+    };
+
+    const artifacts = createPlanArtifacts(manifest, "/tmp/manifest.json");
+    expect(artifacts.targets[0].generationPolicy?.vlmGate).toEqual({
+      threshold: 4,
+      rubric: "Grade silhouette clarity and framing quality from 0 to 5.",
+    });
+  });
+
   it("defaults target palette from style-kit palette files when target palette is unset", async () => {
     const tempRoot = await mkdtemp(path.join(os.tmpdir(), "lootforge-style-kit-palette-"));
     const styleDir = path.join(tempRoot, "style", "default");

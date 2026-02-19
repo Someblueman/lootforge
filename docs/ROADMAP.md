@@ -195,14 +195,15 @@ Completed 2026-02-19 in this release track:
   - eliminate repeated candidate-image decode/stats passes during scoring,
   - run enabled soft adapters in parallel with deterministic result aggregation,
   - reduce repeated PNG decode work for resize variants and auxiliary map derivation.
+- Add automated VLM candidate grading gates:
+  - add manifest-configurable `generationPolicy.vlmGate` with threshold default `4/5` and optional rubric text,
+  - reject below-threshold candidates before final selection and persist per-candidate VLM decisions in provenance,
+  - surface VLM score/threshold/reason traceability in eval and review artifacts.
 
 Remaining queued items:
 - Add optional service mode with stable HTTP generation endpoints and MCP wrapper compatibility (no auth/credit layer in core).
 - Define a canonical generation request contract and mapping layer between service requests and manifest/pipeline targets.
 - Implement Nano/Gemini edit-first parity (where supported) with tests.
-- Add automated VLM candidate grading gates:
-  - score candidates for silhouette clarity, framing/cutoff, and structural fidelity,
-  - discard candidates below manifest threshold (default `4/5`) before review output.
 - Add edge-aware quality scoring and hard-gate coverage:
   - measure alpha-boundary sharpness, halo/bleed risk, and stray-pixel noise on transparent outputs,
   - surface boundary-focused failure reasons in candidate scoring, eval, and review artifacts.
@@ -221,8 +222,6 @@ Remaining queued items:
 - Add coarse-to-fine candidate promotion controls:
   - run lower-cost candidate generation/scoring first,
   - promote top-K candidates into high-fidelity refinement passes only when quality gates justify extra compute.
-- Extend eval/review artifacts with VLM grade traceability:
-  - include per-candidate VLM rubric output, threshold decision, and rejection reasons.
 - Add manifest policy coverage checks:
   - fail release gates when documented manifest policy fields are neither implemented nor marked as reserved.
 - Add model capability introspection contract and endpoint for provider feature gating (pixel/high-res/references).

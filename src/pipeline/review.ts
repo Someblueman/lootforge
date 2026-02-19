@@ -15,6 +15,26 @@ interface EvalReportShape {
     candidateScore?: number;
     candidateReasons?: string[];
     candidateMetrics?: Record<string, number>;
+    candidateVlm?: {
+      score: number;
+      threshold: number;
+      maxScore: number;
+      passed: boolean;
+      reason: string;
+      rubric?: string;
+      evaluator: "command" | "http";
+    };
+    candidateVlmGrades?: Array<{
+      outputPath: string;
+      selected: boolean;
+      score: number;
+      threshold: number;
+      maxScore: number;
+      passed: boolean;
+      reason: string;
+      rubric?: string;
+      evaluator: "command" | "http";
+    }>;
     adapterMetrics?: Record<string, number>;
     adapterScore?: number;
     adapterScoreComponents?: Record<string, number>;
@@ -77,6 +97,26 @@ function renderReviewHtml(params: {
     candidateScore?: number;
     candidateReasons?: string[];
     candidateMetrics?: Record<string, number>;
+    candidateVlm?: {
+      score: number;
+      threshold: number;
+      maxScore: number;
+      passed: boolean;
+      reason: string;
+      rubric?: string;
+      evaluator: "command" | "http";
+    };
+    candidateVlmGrades?: Array<{
+      outputPath: string;
+      selected: boolean;
+      score: number;
+      threshold: number;
+      maxScore: number;
+      passed: boolean;
+      reason: string;
+      rubric?: string;
+      evaluator: "command" | "http";
+    }>;
     adapterMetrics?: Record<string, number>;
     adapterScore?: number;
     adapterScoreComponents?: Record<string, number>;
@@ -252,6 +292,26 @@ function renderScoreDetails(target: {
   adapterScore?: number;
   candidateReasons?: string[];
   candidateMetrics?: Record<string, number>;
+  candidateVlm?: {
+    score: number;
+    threshold: number;
+    maxScore: number;
+    passed: boolean;
+    reason: string;
+    rubric?: string;
+    evaluator: "command" | "http";
+  };
+  candidateVlmGrades?: Array<{
+    outputPath: string;
+    selected: boolean;
+    score: number;
+    threshold: number;
+    maxScore: number;
+    passed: boolean;
+    reason: string;
+    rubric?: string;
+    evaluator: "command" | "http";
+  }>;
   adapterMetrics?: Record<string, number>;
   adapterScoreComponents?: Record<string, number>;
   adapterWarnings?: string[];
@@ -275,6 +335,13 @@ function renderScoreDetails(target: {
   sections.push(
     `<div class="score-headline"><strong>Final:</strong> ${formatScore(target.finalScore)}</div>`,
   );
+  if (target.candidateVlm) {
+    sections.push(
+      `<div class="score-headline"><strong>VLM gate:</strong> ${escapeHtml(
+        formatVlmSummary(target.candidateVlm),
+      )}</div>`,
+    );
+  }
 
   sections.push(
     renderDetailsBlock(
@@ -288,6 +355,13 @@ function renderScoreDetails(target: {
       "Candidate metrics",
       renderObject(target.candidateMetrics),
       Object.keys(target.candidateMetrics ?? {}).length,
+    ),
+  );
+  sections.push(
+    renderDetailsBlock(
+      "VLM candidate grades",
+      renderList(renderVlmGrades(target.candidateVlmGrades)),
+      (target.candidateVlmGrades ?? []).length,
     ),
   );
   sections.push(
@@ -356,6 +430,54 @@ function formatScore(score: number | undefined): string {
     return "0.00";
   }
   return score.toFixed(2);
+}
+
+function renderVlmGrades(
+  grades:
+    | Array<{
+        outputPath: string;
+        selected: boolean;
+        score: number;
+        threshold: number;
+        maxScore: number;
+        passed: boolean;
+        reason: string;
+        rubric?: string;
+        evaluator: "command" | "http";
+      }>
+    | undefined,
+): string[] {
+  if (!grades || grades.length === 0) {
+    return [];
+  }
+
+  return grades.map((grade) => {
+    const parts = [
+      `score=${grade.score.toFixed(2)}/${grade.maxScore.toFixed(2)}`,
+      `threshold=${grade.threshold.toFixed(2)}`,
+      grade.passed ? "PASS" : "FAIL",
+      `evaluator=${grade.evaluator}`,
+      `selected=${grade.selected ? "yes" : "no"}`,
+      `path=${grade.outputPath}`,
+      `reason=${grade.reason}`,
+    ];
+    if (grade.rubric) {
+      parts.push(`rubric=${grade.rubric}`);
+    }
+    return parts.join(" | ");
+  });
+}
+
+function formatVlmSummary(vlm: {
+  score: number;
+  threshold: number;
+  maxScore: number;
+  passed: boolean;
+  reason: string;
+}): string {
+  return `${vlm.score.toFixed(2)}/${vlm.maxScore.toFixed(2)} vs threshold ${vlm.threshold.toFixed(
+    2,
+  )} (${vlm.passed ? "PASS" : "FAIL"}) · ${vlm.reason}`;
 }
 
 function escapeHtml(value: string): string {

@@ -39,6 +39,36 @@ describe("review pipeline", () => {
                 readabilityScore: 0.88,
                 alphaCoverage: 0.97,
               },
+              candidateVlm: {
+                score: 4.5,
+                threshold: 4,
+                maxScore: 5,
+                passed: true,
+                reason: "readable framing",
+                evaluator: "command",
+              },
+              candidateVlmGrades: [
+                {
+                  outputPath: "/tmp/candidates/hero-high-v1.png",
+                  selected: false,
+                  score: 3.1,
+                  threshold: 4,
+                  maxScore: 5,
+                  passed: false,
+                  reason: "cropped weapon",
+                  evaluator: "command",
+                },
+                {
+                  outputPath: "/tmp/candidates/hero-high-v2.png",
+                  selected: true,
+                  score: 4.5,
+                  threshold: 4,
+                  maxScore: 5,
+                  passed: true,
+                  reason: "readable framing",
+                  evaluator: "command",
+                },
+              ],
               adapterScore: 10,
               adapterScoreComponents: {
                 clip: 7,
@@ -63,8 +93,10 @@ describe("review pipeline", () => {
 
     expect(html).toContain("Score Details");
     expect(html).toContain("Candidate reasons (2)");
+    expect(html).toContain("VLM candidate grades (2)");
     expect(html).toContain("Adapter score components (2)");
     expect(html).toContain("good_readability");
+    expect(html).toContain("cropped weapon");
     expect(html).toContain("clip.rawScore");
 
     const highScoreIndex = html.indexOf("hero-high");

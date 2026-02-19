@@ -61,6 +61,8 @@ Generation + processing:
 
 - `prompt` or `promptSpec` (required for non-`spritesheet` targets)
 - `generationPolicy`
+  - `generationPolicy.vlmGate?`: `{ threshold?, rubric? }`
+  - `threshold` defaults to `4` (scored on `0..5`) when gate is configured
 - `postProcess`
 - `acceptance`
 - `runtimeSpec`
@@ -68,6 +70,7 @@ Generation + processing:
 - `generationMode: "edit-first"` requires an edit-capable provider (`openai` or `local`)
 - `edit.inputs[].path` must resolve inside the active `--out` root at runtime
 - `generationPolicy.background: "transparent"` requires a provider that supports transparent outputs (unsupported providers now fail validation)
+- `generationPolicy.vlmGate` requires runtime evaluator transport via `LOOTFORGE_VLM_GATE_CMD` or `LOOTFORGE_VLM_GATE_URL`
 
 Provider runtime precedence for generate/regenerate:
 - target-level `generationPolicy` overrides provider defaults for retries/concurrency settings
@@ -142,7 +145,11 @@ Planner behavior:
         "background": "transparent",
         "outputFormat": "png",
         "quality": "high",
-        "candidates": 4
+        "candidates": 4,
+        "vlmGate": {
+          "threshold": 4,
+          "rubric": "Score silhouette clarity and framing quality from 0 to 5."
+        }
       },
       "postProcess": {
         "resizeTo": "512x512",

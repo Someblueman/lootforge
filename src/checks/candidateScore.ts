@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import sharp from "sharp";
 
 import { runEnabledSoftAdapters } from "./softAdapters.js";
+import { runCandidateVlmGate, targetHasVlmGate } from "./vlmGate.js";
 import type { CandidateScoreRecord, PlannedTarget } from "../providers/types.js";
 
 const SIZE_PATTERN = /^(\d+)x(\d+)$/i;
@@ -281,6 +282,10 @@ export async function scoreCandidateImages(
     string,
     Awaited<ReturnType<typeof runEnabledSoftAdapters>>
   >();
+  const vlmByOutputPath = new Map<
+    string,
+    NonNullable<CandidateScoreRecord["vlm"]>
+  >();
 
   if (outDir) {
     const softResults = await Promise.all(
@@ -295,6 +300,31 @@ export async function scoreCandidateImages(
     );
     for (const row of softResults) {
       softAdapterByOutputPath.set(row.outputPath, row.result);
+    }
+  }
+
+  if (targetHasVlmGate(target)) {
+    if (!outDir) {
+      throw new Error(
+        `Target "${target.id}" configured generationPolicy.vlmGate, but candidate scoring did not receive outDir.`,
+      );
+    }
+
+    const vlmResults = await Promise.all(
+      inspections.map(async (inspection) => ({
+        outputPath: inspection.outputPath,
+        result: await runCandidateVlmGate({
+          target,
+          imagePath: inspection.outputPath,
+          outDir,
+        }),
+      })),
+    );
+
+    for (const row of vlmResults) {
+      if (row.result) {
+        vlmByOutputPath.set(row.outputPath, row.result);
+      }
     }
   }
 
@@ -412,6 +442,21 @@ export async function scoreCandidateImages(
     components.consistencyReward = consistencyReward;
     score += consistencyReward;
 
+    const vlm = vlmByOutputPath.get(inspection.outputPath);
+    if (vlm) {
+      metrics.vlmScore = vlm.score;
+      metrics.vlmThreshold = vlm.threshold;
+      metrics.vlmMaxScore = vlm.maxScore;
+
+      if (!vlm.passed) {
+        passedAcceptance = false;
+        const penalty = 500 + Math.round((vlm.threshold - vlm.score) * 200);
+        components.vlmGatePenalty = -penalty;
+        score -= penalty;
+        reasons.push("vlm_gate_below_threshold");
+      }
+    }
+
     const softAdapterResult = softAdapterByOutputPath.get(inspection.outputPath);
     if (softAdapterResult) {
       for (const adapterName of softAdapterResult.adapterNames) {
@@ -443,6 +488,7 @@ export async function scoreCandidateImages(
       reasons,
       components,
       metrics,
+      ...(vlm ? { vlm } : {}),
       ...(warnings.length > 0 ? { warnings } : {}),
       selected: false,
     });

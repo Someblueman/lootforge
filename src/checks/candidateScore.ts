@@ -1,4 +1,4 @@
-import { stat } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 
 import sharp from "sharp";
 
@@ -87,68 +87,107 @@ function computeSeamScore(raw: Buffer, width: number, height: number, channels: 
   return count > 0 ? total / count : 0;
 }
 
-function collectColorMetrics(raw: Buffer, channels: number, target: PlannedTarget): {
+function analyzeRawCandidate(
+  raw: Buffer,
+  channels: number,
+  target: PlannedTarget,
+  bins = 16,
+): {
+  edgeStdev: number;
+  hasTransparency: boolean;
   distinctColors?: number;
   paletteCompliance?: number;
+  histogram: number[];
 } {
-  if (!target.palette) {
-    return {};
-  }
-
-  const colors = new Set<number>();
-  let counted = 0;
-  let matches = 0;
+  const histogram = new Array<number>(bins).fill(0);
+  const sums = [0, 0, 0];
+  const sumsSq = [0, 0, 0];
+  const colors = target.palette ? new Set<number>() : undefined;
   const exactPalette =
-    target.palette.mode === "exact"
-      ? new Set((target.palette.colors ?? []).map((c) => Number.parseInt(c.replace(/^#/, ""), 16) >>> 0))
+    target.palette?.mode === "exact"
+      ? new Set(
+          (target.palette.colors ?? []).map(
+            (color) => Number.parseInt(color.replace(/^#/, ""), 16) >>> 0,
+          ),
+        )
       : undefined;
 
+  let visiblePixelCount = 0;
+  let colorMatchCount = 0;
+  let colorCounted = 0;
+  let totalPixelCount = 0;
+  let hasTransparency = false;
+
   for (let i = 0; i < raw.length; i += channels) {
+    const r = raw[i];
+    const g = raw[i + 1];
+    const b = raw[i + 2];
     const alpha = channels >= 4 ? raw[i + 3] : 255;
+
+    sums[0] += r;
+    sums[1] += g;
+    sums[2] += b;
+    sumsSq[0] += r * r;
+    sumsSq[1] += g * g;
+    sumsSq[2] += b * b;
+    totalPixelCount += 1;
+
+    if (alpha < 255) {
+      hasTransparency = true;
+    }
     if (alpha === 0) {
       continue;
     }
-    const packed = (raw[i] << 16) | (raw[i + 1] << 8) | raw[i + 2];
-    colors.add(packed >>> 0);
+
+    const packed = ((r << 16) | (g << 8) | b) >>> 0;
+    colors?.add(packed);
 
     if (exactPalette) {
-      counted += 1;
-      if (exactPalette.has(packed >>> 0)) {
-        matches += 1;
+      colorCounted += 1;
+      if (exactPalette.has(packed)) {
+        colorMatchCount += 1;
       }
     }
+
+    const luma = Math.round(0.2126 * r + 0.7152 * g + 0.0722 * b);
+    const bin = Math.max(0, Math.min(bins - 1, Math.floor((luma / 256) * bins)));
+    histogram[bin] += 1;
+    visiblePixelCount += 1;
   }
+
+  const normalizeStdev = (channelIndex: number): number => {
+    if (totalPixelCount === 0) {
+      return 0;
+    }
+    const mean = sums[channelIndex] / totalPixelCount;
+    const meanSq = sumsSq[channelIndex] / totalPixelCount;
+    const variance = Math.max(0, meanSq - mean * mean);
+    return Math.sqrt(variance);
+  };
+
+  const edgeStdev =
+    (normalizeStdev(0) + normalizeStdev(1) + normalizeStdev(2)) / 3;
+  const normalizedHistogram =
+    visiblePixelCount === 0
+      ? histogram
+      : histogram.map((value) => value / visiblePixelCount);
 
   if (exactPalette) {
     return {
-      distinctColors: colors.size,
-      paletteCompliance: counted > 0 ? matches / counted : 1,
+      edgeStdev,
+      hasTransparency,
+      distinctColors: colors?.size,
+      paletteCompliance: colorCounted > 0 ? colorMatchCount / colorCounted : 1,
+      histogram: normalizedHistogram,
     };
   }
 
-  return { distinctColors: colors.size };
-}
-
-function computeLumaHistogram(raw: Buffer, channels: number, bins = 16): number[] {
-  const hist = new Array<number>(bins).fill(0);
-  let counted = 0;
-
-  for (let i = 0; i < raw.length; i += channels) {
-    const alpha = channels >= 4 ? raw[i + 3] : 255;
-    if (alpha === 0) {
-      continue;
-    }
-    const luma = Math.round(0.2126 * raw[i] + 0.7152 * raw[i + 1] + 0.0722 * raw[i + 2]);
-    const bin = Math.max(0, Math.min(bins - 1, Math.floor((luma / 256) * bins)));
-    hist[bin] += 1;
-    counted += 1;
-  }
-
-  if (counted === 0) {
-    return hist;
-  }
-
-  return hist.map((value) => value / counted);
+  return {
+    edgeStdev,
+    hasTransparency,
+    ...(colors ? { distinctColors: colors.size } : {}),
+    histogram: normalizedHistogram,
+  };
 }
 
 function histogramDistance(a: number[], b: number[]): number {
@@ -178,7 +217,8 @@ function centroidHistogram(histograms: number[][]): number[] {
 }
 
 async function inspectCandidate(target: PlannedTarget, outputPath: string): Promise<CandidateInspection> {
-  const image = sharp(outputPath, { failOn: "none" });
+  const imageBytes = await readFile(outputPath);
+  const image = sharp(imageBytes, { failOn: "none" });
   const metadata = await image.metadata();
 
   if (
@@ -190,36 +230,30 @@ async function inspectCandidate(target: PlannedTarget, outputPath: string): Prom
     throw new Error(`Unable to read candidate dimensions for ${outputPath}`);
   }
 
-  const imageStats = await image.stats();
   const rawResult = await image.ensureAlpha().raw().toBuffer({ resolveWithObject: true });
   const raw = rawResult.data;
   const channels = rawResult.info.channels;
 
   const hasAlpha = metadata.hasAlpha === true;
-  const alphaChannel = hasAlpha ? imageStats.channels[imageStats.channels.length - 1] : undefined;
-  const hasTransparency = alphaChannel ? alphaChannel.min < 255 : false;
-  const edgeStdev = imageStats.channels.slice(0, 3).reduce((sum, channel) => sum + channel.stdev, 0) / 3;
+  const derivedMetrics = analyzeRawCandidate(raw, channels, target);
+  const hasTransparency = hasAlpha ? derivedMetrics.hasTransparency : false;
 
   const seamScore =
     target.tileable || typeof target.seamThreshold === "number"
       ? computeSeamScore(raw, metadata.width, metadata.height, channels, target.seamStripPx ?? 4)
       : undefined;
-
-  const colorMetrics = collectColorMetrics(raw, channels, target);
-
-  const fileStat = await stat(outputPath);
   return {
     outputPath,
     width: metadata.width,
     height: metadata.height,
-    sizeBytes: fileStat.size,
+    sizeBytes: imageBytes.byteLength,
     hasAlpha,
     hasTransparency,
-    edgeStdev,
+    edgeStdev: derivedMetrics.edgeStdev,
     seamScore,
-    distinctColors: colorMetrics.distinctColors,
-    paletteCompliance: colorMetrics.paletteCompliance,
-    histogram: computeLumaHistogram(raw, channels),
+    distinctColors: derivedMetrics.distinctColors,
+    paletteCompliance: derivedMetrics.paletteCompliance,
+    histogram: derivedMetrics.histogram,
   };
 }
 

@@ -191,12 +191,12 @@ Completed 2026-02-19 in this release track:
 - Make provider configuration an enforced runtime contract:
   - consistently apply manifest/env endpoint, timeout, retry, delay, and concurrency settings across all providers,
   - add capability-claim parity checks so provider feature flags reflect actual runtime behavior.
-
-Remaining queued items:
 - Performance reliability follow-ups:
   - eliminate repeated candidate-image decode/stats passes during scoring,
   - run enabled soft adapters in parallel with deterministic result aggregation,
   - reduce repeated PNG decode work for resize variants and auxiliary map derivation.
+
+Remaining queued items:
 - Add optional service mode with stable HTTP generation endpoints and MCP wrapper compatibility (no auth/credit layer in core).
 - Define a canonical generation request contract and mapping layer between service requests and manifest/pipeline targets.
 - Implement Nano/Gemini edit-first parity (where supported) with tests.

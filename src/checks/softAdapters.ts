@@ -95,21 +95,44 @@ export async function runEnabledSoftAdapters(
   const failedAdapters: SoftAdapterName[] = [];
   const warnings: string[] = [];
 
-  for (const config of configs) {
-    try {
-      const response = config.command
-        ? await runAdapterCommand(config, payload)
-        : await runAdapterHttp(config, payload);
-      adapterMetrics[config.name] = response.metrics;
-      if (typeof response.score === "number" && Number.isFinite(response.score)) {
-        adapterScores[config.name] = response.score;
+  const adapterResults = await Promise.all(
+    configs.map(async (config) => {
+      try {
+        const response = config.command
+          ? await runAdapterCommand(config, payload)
+          : await runAdapterHttp(config, payload);
+        return {
+          ok: true,
+          config,
+          response,
+        } as const;
+      } catch (error) {
+        return {
+          ok: false,
+          config,
+          error,
+        } as const;
       }
-      succeededAdapters.push(config.name);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      warnings.push(`${config.name}: ${message}`);
-      failedAdapters.push(config.name);
+    }),
+  );
+
+  for (const result of adapterResults) {
+    if (result.ok) {
+      adapterMetrics[result.config.name] = result.response.metrics;
+      if (
+        typeof result.response.score === "number" &&
+        Number.isFinite(result.response.score)
+      ) {
+        adapterScores[result.config.name] = result.response.score;
+      }
+      succeededAdapters.push(result.config.name);
+      continue;
     }
+
+    const message =
+      result.error instanceof Error ? result.error.message : String(result.error);
+    warnings.push(`${result.config.name}: ${message}`);
+    failedAdapters.push(result.config.name);
   }
 
   return {

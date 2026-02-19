@@ -46,6 +46,7 @@ Notes:
 - `adapter` is one of `clip`, `lpips`, `ssim`.
 - `referenceImages` is derived from non-mask `edit.inputs`.
 - `imagePath` and `referenceImages` are absolute filesystem paths.
+- `referenceImages` paths must remain inside the active `--out` root; unsafe paths fail eval.
 
 ## Response Contract
 

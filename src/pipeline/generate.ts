@@ -19,7 +19,11 @@ import {
   ProviderSelection,
   sha256Hex,
 } from "../providers/types.js";
-import { normalizeTargetOutPath, resolveStagePathLayout } from "../shared/paths.js";
+import {
+  normalizeTargetOutPath,
+  resolvePathWithinRoot,
+  resolveStagePathLayout,
+} from "../shared/paths.js";
 
 export interface GeneratePipelineOptions {
   outDir: string;
@@ -284,11 +288,12 @@ export async function runGeneratePipeline(
   });
 
   if (failures.length > 0) {
+    const firstFailure = failures[0];
     throw new Error(
       `Generation failed for ${failures.length} target(s): ${failures
         .slice(0, 5)
         .map((failure) => `${failure.targetId}`)
-        .join(", ")}`,
+        .join(", ")}. First failure (${firstFailure.targetId}): ${firstFailure.message}`,
     );
   }
 
@@ -405,7 +410,19 @@ async function runTaskWithFallback(params: {
     const job = preparedJobs[0];
     const lockEntry = params.lockByTargetId.get(params.task.target.id);
     if (params.skipLocked && lockEntry?.approved && lockEntry.inputHash === job.inputHash) {
-      const lockedPath = path.resolve(lockEntry.selectedOutputPath);
+      let lockedPath: string;
+      try {
+        lockedPath = resolvePathWithinRoot(
+          params.outDir,
+          lockEntry.selectedOutputPath,
+          `selection lock output path for target "${job.targetId}"`,
+        );
+      } catch (error) {
+        throw new Error(
+          `Selection lock output path for "${job.targetId}" must stay within --out (${params.outDir}).`,
+          { cause: error },
+        );
+      }
       if (await fileExists(lockedPath)) {
         if (lockedPath !== job.outPath) {
           await cp(lockedPath, job.outPath, { force: true });

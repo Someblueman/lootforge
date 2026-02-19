@@ -1,8 +1,8 @@
 import { spawn } from "node:child_process";
-import path from "node:path";
 
 import { buildStructuredPrompt } from "../providers/types.js";
 import type { PlannedTarget } from "../providers/types.js";
+import { resolvePathWithinRoot } from "../shared/paths.js";
 
 const DEFAULT_ADAPTER_TIMEOUT_MS = 30_000;
 const GENERIC_ADAPTER_TIMEOUT_ENV = "LOOTFORGE_ADAPTER_TIMEOUT_MS";
@@ -356,11 +356,13 @@ function resolveReferenceImages(target: PlannedTarget, outDir: string): string[]
     if (input.role === "mask") {
       continue;
     }
-    if (path.isAbsolute(input.path)) {
-      resolved.add(path.normalize(input.path));
-    } else {
-      resolved.add(path.resolve(outDir, input.path));
-    }
+
+    const resolvedPath = resolvePathWithinRoot(
+      outDir,
+      input.path,
+      `adapter reference path for target "${target.id}"`,
+    );
+    resolved.add(resolvedPath);
   }
 
   return Array.from(resolved);

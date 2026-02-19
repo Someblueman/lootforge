@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
@@ -282,5 +282,38 @@ describe("eval adapters", () => {
     ]);
     expect(result.report.targets[0].adapterWarnings?.length).toBeGreaterThan(0);
     expect(result.report.targets[0].finalScore).toBe(40);
+  });
+
+  it("fails fast when adapter reference paths escape the output root", async () => {
+    const fixture = await createEvalFixture(true);
+    const clipScriptPath = path.join(fixture.outDir, "clip-adapter-safe.js");
+
+    await writeFile(
+      clipScriptPath,
+      [
+        'process.stdout.write(JSON.stringify({ metrics: { alignment: 0.9 }, score: 1 }));',
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+
+    process.env.LOOTFORGE_ENABLE_CLIP_ADAPTER = "1";
+    process.env.LOOTFORGE_CLIP_ADAPTER_CMD = `${process.execPath} ${clipScriptPath}`;
+
+    const indexRaw = await readFile(fixture.targetsIndexPath, "utf8");
+    const index = JSON.parse(indexRaw) as { targets?: Array<{ edit?: { inputs?: Array<{ path: string }> } }> };
+    if (!index.targets?.[0]?.edit?.inputs?.[0]) {
+      throw new Error("fixture target is missing edit input");
+    }
+    index.targets[0].edit.inputs[0].path = "../outside-reference.png";
+    await writeFile(fixture.targetsIndexPath, `${JSON.stringify(index, null, 2)}\n`, "utf8");
+
+    await expect(
+      runEvalPipeline({
+        outDir: fixture.outDir,
+        targetsIndexPath: fixture.targetsIndexPath,
+        strict: true,
+      }),
+    ).rejects.toThrow(/outside/i);
   });
 });

@@ -57,6 +57,7 @@ Generation + processing:
 - `acceptance`
 - `runtimeSpec`
 - `provider`, `model`, `edit`, `auxiliaryMaps`
+- `edit.inputs[].path` must resolve inside the active `--out` root at runtime
 
 ## Spritesheet targets
 

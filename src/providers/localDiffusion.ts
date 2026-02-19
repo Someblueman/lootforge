@@ -1,6 +1,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 
+import { resolvePathWithinRoot } from "../shared/paths.js";
 import {
   createProviderJob,
   GenerationProvider,
@@ -117,7 +118,7 @@ export class LocalDiffusionProvider implements GenerationProvider {
           background: job.background,
           output_format: job.outputFormat,
           candidates: job.candidateCount,
-          control: this.toControlPayload(job.target.edit?.inputs),
+          control: this.toControlPayload(job.target.edit?.inputs, ctx.outDir, job.targetId),
         }),
       });
 
@@ -169,16 +170,42 @@ export class LocalDiffusionProvider implements GenerationProvider {
     }
   }
 
-  private toControlPayload(inputs: TargetEditInput[] | undefined) {
+  private toControlPayload(
+    inputs: TargetEditInput[] | undefined,
+    outDir: string,
+    targetId: string,
+  ) {
     if (!inputs || inputs.length === 0) {
       return undefined;
     }
 
     return inputs.map((input) => ({
-      path: input.path,
+      path: this.resolveControlInputPath(input.path, outDir, targetId),
       role: input.role ?? "reference",
       fidelity: input.fidelity ?? "medium",
     }));
+  }
+
+  private resolveControlInputPath(
+    inputPath: string,
+    outDir: string,
+    targetId: string,
+  ): string {
+    try {
+      return resolvePathWithinRoot(
+        outDir,
+        inputPath,
+        `local control input path for target "${targetId}"`,
+      );
+    } catch (error) {
+      throw new ProviderError({
+        provider: this.name,
+        code: "local_diffusion_unsafe_control_path",
+        message: `Unsafe local control input path "${inputPath}" for target "${targetId}".`,
+        actionable: `Control input paths must stay within the output root (${path.resolve(outDir)}).`,
+        cause: error,
+      });
+    }
   }
 
   private async resolveImageBytes(

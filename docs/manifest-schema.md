@@ -7,6 +7,14 @@
 - `version`: must be `"next"`
 - `pack`: `{ id, version, license?, author? }`
 - `providers`: `{ default, openai?, nano?, local? }`
+  - Provider configs support runtime fields:
+    - `model?`
+    - `endpoint?` (OpenAI generation endpoint, Nano API base)
+    - `timeoutMs?` (request timeout per provider call)
+    - `maxRetries?` (default retries when target policy omits `generationPolicy.maxRetries`)
+    - `minDelayMs?` (provider-level minimum spacing between jobs)
+    - `defaultConcurrency?` (provider-level worker count)
+  - `providers.local` also supports `baseUrl?` (alias for local endpoint)
 - `styleKits[]` (required, at least one)
   - `id`
   - `rulesPath`
@@ -57,7 +65,14 @@ Generation + processing:
 - `acceptance`
 - `runtimeSpec`
 - `provider`, `model`, `edit`, `auxiliaryMaps`
+- `generationMode: "edit-first"` requires an edit-capable provider (`openai` or `local`)
 - `edit.inputs[].path` must resolve inside the active `--out` root at runtime
+- `generationPolicy.background: "transparent"` requires a provider that supports transparent outputs (unsupported providers now fail validation)
+
+Provider runtime precedence for generate/regenerate:
+- target-level `generationPolicy` overrides provider defaults for retries/concurrency settings
+- provider runtime fields resolve from manifest and can be overridden by environment variables (`LOOTFORGE_*` / provider-specific env aliases)
+- capability parity is enforced at runtime (`supports(...)` must match provider capability flags)
 
 ## Spritesheet targets
 

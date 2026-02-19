@@ -938,7 +938,7 @@ function toNormalizedGenerationPolicy(target: ManifestTarget): NormalizedGenerat
   const maxRetries =
     typeof target.generationPolicy?.maxRetries === "number"
       ? Math.max(0, Math.round(target.generationPolicy.maxRetries))
-      : 1;
+      : undefined;
 
   return {
     size: target.generationPolicy?.size?.trim() || target.acceptance?.size || "1024x1024",
@@ -946,7 +946,7 @@ function toNormalizedGenerationPolicy(target: ManifestTarget): NormalizedGenerat
     background: target.generationPolicy?.background?.trim() || "opaque",
     outputFormat,
     candidates,
-    maxRetries,
+    ...(typeof maxRetries === "number" ? { maxRetries } : {}),
     fallbackProviders: target.generationPolicy?.fallbackProviders ?? [],
     providerConcurrency: target.generationPolicy?.providerConcurrency,
     rateLimitPerMinute: target.generationPolicy?.rateLimitPerMinute,

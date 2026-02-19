@@ -565,4 +565,116 @@ describe("generate pipeline safety", () => {
     const selectedScore = result.jobs[0]!.candidateScores?.find((entry) => entry.selected);
     expect(selectedScore?.outputPath.endsWith(".candidate-2.png")).toBe(true);
   });
+
+  test("fails fast when selected provider does not support edit-first generation", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "lootforge-generate-edit-capability-"));
+    const outDir = path.join(root, "out");
+    const indexPath = path.join(outDir, "jobs", "targets-index.json");
+    await mkdir(path.dirname(indexPath), { recursive: true });
+
+    const target: PlannedTarget = {
+      id: "hero-edit",
+      out: "hero-edit.png",
+      generationMode: "edit-first",
+      edit: {
+        inputs: [{ path: "inputs/base.png", role: "base" }],
+      },
+      promptSpec: { primary: "hero edit" },
+      generationPolicy: {
+        outputFormat: "png",
+        background: "transparent",
+      },
+    };
+
+    await writeFile(
+      indexPath,
+      `${JSON.stringify({ targets: [target] }, null, 2)}\n`,
+      "utf8",
+    );
+
+    let nanoRunCalls = 0;
+    const unsupportedNanoProvider: GenerationProvider = {
+      name: "nano",
+      capabilities: {
+        ...PROVIDER_CAPABILITIES.nano,
+        supportsEdits: false,
+      },
+      prepareJobs(targets, ctx) {
+        return targets.map((entry) =>
+          createProviderJob({
+            provider: "nano",
+            target: entry,
+            model: "gemini-2.5-flash-image",
+            imagesDir: ctx.imagesDir,
+          }),
+        );
+      },
+      async runJob(job) {
+        nanoRunCalls += 1;
+        await mkdir(path.dirname(job.outPath), { recursive: true });
+        await writeFile(job.outPath, TINY_PNG);
+        return {
+          jobId: job.id,
+          provider: "nano",
+          model: job.model,
+          targetId: job.targetId,
+          outputPath: job.outPath,
+          bytesWritten: TINY_PNG.byteLength,
+          inputHash: job.inputHash,
+          startedAt: new Date().toISOString(),
+          finishedAt: new Date().toISOString(),
+        };
+      },
+      supports(feature) {
+        if (feature === "image-edits") {
+          return false;
+        }
+        return true;
+      },
+      normalizeError(error) {
+        if (error instanceof ProviderError) {
+          return error;
+        }
+        return new ProviderError({
+          provider: "nano",
+          code: "nano_stub_error",
+          message: error instanceof Error ? error.message : String(error),
+        });
+      },
+    };
+
+    const fallbackProvider = createTestProvider({
+      name: "openai",
+      runJob: async (job) => {
+        await mkdir(path.dirname(job.outPath), { recursive: true });
+        await writeFile(job.outPath, TINY_PNG);
+        return {
+          jobId: job.id,
+          provider: "openai",
+          model: job.model,
+          targetId: job.targetId,
+          outputPath: job.outPath,
+          bytesWritten: TINY_PNG.byteLength,
+          inputHash: job.inputHash,
+          startedAt: new Date().toISOString(),
+          finishedAt: new Date().toISOString(),
+        };
+      },
+    });
+
+    await expect(
+      runGeneratePipeline({
+        outDir,
+        provider: "nano",
+        skipLocked: false,
+        registry: {
+          openai: fallbackProvider,
+          nano: unsupportedNanoProvider,
+          local: fallbackProvider,
+        },
+      }),
+    ).rejects.toThrow(/does not support edit-first generation/i);
+
+    expect(nanoRunCalls).toBe(0);
+  });
 });

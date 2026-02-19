@@ -2,6 +2,23 @@
 
 This workflow keeps release docs, changelog entries, and showcase images consistent.
 
+## Branch Strategy (`0.3.0`)
+
+Use a release-train branch model so `main` stays stable until release cut:
+- `main` is release-only (no feature merges while `0.3.0` is in flight).
+- `release/0.3` is the integration branch for all `0.3.0` work.
+- Feature branches are short-lived and branch from `release/0.3`.
+- PR targets should be `release/0.3` until release readiness.
+
+Cut `0.3.0` with:
+1. Freeze `release/0.3` and ensure release checks pass.
+2. Open a release PR from `release/0.3` to `main`.
+3. Merge the release PR and tag `v0.3.0` from `main`.
+
+Recommended branch protection:
+- `main`: block direct pushes, require PR + required checks.
+- `release/0.3`: block direct pushes, require PR + required checks.
+
 ## Codename Policy
 
 Codenames are docs-only labels. Semver remains authoritative for npm/git releases.

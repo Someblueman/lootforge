@@ -5,7 +5,10 @@
 - Prioritize deterministic outputs, reproducible runs, and measurable quality gates.
 
 ## Workflow
-- Work from short-lived feature branches off `main`.
+- Treat `main` as release-only while `0.3.0` is in progress.
+- Integrate ongoing work in `release/0.3` (branched from `main` at `v0.2.0`).
+- Work from short-lived feature branches off `release/0.3` and open PRs back to `release/0.3`.
+- When `0.3.0` is ready, open a single release PR from `release/0.3` to `main`, then tag `v0.3.0`.
 - Prefer small, reviewable commits with passing checks.
 - Keep pipeline contracts stable unless a migration/update is included.
 

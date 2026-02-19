@@ -273,6 +273,12 @@ async function processSingleTarget(params: {
       effort: 8,
     })
     .toBuffer();
+  const decodedMain = await sharp(encodedMain, { failOn: "none" })
+    .ensureAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  const mainRaw = decodedMain.data;
+  const mainRawInfo = decodedMain.info;
 
   await mkdir(path.dirname(params.processedImagePath), { recursive: true });
   await writeFile(params.processedImagePath, encodedMain);
@@ -288,7 +294,7 @@ async function processSingleTarget(params: {
     const variantPath = withVariantSuffix(params.processedImagePath, variant.name);
     const variantLegacyPath = withVariantSuffix(params.legacyImagePath, variant.name);
 
-    const variantBuffer = await sharp(encodedMain)
+    const variantBuffer = await sharp(mainRaw, { raw: mainRawInfo })
       .resize(variant.width, variant.height, {
         fit: "contain",
         background:
@@ -316,7 +322,7 @@ async function processSingleTarget(params: {
     const normalPath = withVariantSuffix(params.processedImagePath, "normal");
     const normalLegacyPath = withVariantSuffix(params.legacyImagePath, "normal");
 
-    const normalBuffer = await sharp(encodedMain)
+    const normalBuffer = await sharp(mainRaw, { raw: mainRawInfo })
       .greyscale()
       .convolve({
         width: 3,
@@ -335,7 +341,10 @@ async function processSingleTarget(params: {
   if (params.target.auxiliaryMaps?.specularFromLuma) {
     const specularPath = withVariantSuffix(params.processedImagePath, "specular");
     const specularLegacyPath = withVariantSuffix(params.legacyImagePath, "specular");
-    const specularBuffer = await sharp(encodedMain).greyscale().png().toBuffer();
+    const specularBuffer = await sharp(mainRaw, { raw: mainRawInfo })
+      .greyscale()
+      .png()
+      .toBuffer();
     await writeFile(specularPath, specularBuffer);
     if (params.mirrorLegacy) {
       await writeFile(specularLegacyPath, specularBuffer);
@@ -345,7 +354,7 @@ async function processSingleTarget(params: {
   if (params.target.auxiliaryMaps?.aoFromLuma) {
     const aoPath = withVariantSuffix(params.processedImagePath, "ao");
     const aoLegacyPath = withVariantSuffix(params.legacyImagePath, "ao");
-    const aoBuffer = await sharp(encodedMain)
+    const aoBuffer = await sharp(mainRaw, { raw: mainRawInfo })
       .greyscale()
       .linear(0.8, 10)
       .png()

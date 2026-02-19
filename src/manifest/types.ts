@@ -66,6 +66,9 @@ export interface ManifestEvaluationProfile {
     seamThreshold?: number;
     seamStripPx?: number;
     paletteComplianceMin?: number;
+    alphaHaloRiskMax?: number;
+    alphaStrayNoiseMax?: number;
+    alphaEdgeSharpnessMin?: number;
   };
   scoreWeights?: {
     readability?: number;

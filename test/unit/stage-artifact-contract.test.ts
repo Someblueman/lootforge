@@ -106,6 +106,46 @@ describe("stage artifact contracts", () => {
     expect(result.targets[0]?.candidateVlmGrades).toHaveLength(2);
   });
 
+  it("accepts acceptance-report boundary quality metrics", () => {
+    const result = validateStageArtifact(
+      "acceptance-report",
+      {
+        generatedAt: "2026-02-19T00:00:00.000Z",
+        imagesDir: "/tmp/out/assets/imagegen/processed/images",
+        strict: true,
+        total: 1,
+        passed: 1,
+        failed: 0,
+        errors: 0,
+        warnings: 0,
+        items: [
+          {
+            targetId: "hero",
+            out: "hero.png",
+            imagePath: "/tmp/out/assets/imagegen/processed/images/hero.png",
+            exists: true,
+            width: 64,
+            height: 64,
+            format: "png",
+            sizeBytes: 5120,
+            hasAlphaChannel: true,
+            hasTransparentPixels: true,
+            metrics: {
+              alphaBoundaryPixels: 220,
+              alphaHaloRisk: 0.02,
+              alphaStrayNoise: 0.001,
+              alphaEdgeSharpness: 0.94,
+            },
+            issues: [],
+          },
+        ],
+      },
+      "/tmp/out/checks/image-acceptance-report.json",
+    );
+
+    expect(result.items[0]?.metrics?.alphaHaloRisk).toBe(0.02);
+  });
+
   it("reports file/field diagnostics for contract failures", () => {
     expect(() =>
       validateStageArtifact(

@@ -341,6 +341,10 @@ Runs hard/soft quality scoring and writes:
 - `eval-report.json` also includes VLM gate traceability when enabled:
   - `candidateVlm`: selected candidate VLM score/threshold/decision
   - `candidateVlmGrades[]`: per-candidate VLM score, threshold, pass/fail, evaluator mode, and reason
+- `eval-report.json` acceptance metrics include edge-aware alpha boundary signals:
+  - `alphaHaloRisk`
+  - `alphaStrayNoise`
+  - `alphaEdgeSharpness`
 
 Optional CLIP/LPIPS/SSIM adapter execution:
 - Enable adapters with:
@@ -426,6 +430,10 @@ Per target:
 - optional generation/runtime fields (`generationPolicy`, `postProcess`, `runtimeSpec`, `model`, `edit`, `auxiliaryMaps`, `palette`, `tileable`, `seamThreshold`, `seamStripPx`, `seamHeal`, `wrapGrid`)
 - `seamHeal`: optional pass for tileables (`enabled`, `stripPx`, `strength`) applied during process before final encode.
 - `wrapGrid`: optional per-cell tile validation (`columns`, `rows`, optional seam thresholds) enforced in image acceptance.
+- edge-aware boundary gates are configured via `evaluationProfiles[].hardGates`:
+  - `alphaHaloRiskMax` (`0..1`)
+  - `alphaStrayNoiseMax` (`0..1`)
+  - `alphaEdgeSharpnessMin` (`0..1`)
 - `kind: "spritesheet"` targets define `animations` and are expanded/assembled by the pipeline
 
 Minimal example:
@@ -465,7 +473,13 @@ Minimal example:
   "evaluationProfiles": [
     {
       "id": "sprite-quality",
-      "hardGates": { "requireAlpha": true, "maxFileSizeKB": 512 }
+      "hardGates": {
+        "requireAlpha": true,
+        "maxFileSizeKB": 512,
+        "alphaHaloRiskMax": 0.08,
+        "alphaStrayNoiseMax": 0.01,
+        "alphaEdgeSharpnessMin": 0.8
+      }
     }
   ],
   "targets": [

@@ -199,14 +199,15 @@ Completed 2026-02-19 in this release track:
   - add manifest-configurable `generationPolicy.vlmGate` with threshold default `4/5` and optional rubric text,
   - reject below-threshold candidates before final selection and persist per-candidate VLM decisions in provenance,
   - surface VLM score/threshold/reason traceability in eval and review artifacts.
+- Add edge-aware quality scoring and hard-gate coverage:
+  - added alpha-boundary metrics (`alphaHaloRisk`, `alphaStrayNoise`, `alphaEdgeSharpness`) to candidate scoring and eval acceptance output,
+  - enforce configurable hard-gate thresholds from evaluation profiles for halo risk, stray noise, and boundary edge sharpness,
+  - surface boundary-focused rejection reasons in candidate score records and acceptance issue diagnostics.
 
 Remaining queued items:
 - Add optional service mode with stable HTTP generation endpoints and MCP wrapper compatibility (no auth/credit layer in core).
 - Define a canonical generation request contract and mapping layer between service requests and manifest/pipeline targets.
 - Implement Nano/Gemini edit-first parity (where supported) with tests.
-- Add edge-aware quality scoring and hard-gate coverage:
-  - measure alpha-boundary sharpness, halo/bleed risk, and stray-pixel noise on transparent outputs,
-  - surface boundary-focused failure reasons in candidate scoring, eval, and review artifacts.
 - Expand acceptance from single-image checks to pack-level invariants:
   - enforce pack-level runtime/output uniqueness and atlas grouping integrity checks,
   - add spritesheet continuity checks (frame-to-frame silhouette/anchor drift),

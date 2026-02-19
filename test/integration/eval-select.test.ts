@@ -156,6 +156,9 @@ describe("eval + select integration", () => {
         }),
       ]),
     );
+    expect(evalResult.report.targets[0]?.acceptanceMetrics?.alphaHaloRisk).toBeDefined();
+    expect(evalResult.report.targets[0]?.acceptanceMetrics?.alphaStrayNoise).toBeDefined();
+    expect(evalResult.report.targets[0]?.acceptanceMetrics?.alphaEdgeSharpness).toBeDefined();
 
     const selectResult = await runSelectPipeline({
       outDir,

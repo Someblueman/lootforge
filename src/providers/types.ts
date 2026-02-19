@@ -239,6 +239,9 @@ export interface PlannedTarget {
   tileable?: boolean;
   seamThreshold?: number;
   seamStripPx?: number;
+  alphaHaloRiskMax?: number;
+  alphaStrayNoiseMax?: number;
+  alphaEdgeSharpnessMin?: number;
   seamHeal?: SeamHealPolicy;
   wrapGrid?: WrapGridPolicy;
   palette?: PalettePolicy;

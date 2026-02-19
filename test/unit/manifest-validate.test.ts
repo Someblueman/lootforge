@@ -201,6 +201,28 @@ describe("manifest normalization", () => {
     });
   });
 
+  it("applies boundary hard-gate thresholds from evaluation profiles", () => {
+    const manifest: ManifestV2 = {
+      ...BASE_MANIFEST,
+      evaluationProfiles: [
+        {
+          ...BASE_MANIFEST.evaluationProfiles[0],
+          hardGates: {
+            ...BASE_MANIFEST.evaluationProfiles[0].hardGates,
+            alphaHaloRiskMax: 0.05,
+            alphaStrayNoiseMax: 0.01,
+            alphaEdgeSharpnessMin: 0.8,
+          },
+        },
+      ],
+    };
+
+    const artifacts = createPlanArtifacts(manifest, "/tmp/manifest.json");
+    expect(artifacts.targets[0].alphaHaloRiskMax).toBe(0.05);
+    expect(artifacts.targets[0].alphaStrayNoiseMax).toBe(0.01);
+    expect(artifacts.targets[0].alphaEdgeSharpnessMin).toBe(0.8);
+  });
+
   it("reports invalid postProcess resize literals", () => {
     const manifest: ManifestV2 = {
       ...BASE_MANIFEST,

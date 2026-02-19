@@ -29,7 +29,7 @@
   - `referenceImages[]`
 - `evaluationProfiles[]` (required, at least one)
   - `id`
-  - `hardGates?`: `{ requireAlpha?, maxFileSizeKB?, seamThreshold?, seamStripPx?, paletteComplianceMin? }`
+  - `hardGates?`: `{ requireAlpha?, maxFileSizeKB?, seamThreshold?, seamStripPx?, paletteComplianceMin?, alphaHaloRiskMax?, alphaStrayNoiseMax?, alphaEdgeSharpnessMin? }`
   - `scoreWeights?`: `{ readability?, fileSize?, consistency?, clip?, lpips?, ssim? }`
 - `atlas?`: atlas defaults + optional per-group overrides
 - `targets[]` (required)
@@ -71,6 +71,10 @@ Generation + processing:
 - `edit.inputs[].path` must resolve inside the active `--out` root at runtime
 - `generationPolicy.background: "transparent"` requires a provider that supports transparent outputs (unsupported providers now fail validation)
 - `generationPolicy.vlmGate` requires runtime evaluator transport via `LOOTFORGE_VLM_GATE_CMD` or `LOOTFORGE_VLM_GATE_URL`
+- edge-aware hard gates can be configured in `evaluationProfiles[].hardGates`:
+  - `alphaHaloRiskMax` (`0..1`, lower is stricter)
+  - `alphaStrayNoiseMax` (`0..1`, lower is stricter)
+  - `alphaEdgeSharpnessMin` (`0..1`, higher is stricter)
 
 Provider runtime precedence for generate/regenerate:
 - target-level `generationPolicy` overrides provider defaults for retries/concurrency settings
@@ -126,7 +130,10 @@ Planner behavior:
       "id": "sprite-quality",
       "hardGates": {
         "requireAlpha": true,
-        "maxFileSizeKB": 512
+        "maxFileSizeKB": 512,
+        "alphaHaloRiskMax": 0.08,
+        "alphaStrayNoiseMax": 0.01,
+        "alphaEdgeSharpnessMin": 0.8
       }
     }
   ],

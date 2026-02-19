@@ -29,7 +29,7 @@
   - `referenceImages[]`
 - `evaluationProfiles[]` (required, at least one)
   - `id`
-  - `hardGates?`: `{ requireAlpha?, maxFileSizeKB?, seamThreshold?, seamStripPx?, paletteComplianceMin?, alphaHaloRiskMax?, alphaStrayNoiseMax?, alphaEdgeSharpnessMin? }`
+  - `hardGates?`: `{ requireAlpha?, maxFileSizeKB?, seamThreshold?, seamStripPx?, paletteComplianceMin?, alphaHaloRiskMax?, alphaStrayNoiseMax?, alphaEdgeSharpnessMin?, packTextureBudgetMB?, spritesheetSilhouetteDriftMax?, spritesheetAnchorDriftMax? }`
   - `scoreWeights?`: `{ readability?, fileSize?, consistency?, clip?, lpips?, ssim? }`
 - `atlas?`: atlas defaults + optional per-group overrides
 - `targets[]` (required)
@@ -75,6 +75,10 @@ Generation + processing:
   - `alphaHaloRiskMax` (`0..1`, lower is stricter)
   - `alphaStrayNoiseMax` (`0..1`, lower is stricter)
   - `alphaEdgeSharpnessMin` (`0..1`, higher is stricter)
+- pack-level gates can be configured in `evaluationProfiles[].hardGates` and are normalized onto each planned target:
+  - `packTextureBudgetMB` (`>0`, optional profile-level uncompressed texture budget)
+  - `spritesheetSilhouetteDriftMax` (`0..1`, optional max adjacent-frame silhouette drift)
+  - `spritesheetAnchorDriftMax` (`0..1`, optional max adjacent-frame anchor drift)
 
 Provider runtime precedence for generate/regenerate:
 - target-level `generationPolicy` overrides provider defaults for retries/concurrency settings
@@ -94,6 +98,12 @@ Planner behavior:
 
 - expands each animation frame into internal frame targets under `__frames/...`
 - emits a generation-disabled sheet target that process stage assembles
+
+Pack invariants enforced during acceptance/eval:
+- runtime output uniqueness across non-catalog targets (case-insensitive normalized path)
+- spritesheet sheet/frame family and atlas-group integrity checks
+- continuity metrics per animation (`maxSilhouetteDrift`, `maxAnchorDrift`) with optional hard-gate thresholds
+- optional profile texture budget gate using estimated uncompressed bytes (`width * height * 4`)
 
 ## Example (minimal sprite)
 
@@ -133,7 +143,10 @@ Planner behavior:
         "maxFileSizeKB": 512,
         "alphaHaloRiskMax": 0.08,
         "alphaStrayNoiseMax": 0.01,
-        "alphaEdgeSharpnessMin": 0.8
+        "alphaEdgeSharpnessMin": 0.8,
+        "packTextureBudgetMB": 48,
+        "spritesheetSilhouetteDriftMax": 0.2,
+        "spritesheetAnchorDriftMax": 0.15
       }
     }
   ],

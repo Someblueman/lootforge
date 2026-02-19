@@ -4,6 +4,8 @@ import path from "node:path";
 import sharp from "sharp";
 
 import { computeBoundaryQualityMetrics } from "./boundaryMetrics.js";
+import { runPackInvariantChecks } from "./packInvariants.js";
+import type { PackInvariantSummary } from "./packInvariants.js";
 import type { PlannedTarget } from "../providers/types.js";
 import { normalizeOutputFormatAlias } from "../providers/types.js";
 import { normalizeTargetOutPath, resolvePathWithinDir } from "../shared/paths.js";
@@ -59,6 +61,7 @@ export interface ImageAcceptanceReport {
   errors: number;
   warnings: number;
   items: ImageAcceptanceItemReport[];
+  packInvariants?: PackInvariantSummary;
 }
 
 interface InspectedImage {
@@ -594,11 +597,32 @@ export async function runImageAcceptanceChecks(params: {
   strict?: boolean;
 }): Promise<ImageAcceptanceReport> {
   const strict = params.strict ?? true;
+  const runtimeTargets = params.targets.filter((target) => !target.catalogDisabled);
   const items = await Promise.all(
-    params.targets
-      .filter((target) => !target.catalogDisabled)
-      .map((target) => evaluateImageAcceptance(target, params.imagesDir)),
+    runtimeTargets.map((target) => evaluateImageAcceptance(target, params.imagesDir)),
   );
+
+  const packInvariantResult = await runPackInvariantChecks({
+    targets: params.targets,
+    items,
+    imagesDir: params.imagesDir,
+  });
+
+  const itemByTargetId = new Map(items.map((item) => [item.targetId, item]));
+  for (const targetIssue of packInvariantResult.targetIssues) {
+    const item = itemByTargetId.get(targetIssue.targetId);
+    if (!item) {
+      continue;
+    }
+
+    item.issues.push({
+      level: targetIssue.level,
+      code: targetIssue.code,
+      targetId: targetIssue.targetId,
+      imagePath: item.imagePath,
+      message: targetIssue.message,
+    });
+  }
 
   const errors = items.reduce(
     (count, item) => count + item.issues.filter((issue) => issue.level === "error").length,
@@ -622,6 +646,7 @@ export async function runImageAcceptanceChecks(params: {
     errors,
     warnings,
     items,
+    ...(packInvariantResult.summary ? { packInvariants: packInvariantResult.summary } : {}),
   };
 }
 

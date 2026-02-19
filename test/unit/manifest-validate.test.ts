@@ -212,6 +212,9 @@ describe("manifest normalization", () => {
             alphaHaloRiskMax: 0.05,
             alphaStrayNoiseMax: 0.01,
             alphaEdgeSharpnessMin: 0.8,
+            packTextureBudgetMB: 32,
+            spritesheetSilhouetteDriftMax: 0.2,
+            spritesheetAnchorDriftMax: 0.15,
           },
         },
       ],
@@ -221,6 +224,42 @@ describe("manifest normalization", () => {
     expect(artifacts.targets[0].alphaHaloRiskMax).toBe(0.05);
     expect(artifacts.targets[0].alphaStrayNoiseMax).toBe(0.01);
     expect(artifacts.targets[0].alphaEdgeSharpnessMin).toBe(0.8);
+    expect(artifacts.targets[0].packTextureBudgetMB).toBe(32);
+    expect(artifacts.targets[0].spritesheetSilhouetteDriftMax).toBe(0.2);
+    expect(artifacts.targets[0].spritesheetAnchorDriftMax).toBe(0.15);
+  });
+
+  it("rejects invalid pack-level hard-gate values", () => {
+    const manifest: ManifestV2 = {
+      ...BASE_MANIFEST,
+      evaluationProfiles: [
+        {
+          ...BASE_MANIFEST.evaluationProfiles[0],
+          hardGates: {
+            ...BASE_MANIFEST.evaluationProfiles[0].hardGates,
+            packTextureBudgetMB: -1,
+            spritesheetSilhouetteDriftMax: 1.2,
+            spritesheetAnchorDriftMax: -0.1,
+          },
+        },
+      ],
+    };
+
+    const validation = validateManifestSource({
+      manifestPath: "/tmp/manifest.json",
+      raw: JSON.stringify(manifest),
+      data: manifest,
+    });
+
+    expect(validation.report.errors).toBeGreaterThan(0);
+    expect(
+      validation.report.issues.some(
+        (issue) =>
+          issue.path === "evaluationProfiles[0].hardGates.packTextureBudgetMB" ||
+          issue.path === "evaluationProfiles[0].hardGates.spritesheetSilhouetteDriftMax" ||
+          issue.path === "evaluationProfiles[0].hardGates.spritesheetAnchorDriftMax",
+      ),
+    ).toBe(true);
   });
 
   it("reports invalid postProcess resize literals", () => {

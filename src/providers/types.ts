@@ -242,6 +242,9 @@ export interface PlannedTarget {
   alphaHaloRiskMax?: number;
   alphaStrayNoiseMax?: number;
   alphaEdgeSharpnessMin?: number;
+  packTextureBudgetMB?: number;
+  spritesheetSilhouetteDriftMax?: number;
+  spritesheetAnchorDriftMax?: number;
   seamHeal?: SeamHealPolicy;
   wrapGrid?: WrapGridPolicy;
   palette?: PalettePolicy;

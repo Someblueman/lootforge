@@ -146,6 +146,122 @@ describe("stage artifact contracts", () => {
     expect(result.items[0]?.metrics?.alphaHaloRisk).toBe(0.02);
   });
 
+  it("accepts optional pack invariant summaries in acceptance/eval reports", () => {
+    const acceptance = validateStageArtifact(
+      "acceptance-report",
+      {
+        generatedAt: "2026-02-19T00:00:00.000Z",
+        imagesDir: "/tmp/out/assets/imagegen/processed/images",
+        strict: true,
+        total: 1,
+        passed: 0,
+        failed: 1,
+        errors: 1,
+        warnings: 0,
+        packInvariants: {
+          errors: 1,
+          warnings: 0,
+          issues: [
+            {
+              level: "error",
+              code: "pack_duplicate_runtime_out",
+              message: "Runtime output collision.",
+              targetIds: ["hero", "hero-alt"],
+            },
+          ],
+          metrics: {
+            textureBudgetMBByProfile: {
+              "sprite-quality": {
+                estimatedMB: 10.2,
+                budgetMB: 8,
+                targetCount: 2,
+              },
+            },
+          },
+        },
+        items: [
+          {
+            targetId: "hero",
+            out: "hero.png",
+            imagePath: "/tmp/out/assets/imagegen/processed/images/hero.png",
+            exists: true,
+            issues: [
+              {
+                level: "error",
+                code: "pack_duplicate_runtime_out",
+                targetId: "hero",
+                imagePath: "/tmp/out/assets/imagegen/processed/images/hero.png",
+                message: "Runtime output collision.",
+              },
+            ],
+          },
+        ],
+      },
+      "/tmp/out/checks/image-acceptance-report.json",
+    );
+
+    const evalReport = validateStageArtifact(
+      "eval-report",
+      {
+        generatedAt: "2026-02-19T00:00:00.000Z",
+        strict: false,
+        imagesDir: "/tmp/out/assets/imagegen/processed/images",
+        targetCount: 1,
+        passed: 0,
+        failed: 1,
+        hardErrors: 1,
+        adaptersUsed: [],
+        adapterHealth: {
+          configured: [],
+          active: [],
+          failed: [],
+          adapters: [],
+        },
+        adapterWarnings: [],
+        packInvariants: {
+          errors: 1,
+          warnings: 0,
+          issues: [
+            {
+              level: "error",
+              code: "pack_texture_budget_exceeded",
+              message: "Profile exceeds configured texture budget.",
+              targetIds: ["hero"],
+              evaluationProfileId: "sprite-quality",
+              metrics: {
+                estimatedMB: 10.2,
+                budgetMB: 8,
+              },
+            },
+          ],
+          metrics: {
+            spritesheetContinuityByAnimation: {
+              "hero.sheet:walk": {
+                comparisons: 3,
+                maxSilhouetteDrift: 0.12,
+                maxAnchorDrift: 0.08,
+              },
+            },
+          },
+        },
+        targets: [
+          {
+            targetId: "hero",
+            out: "hero.png",
+            passedHardGates: false,
+            hardGateErrors: ["pack_texture_budget_exceeded: exceeded budget"],
+            hardGateWarnings: [],
+            finalScore: -958,
+          },
+        ],
+      },
+      "/tmp/out/checks/eval-report.json",
+    );
+
+    expect(acceptance.packInvariants?.issues[0]?.code).toBe("pack_duplicate_runtime_out");
+    expect(evalReport.packInvariants?.issues[0]?.code).toBe("pack_texture_budget_exceeded");
+  });
+
   it("reports file/field diagnostics for contract failures", () => {
     expect(() =>
       validateStageArtifact(

@@ -273,6 +273,9 @@ export const ManifestEvaluationProfileSchema = z.object({
       alphaHaloRiskMax: z.number().min(0).max(1).optional(),
       alphaStrayNoiseMax: z.number().min(0).max(1).optional(),
       alphaEdgeSharpnessMin: z.number().min(0).max(1).optional(),
+      packTextureBudgetMB: z.number().positive().optional(),
+      spritesheetSilhouetteDriftMax: z.number().min(0).max(1).optional(),
+      spritesheetAnchorDriftMax: z.number().min(0).max(1).optional(),
     })
     .optional(),
   scoreWeights: z

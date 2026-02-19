@@ -5,6 +5,36 @@ import { resolveStagePathLayout } from "../shared/paths.js";
 
 interface EvalReportShape {
   generatedAt?: string;
+  packInvariants?: {
+    errors: number;
+    warnings: number;
+    issues: Array<{
+      level: "error" | "warning";
+      code: string;
+      message: string;
+      targetIds: string[];
+      evaluationProfileId?: string;
+      metrics?: Record<string, number>;
+    }>;
+    metrics?: {
+      textureBudgetMBByProfile?: Record<
+        string,
+        {
+          estimatedMB: number;
+          budgetMB?: number;
+          targetCount: number;
+        }
+      >;
+      spritesheetContinuityByAnimation?: Record<
+        string,
+        {
+          comparisons: number;
+          maxSilhouetteDrift: number;
+          maxAnchorDrift: number;
+        }
+      >;
+    };
+  };
   targets?: Array<{
     targetId: string;
     out: string;
@@ -69,6 +99,7 @@ export async function runReviewPipeline(
 
   const html = renderReviewHtml({
     generatedAt: report.generatedAt ?? new Date().toISOString(),
+    packInvariants: report.packInvariants,
     targets,
   });
 
@@ -87,6 +118,7 @@ export async function runReviewPipeline(
 
 function renderReviewHtml(params: {
   generatedAt: string;
+  packInvariants?: EvalReportShape["packInvariants"];
   targets: Array<{
     targetId: string;
     out: string;
@@ -140,6 +172,7 @@ function renderReviewHtml(params: {
 </tr>`;
     })
     .join("\n");
+  const packInvariantSection = renderPackInvariantSummary(params.packInvariants);
 
   return `<!doctype html>
 <html lang="en">
@@ -256,12 +289,30 @@ function renderReviewHtml(params: {
       color: #6b7785;
       font-size: 12px;
     }
+    .pack-invariants {
+      background: #fff5f0;
+      border: 1px solid #f2c9ba;
+      border-radius: 12px;
+      padding: 14px 16px;
+      margin-bottom: 16px;
+      color: #3c2b24;
+    }
+    .pack-invariants h2 {
+      margin: 0 0 8px;
+      font-size: 17px;
+    }
+    .pack-invariants p {
+      margin: 0 0 8px;
+      font-size: 12px;
+      color: #6d4e44;
+    }
   </style>
 </head>
 <body>
   <main>
     <h1>LootForge Evaluation Review</h1>
     <p class="meta">Generated at ${escapeHtml(params.generatedAt)} · Targets: ${params.targets.length}</p>
+    ${packInvariantSection}
     <div class="table-wrap">
       <table>
         <thead>
@@ -284,6 +335,69 @@ function renderReviewHtml(params: {
   </main>
 </body>
 </html>`;
+}
+
+function renderPackInvariantSummary(
+  packInvariants: EvalReportShape["packInvariants"],
+): string {
+  if (!packInvariants) {
+    return "";
+  }
+
+  const issueRows = packInvariants.issues
+    .map((issue) => {
+      const scope = issue.evaluationProfileId
+        ? `profile=${issue.evaluationProfileId}`
+        : "profile=all";
+      const targets = issue.targetIds.join(", ");
+      const metrics =
+        issue.metrics && Object.keys(issue.metrics).length > 0
+          ? ` metrics=${JSON.stringify(issue.metrics)}`
+          : "";
+      return `${issue.level.toUpperCase()} ${issue.code}: ${issue.message} (${scope}; targets=${targets})${metrics}`;
+    });
+
+  const metricsRows: string[] = [];
+  const budget = packInvariants.metrics?.textureBudgetMBByProfile;
+  if (budget) {
+    for (const [profileId, values] of Object.entries(budget).sort((a, b) =>
+      a[0].localeCompare(b[0]),
+    )) {
+      metricsRows.push(
+        `Texture budget ${profileId}: estimated=${values.estimatedMB.toFixed(3)}MB${
+          typeof values.budgetMB === "number"
+            ? ` budget=${values.budgetMB.toFixed(3)}MB`
+            : ""
+        } targets=${values.targetCount}`,
+      );
+    }
+  }
+
+  const continuity = packInvariants.metrics?.spritesheetContinuityByAnimation;
+  if (continuity) {
+    for (const [animationKey, values] of Object.entries(continuity).sort((a, b) =>
+      a[0].localeCompare(b[0]),
+    )) {
+      metricsRows.push(
+        `Continuity ${animationKey}: comparisons=${values.comparisons} silhouette=${values.maxSilhouetteDrift.toFixed(
+          4,
+        )} anchor=${values.maxAnchorDrift.toFixed(4)}`,
+      );
+    }
+  }
+
+  return `<section class=\"pack-invariants\">
+  <h2>Pack Invariants</h2>
+  <p>Errors: ${packInvariants.errors} · Warnings: ${packInvariants.warnings} · Issues: ${
+    packInvariants.issues.length
+  }</p>
+  ${renderList(issueRows)}
+  ${renderDetailsBlock(
+    "Pack metrics",
+    renderList(metricsRows),
+    metricsRows.length,
+  )}
+</section>`;
 }
 
 function renderScoreDetails(target: {

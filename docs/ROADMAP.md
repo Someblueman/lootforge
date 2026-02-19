@@ -1,6 +1,6 @@
 # LootForge Public Release Roadmap
 
-Last updated: 2026-02-18
+Last updated: 2026-02-19
 
 ## Goal
 Move LootForge from a strong early foundation (`0.1.x`) to a dependable, public-facing release with:
@@ -203,15 +203,15 @@ Completed 2026-02-19 in this release track:
   - added alpha-boundary metrics (`alphaHaloRisk`, `alphaStrayNoise`, `alphaEdgeSharpness`) to candidate scoring and eval acceptance output,
   - enforce configurable hard-gate thresholds from evaluation profiles for halo risk, stray noise, and boundary edge sharpness,
   - surface boundary-focused rejection reasons in candidate score records and acceptance issue diagnostics.
+- Expand acceptance from single-image checks to pack-level invariants:
+  - enforce runtime/output uniqueness across non-catalog targets and spritesheet atlas-family integrity checks,
+  - add spritesheet continuity checks (adjacent-frame silhouette/anchor drift metrics + optional hard-gate thresholds),
+  - add optional profile texture-memory budget gates and propagate pack-level summary into acceptance/eval/review artifacts.
 
 Remaining queued items:
 - Add optional service mode with stable HTTP generation endpoints and MCP wrapper compatibility (no auth/credit layer in core).
 - Define a canonical generation request contract and mapping layer between service requests and manifest/pipeline targets.
 - Implement Nano/Gemini edit-first parity (where supported) with tests.
-- Expand acceptance from single-image checks to pack-level invariants:
-  - enforce pack-level runtime/output uniqueness and atlas grouping integrity checks,
-  - add spritesheet continuity checks (frame-to-frame silhouette/anchor drift),
-  - add optional texture-memory budget gates for pack outputs.
 - Add manifest schema scaffolding for directed synthesis controls:
   - `targets[].controlImage`, `targets[].controlMode` (`canny|depth|openpose`),
   - `styleKits[].styleReferenceImages`, `styleKits[].loraPath`, `styleKits[].loraStrength`,
@@ -230,6 +230,20 @@ Remaining queued items:
 - Add consistency-group drift/outlier scoring using CLIP/LPIPS signals.
 - Introduce per-kind scoring presets and manifest-level scoring profile overrides.
 - Add aggregate group-level review/eval warnings and ranking influence controls.
+
+#### 2D Investigation Follow-ups (Visual QA + Policy)
+- Add machine-checkable visual style-bible policy contracts:
+  - extend style constraints beyond palette (line weight, shading rules, UI geometry constraints),
+  - enforce policy compliance in validate/eval with explicit per-target diagnostics.
+- Add sprite identity + pose adherence QA modules:
+  - add frame-to-frame identity drift scoring for animation families,
+  - add optional pose-target checks and rejection reasons for frame candidates.
+- Expand tile QA from seam-only checks to topology constraints:
+  - validate self/one-to-one/many-to-many adjacency compatibility from explicit tile rules,
+  - report topology violations separately from texture seam metrics for map assembly reliability.
+- Add layered export + matting-assisted alpha QA pipeline:
+  - add first-class layered artifacts for sprite/UI/VFX workflows with deterministic export contracts,
+  - add matting-derived transparency QA checks (halo/fringe/mask consistency) in eval/review diagnostics.
 
 ## Future (After Upcoming)
 These are high-impact but should follow once `0.2.0` and `0.3.0` stabilize.
@@ -262,6 +276,19 @@ These are high-impact but should follow once `0.2.0` and `0.3.0` stabilize.
   - pin workflow action revisions and emit SBOM + build provenance artifacts,
   - add policy checks for insecure soft-adapter execution configuration.
 - Expand runtime export presets and metadata for Unity/Godot integration.
+
+#### 2D Investigation Follow-ups (Runtime/Export)
+- Add first-class autotile runtime contract exports:
+  - emit 4-neighbor bitmask metadata (`4 bits -> 16-entry LUT`) for deterministic tile-index selection,
+  - support tileset variant blocks (e.g., separate `4x4` banks for water-edge vs cliff-edge families) with runtime selection hints.
+  - define canonical neighbor bit ordering, map-boundary behavior, and deterministic variant-picking rules so runtime implementations stay consistent across engines.
+- Add vector/layered asset interoperability gates:
+  - add first-class SVG target support (generation, validation, review, and package/export stages),
+  - validate SVG structure/layer hygiene before packaging and publish deterministic export conventions,
+  - define layered-artifact contracts for downstream toolchains that expect editable layered inputs.
+- Add asset-license provenance release gates:
+  - require machine-readable provenance metadata for visual datasets, reference assets, and model families used per target,
+  - fail packaging/release checks when license status is unresolved or violates configured policy.
 - Add atlas-capacity planning and multipack spillover safeguards:
   - compute safe atlas frame capacity with padding/extrusion/mip constraints before pack build,
   - warn/fail on atlas overcommit and auto-spill frames to additional atlas pages when enabled.

@@ -54,6 +54,44 @@ async function writeWrapGridSample(
   await sharp(raw, { raw: { width, height, channels } }).png().toFile(filePath);
 }
 
+async function writeBoundaryArtifactSample(filePath: string): Promise<void> {
+  const width = 64;
+  const height = 64;
+  const channels = 4;
+  const raw = Buffer.alloc(width * height * channels, 0);
+
+  for (let y = 16; y <= 47; y += 1) {
+    for (let x = 16; x <= 47; x += 1) {
+      const index = (y * width + x) * channels;
+      raw[index] = 220;
+      raw[index + 1] = 30;
+      raw[index + 2] = 30;
+      raw[index + 3] = 255;
+    }
+  }
+
+  for (let y = 15; y <= 48; y += 1) {
+    for (let x = 15; x <= 48; x += 1) {
+      if (x !== 15 && x !== 48 && y !== 15 && y !== 48) {
+        continue;
+      }
+      const index = (y * width + x) * channels;
+      raw[index] = 255;
+      raw[index + 1] = 255;
+      raw[index + 2] = 255;
+      raw[index + 3] = 120;
+    }
+  }
+
+  const strayIndex = (4 * width + 4) * channels;
+  raw[strayIndex] = 255;
+  raw[strayIndex + 1] = 255;
+  raw[strayIndex + 2] = 255;
+  raw[strayIndex + 3] = 255;
+
+  await sharp(raw, { raw: { width, height, channels } }).png().toFile(filePath);
+}
+
 describe("image acceptance", () => {
   it("passes a valid transparent png", async () => {
     const tempDir = await mkdtemp(path.join(os.tmpdir(), "lootforge-acceptance-pass-"));
@@ -170,5 +208,31 @@ describe("image acceptance", () => {
     );
 
     expect(item.issues.some((issue) => issue.code === "wrap_grid_size_mismatch")).toBe(true);
+  });
+
+  it("reports boundary artifact metrics and hard-gate violations", async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "lootforge-boundary-metrics-"));
+    await mkdir(tempDir, { recursive: true });
+    const imagePath = path.join(tempDir, "hero.png");
+    await writeBoundaryArtifactSample(imagePath);
+
+    const item = await evaluateImageAcceptance(
+      makeTarget({
+        alphaHaloRiskMax: 0.02,
+        alphaStrayNoiseMax: 0,
+        alphaEdgeSharpnessMin: 0.9,
+      }),
+      tempDir,
+    );
+
+    expect(item.metrics?.alphaBoundaryPixels).toBeGreaterThan(0);
+    expect(item.metrics?.alphaHaloRisk).toBeGreaterThan(0);
+    expect(item.metrics?.alphaStrayNoise).toBeGreaterThan(0);
+    expect(item.metrics?.alphaEdgeSharpness).toBeLessThan(1);
+    expect(item.issues.some((issue) => issue.code === "alpha_halo_risk_exceeded")).toBe(true);
+    expect(item.issues.some((issue) => issue.code === "alpha_stray_noise_exceeded")).toBe(true);
+    expect(item.issues.some((issue) => issue.code === "alpha_edge_sharpness_too_low")).toBe(
+      true,
+    );
   });
 });

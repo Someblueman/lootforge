@@ -137,6 +137,9 @@ const plannedTargetSchema = z.object({
   tileable: z.boolean().optional(),
   seamThreshold: z.number().optional(),
   seamStripPx: z.number().int().positive().optional(),
+  alphaHaloRiskMax: z.number().min(0).max(1).optional(),
+  alphaStrayNoiseMax: z.number().min(0).max(1).optional(),
+  alphaEdgeSharpnessMin: z.number().min(0).max(1).optional(),
   seamHeal: z
     .object({
       enabled: z.boolean().optional(),
@@ -330,6 +333,10 @@ const stageArtifactSchemas = {
             wrapGridSeamStripPx: z.number().optional(),
             paletteCompliance: z.number().optional(),
             distinctColors: z.number().optional(),
+            alphaBoundaryPixels: z.number().optional(),
+            alphaHaloRisk: z.number().optional(),
+            alphaStrayNoise: z.number().optional(),
+            alphaEdgeSharpness: z.number().optional(),
           })
           .optional(),
         issues: z.array(

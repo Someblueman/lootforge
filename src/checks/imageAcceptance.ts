@@ -3,6 +3,7 @@ import path from "node:path";
 
 import sharp from "sharp";
 
+import { computeBoundaryQualityMetrics } from "./boundaryMetrics.js";
 import type { PlannedTarget } from "../providers/types.js";
 import { normalizeOutputFormatAlias } from "../providers/types.js";
 import { normalizeTargetOutPath, resolvePathWithinDir } from "../shared/paths.js";
@@ -27,6 +28,10 @@ export interface ImageAcceptanceMetrics {
   wrapGridSeamStripPx?: number;
   paletteCompliance?: number;
   distinctColors?: number;
+  alphaBoundaryPixels?: number;
+  alphaHaloRisk?: number;
+  alphaStrayNoise?: number;
+  alphaEdgeSharpness?: number;
 }
 
 export interface ImageAcceptanceItemReport {
@@ -422,6 +427,61 @@ export async function evaluateImageAcceptance(
         targetId: target.id,
         imagePath,
         message: `File size ${(inspected.sizeBytes / 1024).toFixed(1)}KB exceeds max ${maxFileSizeKB}KB.`,
+      });
+    }
+  }
+
+  const boundaryMetrics =
+    inspected.hasAlphaChannel && inspected.hasTransparentPixels
+      ? computeBoundaryQualityMetrics({
+          raw: inspected.raw,
+          channels: inspected.channels,
+          width: inspected.width,
+          height: inspected.height,
+        })
+      : undefined;
+  if (boundaryMetrics) {
+    report.metrics = {
+      ...report.metrics,
+      alphaBoundaryPixels: boundaryMetrics.edgePixelCount,
+      alphaHaloRisk: boundaryMetrics.haloRisk,
+      alphaStrayNoise: boundaryMetrics.strayNoiseRatio,
+      alphaEdgeSharpness: boundaryMetrics.edgeSharpness,
+    };
+  }
+
+  if (typeof target.alphaHaloRiskMax === "number" && boundaryMetrics) {
+    if (boundaryMetrics.haloRisk > target.alphaHaloRiskMax) {
+      report.issues.push({
+        level: "error",
+        code: "alpha_halo_risk_exceeded",
+        targetId: target.id,
+        imagePath,
+        message: `Alpha halo risk ${boundaryMetrics.haloRisk.toFixed(4)} exceeds threshold ${target.alphaHaloRiskMax.toFixed(4)}.`,
+      });
+    }
+  }
+
+  if (typeof target.alphaStrayNoiseMax === "number" && boundaryMetrics) {
+    if (boundaryMetrics.strayNoiseRatio > target.alphaStrayNoiseMax) {
+      report.issues.push({
+        level: "error",
+        code: "alpha_stray_noise_exceeded",
+        targetId: target.id,
+        imagePath,
+        message: `Alpha stray-noise ratio ${boundaryMetrics.strayNoiseRatio.toFixed(4)} exceeds threshold ${target.alphaStrayNoiseMax.toFixed(4)}.`,
+      });
+    }
+  }
+
+  if (typeof target.alphaEdgeSharpnessMin === "number" && boundaryMetrics) {
+    if (boundaryMetrics.edgeSharpness < target.alphaEdgeSharpnessMin) {
+      report.issues.push({
+        level: "error",
+        code: "alpha_edge_sharpness_too_low",
+        targetId: target.id,
+        imagePath,
+        message: `Alpha edge sharpness ${boundaryMetrics.edgeSharpness.toFixed(4)} is below threshold ${target.alphaEdgeSharpnessMin.toFixed(4)}.`,
       });
     }
   }

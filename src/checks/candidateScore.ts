@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 
 import sharp from "sharp";
 
+import { computeBoundaryQualityMetrics } from "./boundaryMetrics.js";
 import { runEnabledSoftAdapters } from "./softAdapters.js";
 import { runCandidateVlmGate, targetHasVlmGate } from "./vlmGate.js";
 import type { CandidateScoreRecord, PlannedTarget } from "../providers/types.js";
@@ -18,6 +19,10 @@ interface CandidateInspection {
   hasTransparency: boolean;
   edgeStdev: number;
   seamScore?: number;
+  alphaBoundaryPixels?: number;
+  alphaHaloRisk?: number;
+  alphaStrayNoise?: number;
+  alphaEdgeSharpness?: number;
   distinctColors?: number;
   paletteCompliance?: number;
   histogram: number[];
@@ -238,6 +243,14 @@ async function inspectCandidate(target: PlannedTarget, outputPath: string): Prom
   const hasAlpha = metadata.hasAlpha === true;
   const derivedMetrics = analyzeRawCandidate(raw, channels, target);
   const hasTransparency = hasAlpha ? derivedMetrics.hasTransparency : false;
+  const boundaryMetrics = hasTransparency
+    ? computeBoundaryQualityMetrics({
+        raw,
+        channels,
+        width: metadata.width,
+        height: metadata.height,
+      })
+    : undefined;
 
   const seamScore =
     target.tileable || typeof target.seamThreshold === "number"
@@ -252,6 +265,10 @@ async function inspectCandidate(target: PlannedTarget, outputPath: string): Prom
     hasTransparency,
     edgeStdev: derivedMetrics.edgeStdev,
     seamScore,
+    alphaBoundaryPixels: boundaryMetrics?.edgePixelCount,
+    alphaHaloRisk: boundaryMetrics?.haloRisk,
+    alphaStrayNoise: boundaryMetrics?.strayNoiseRatio,
+    alphaEdgeSharpness: boundaryMetrics?.edgeSharpness,
     distinctColors: derivedMetrics.distinctColors,
     paletteCompliance: derivedMetrics.paletteCompliance,
     histogram: derivedMetrics.histogram,
@@ -400,6 +417,49 @@ export async function scoreCandidateImages(
         );
         components.seamReward = reward;
         score += reward;
+      }
+    }
+
+    if (typeof inspection.alphaBoundaryPixels === "number") {
+      metrics.alphaBoundaryPixels = inspection.alphaBoundaryPixels;
+    }
+    if (typeof inspection.alphaHaloRisk === "number") {
+      metrics.alphaHaloRisk = inspection.alphaHaloRisk;
+      if (
+        typeof target.alphaHaloRiskMax === "number" &&
+        inspection.alphaHaloRisk > target.alphaHaloRiskMax
+      ) {
+        passedAcceptance = false;
+        const penalty = 450 + Math.round((inspection.alphaHaloRisk - target.alphaHaloRiskMax) * 1000);
+        components.alphaHaloRiskPenalty = -penalty;
+        score -= penalty;
+        reasons.push("alpha_halo_risk_exceeded");
+      }
+    }
+    if (typeof inspection.alphaStrayNoise === "number") {
+      metrics.alphaStrayNoise = inspection.alphaStrayNoise;
+      if (
+        typeof target.alphaStrayNoiseMax === "number" &&
+        inspection.alphaStrayNoise > target.alphaStrayNoiseMax
+      ) {
+        passedAcceptance = false;
+        const penalty = 350 + Math.round((inspection.alphaStrayNoise - target.alphaStrayNoiseMax) * 1500);
+        components.alphaStrayNoisePenalty = -penalty;
+        score -= penalty;
+        reasons.push("alpha_stray_noise_exceeded");
+      }
+    }
+    if (typeof inspection.alphaEdgeSharpness === "number") {
+      metrics.alphaEdgeSharpness = inspection.alphaEdgeSharpness;
+      if (
+        typeof target.alphaEdgeSharpnessMin === "number" &&
+        inspection.alphaEdgeSharpness < target.alphaEdgeSharpnessMin
+      ) {
+        passedAcceptance = false;
+        const penalty = 450 + Math.round((target.alphaEdgeSharpnessMin - inspection.alphaEdgeSharpness) * 1200);
+        components.alphaEdgeSharpnessPenalty = -penalty;
+        score -= penalty;
+        reasons.push("alpha_edge_sharpness_too_low");
       }
     }
 

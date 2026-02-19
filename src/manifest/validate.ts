@@ -703,6 +703,9 @@ function normalizeTargetForGeneration(params: {
     seamThreshold:
       params.target.seamThreshold ?? params.evalProfile.hardGates?.seamThreshold,
     seamStripPx: params.target.seamStripPx ?? params.evalProfile.hardGates?.seamStripPx,
+    alphaHaloRiskMax: params.evalProfile.hardGates?.alphaHaloRiskMax,
+    alphaStrayNoiseMax: params.evalProfile.hardGates?.alphaStrayNoiseMax,
+    alphaEdgeSharpnessMin: params.evalProfile.hardGates?.alphaEdgeSharpnessMin,
     ...(seamHeal ? { seamHeal } : {}),
     ...(wrapGrid ? { wrapGrid } : {}),
     ...(palette ? { palette } : {}),

@@ -270,6 +270,9 @@ export const ManifestEvaluationProfileSchema = z.object({
       seamThreshold: z.number().min(0).max(255).optional(),
       seamStripPx: z.number().int().min(1).max(64).optional(),
       paletteComplianceMin: z.number().min(0).max(1).optional(),
+      alphaHaloRiskMax: z.number().min(0).max(1).optional(),
+      alphaStrayNoiseMax: z.number().min(0).max(1).optional(),
+      alphaEdgeSharpnessMin: z.number().min(0).max(1).optional(),
     })
     .optional(),
   scoreWeights: z

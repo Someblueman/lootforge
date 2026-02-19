@@ -10,6 +10,7 @@ import {
   type PlannedTarget,
 } from "../../src/providers/types.ts";
 import {
+  createProviderRegistry,
   resolveTargetProviderName,
   resolveTargetProviderRoute,
 } from "../../src/providers/registry.ts";
@@ -172,6 +173,31 @@ describe("providers helpers", () => {
     expect(result.issues.some((issue) => issue.code === "jpg_transparency_normalized")).toBe(
       true,
     );
+  });
+
+  it("returns an error when transparent background is requested on unsupported providers", () => {
+    const result = normalizeGenerationPolicyForProvider("nano", {
+      size: "1024x1024",
+      quality: "high",
+      background: "transparent",
+      outputFormat: "png",
+      candidates: 1,
+      fallbackProviders: [],
+    });
+
+    expect(
+      result.issues.some(
+        (issue) =>
+          issue.level === "error" && issue.code === "transparent_background_unsupported",
+      ),
+    ).toBe(true);
+    expect(result.policy.background).toBe("transparent");
+  });
+
+  it("keeps nano capability claims aligned with runtime feature support", () => {
+    const registry = createProviderRegistry();
+    expect(registry.nano.capabilities.supportsEdits).toBe(false);
+    expect(registry.nano.supports("image-edits")).toBe(false);
   });
 
   it("createProviderJob rejects unsafe target output paths", () => {

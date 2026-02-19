@@ -66,7 +66,7 @@ export const PROVIDER_CAPABILITIES: Record<ProviderName, ProviderCapabilities> =
     defaultOutputFormat: "png",
     supportedOutputFormats: SUPPORTED_FORMATS,
     supportsTransparentBackground: false,
-    supportsEdits: true,
+    supportsEdits: false,
     supportsControlNet: false,
     maxCandidates: 4,
     defaultConcurrency: 2,
@@ -295,7 +295,7 @@ export interface NormalizedGenerationPolicy {
   background: "transparent" | "opaque" | string;
   outputFormat: NormalizedOutputFormat;
   candidates: number;
-  maxRetries: number;
+  maxRetries?: number;
   fallbackProviders: ProviderName[];
   providerConcurrency?: number;
   rateLimitPerMinute?: number;
@@ -519,7 +519,7 @@ export function getTargetGenerationPolicy(target: PlannedTarget): NormalizedGene
   const maxRetriesRaw =
     typeof policy.maxRetries === "number" && Number.isFinite(policy.maxRetries)
       ? Math.round(policy.maxRetries)
-      : DEFAULT_MAX_RETRIES;
+      : undefined;
 
   return {
     size: policy.size?.trim() || DEFAULT_SIZE,
@@ -527,7 +527,7 @@ export function getTargetGenerationPolicy(target: PlannedTarget): NormalizedGene
     background: policy.background?.trim() || DEFAULT_BACKGROUND,
     outputFormat: normalizeOutputFormatAlias(policy.outputFormat || DEFAULT_OUTPUT_FORMAT),
     candidates: Math.max(1, candidatesRaw),
-    maxRetries: Math.max(0, maxRetriesRaw),
+    ...(typeof maxRetriesRaw === "number" ? { maxRetries: Math.max(0, maxRetriesRaw) } : {}),
     fallbackProviders: Array.isArray(policy.fallbackProviders)
       ? policy.fallbackProviders.filter((name): name is ProviderName => isProviderName(name))
       : [],
@@ -584,11 +584,10 @@ export function normalizeGenerationPolicyForProvider(
   }
 
   if (policy.background === "transparent" && !capabilities.supportsTransparentBackground) {
-    policy.background = "opaque";
     issues.push({
-      level: "warning",
-      code: "transparent_background_normalized",
-      message: `${provider} does not guarantee transparent backgrounds; background normalized to opaque.`,
+      level: "error",
+      code: "transparent_background_unsupported",
+      message: `${provider} does not support transparent backgrounds.`,
     });
   }
 
@@ -701,6 +700,9 @@ export interface CreateJobParams {
   target: PlannedTarget;
   model: string;
   imagesDir: string;
+  defaults?: {
+    maxRetries?: number;
+  };
 }
 
 export function createProviderJob(params: CreateJobParams): ProviderJob {
@@ -749,12 +751,31 @@ export function createProviderJob(params: CreateJobParams): ProviderJob {
     background: normalized.policy.background,
     outputFormat: normalized.policy.outputFormat,
     candidateCount: normalized.policy.candidates,
-    maxRetries: normalized.policy.maxRetries,
+    maxRetries: firstNonNegativeInteger(
+      normalized.policy.maxRetries,
+      params.defaults?.maxRetries,
+      DEFAULT_MAX_RETRIES,
+    ),
     fallbackProviders: normalized.policy.fallbackProviders,
     providerConcurrency: normalized.policy.providerConcurrency,
     rateLimitPerMinute: normalized.policy.rateLimitPerMinute,
     target: params.target,
   };
+}
+
+function firstNonNegativeInteger(
+  ...values: Array<number | undefined>
+): number {
+  for (const value of values) {
+    if (typeof value !== "number" || !Number.isFinite(value)) {
+      continue;
+    }
+    const rounded = Math.round(value);
+    if (rounded >= 0) {
+      return rounded;
+    }
+  }
+  return DEFAULT_MAX_RETRIES;
 }
 
 export function nowIso(now?: () => Date): string {

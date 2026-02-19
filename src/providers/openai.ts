@@ -3,6 +3,14 @@ import path from "node:path";
 
 import { resolvePathWithinRoot } from "../shared/paths.js";
 import {
+  DEFAULT_PROVIDER_REQUEST_TIMEOUT_MS,
+  fetchWithTimeout,
+  normalizeNonNegativeInteger,
+  normalizePositiveInteger,
+  ProviderRequestTimeoutError,
+  toOptionalNonNegativeInteger,
+} from "./runtime.js";
+import {
   createProviderJob,
   GenerationProvider,
   nowIso,
@@ -27,20 +35,40 @@ export interface OpenAIProviderOptions {
   model?: string;
   endpoint?: string;
   editsEndpoint?: string;
+  timeoutMs?: number;
+  maxRetries?: number;
+  minDelayMs?: number;
+  defaultConcurrency?: number;
 }
 
 export class OpenAIProvider implements GenerationProvider {
   readonly name = "openai" as const;
-  readonly capabilities: ProviderCapabilities = PROVIDER_CAPABILITIES.openai;
+  readonly capabilities: ProviderCapabilities;
 
   private readonly model: string;
   private readonly endpoint: string;
   private readonly editsEndpoint: string;
+  private readonly timeoutMs: number;
+  private readonly maxRetries?: number;
 
   constructor(options: OpenAIProviderOptions = {}) {
+    const defaults = PROVIDER_CAPABILITIES.openai;
+    this.capabilities = {
+      ...defaults,
+      defaultConcurrency: normalizePositiveInteger(
+        options.defaultConcurrency,
+        defaults.defaultConcurrency,
+      ),
+      minDelayMs: normalizeNonNegativeInteger(options.minDelayMs, defaults.minDelayMs),
+    };
     this.model = options.model ?? DEFAULT_OPENAI_MODEL;
     this.endpoint = options.endpoint ?? OPENAI_IMAGES_ENDPOINT;
     this.editsEndpoint = options.editsEndpoint ?? OPENAI_EDITS_ENDPOINT;
+    this.timeoutMs = normalizePositiveInteger(
+      options.timeoutMs,
+      DEFAULT_PROVIDER_REQUEST_TIMEOUT_MS,
+    );
+    this.maxRetries = toOptionalNonNegativeInteger(options.maxRetries);
   }
 
   prepareJobs(targets: PlannedTarget[], ctx: ProviderPrepareContext): ProviderJob[] {
@@ -50,6 +78,9 @@ export class OpenAIProvider implements GenerationProvider {
         target,
         model: target.model ?? this.model,
         imagesDir: ctx.imagesDir,
+        defaults: {
+          maxRetries: this.maxRetries,
+        },
       }),
     );
   }
@@ -115,7 +146,7 @@ export class OpenAIProvider implements GenerationProvider {
     try {
       const response = this.shouldUseEdits(job)
         ? await this.runEditRequest(job, ctx, fetchImpl, apiKey)
-        : await fetchImpl(this.endpoint, {
+        : await this.requestWithTimeout(fetchImpl, this.endpoint, {
             method: "POST",
             headers: {
               Authorization: `Bearer ${apiKey}`,
@@ -260,7 +291,7 @@ export class OpenAIProvider implements GenerationProvider {
       );
     }
 
-    return fetchImpl(this.editsEndpoint, {
+    return this.requestWithTimeout(fetchImpl, this.editsEndpoint, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
@@ -348,7 +379,7 @@ export class OpenAIProvider implements GenerationProvider {
     }
 
     if (typeof imageData.url === "string" && imageData.url.length > 0) {
-      const imageResponse = await fetchImpl(imageData.url);
+      const imageResponse = await this.requestWithTimeout(fetchImpl, imageData.url);
       if (!imageResponse.ok) {
         throw new ProviderError({
           provider: this.name,
@@ -380,6 +411,28 @@ export class OpenAIProvider implements GenerationProvider {
       actionable:
         "Switch model or prompt format and verify the Images API response schema.",
     });
+  }
+
+  private async requestWithTimeout(
+    fetchImpl: typeof fetch,
+    input: Parameters<typeof fetch>[0],
+    init?: RequestInit,
+  ): Promise<Response> {
+    try {
+      return await fetchWithTimeout(fetchImpl, input, init, this.timeoutMs);
+    } catch (error) {
+      if (error instanceof ProviderRequestTimeoutError) {
+        throw new ProviderError({
+          provider: this.name,
+          code: "openai_request_timeout",
+          message: `OpenAI request timed out after ${error.timeoutMs}ms.`,
+          actionable:
+            "Increase providers.openai.timeoutMs or LOOTFORGE_OPENAI_TIMEOUT_MS and retry.",
+          cause: error,
+        });
+      }
+      throw error;
+    }
   }
 }
 

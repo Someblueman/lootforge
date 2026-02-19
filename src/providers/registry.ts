@@ -7,6 +7,7 @@ import {
   isProviderName,
   parseProviderSelection,
   PlannedTarget,
+  ProviderFeature,
   ProviderName,
   ProviderSelection,
 } from "./types.js";
@@ -31,11 +32,17 @@ export interface ProviderRoute {
 export function createProviderRegistry(
   options: ProviderRegistryOptions = {},
 ): ProviderRegistry {
-  return {
+  const registry: ProviderRegistry = {
     openai: createOpenAIProvider(options.openai),
     nano: createNanoProvider(options.nano),
     local: createLocalDiffusionProvider(options.local),
   };
+
+  assertProviderCapabilityParity(registry.openai);
+  assertProviderCapabilityParity(registry.nano);
+  assertProviderCapabilityParity(registry.local);
+
+  return registry;
 }
 
 export function getProvider(
@@ -128,4 +135,29 @@ export function resolveTargetProvider(
 
 export function parseProviderFlag(flagValue: string | undefined): ProviderSelection {
   return parseProviderSelection(flagValue);
+}
+
+function assertProviderCapabilityParity(provider: GenerationProvider): void {
+  if (provider.capabilities.name !== provider.name) {
+    throw new Error(
+      `Provider capability mismatch: capabilities.name="${provider.capabilities.name}" does not match provider "${provider.name}".`,
+    );
+  }
+
+  const checks: Array<[ProviderFeature, boolean]> = [
+    ["image-generation", true],
+    ["transparent-background", provider.capabilities.supportsTransparentBackground],
+    ["image-edits", provider.capabilities.supportsEdits],
+    ["multi-candidate", provider.capabilities.maxCandidates > 1],
+    ["controlnet", provider.capabilities.supportsControlNet],
+  ];
+
+  for (const [feature, expected] of checks) {
+    const actual = provider.supports(feature);
+    if (actual !== expected) {
+      throw new Error(
+        `Provider capability mismatch for "${provider.name}": supports("${feature}")=${String(actual)} but capabilities declare ${String(expected)}.`,
+      );
+    }
+  }
 }

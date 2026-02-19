@@ -950,7 +950,30 @@ function toNormalizedGenerationPolicy(target: ManifestTarget): NormalizedGenerat
     fallbackProviders: target.generationPolicy?.fallbackProviders ?? [],
     providerConcurrency: target.generationPolicy?.providerConcurrency,
     rateLimitPerMinute: target.generationPolicy?.rateLimitPerMinute,
+    vlmGate: normalizeVlmGatePolicy(target.generationPolicy?.vlmGate),
   };
+}
+
+function normalizeVlmGatePolicy(
+  policy: NonNullable<ManifestTarget["generationPolicy"]>["vlmGate"] | undefined,
+): NormalizedGenerationPolicy["vlmGate"] {
+  if (!policy) {
+    return undefined;
+  }
+
+  const threshold =
+    typeof policy.threshold === "number" && Number.isFinite(policy.threshold)
+      ? Math.max(0, Math.min(5, policy.threshold))
+      : 4;
+  const normalized = {
+    threshold,
+  } as NonNullable<NormalizedGenerationPolicy["vlmGate"]>;
+
+  if (typeof policy.rubric === "string" && policy.rubric.trim()) {
+    normalized.rubric = policy.rubric.trim();
+  }
+
+  return normalized;
 }
 
 function resolvePostProcess(

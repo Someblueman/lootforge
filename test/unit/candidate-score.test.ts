@@ -13,6 +13,9 @@ const ADAPTER_ENV_KEYS = [
   "LOOTFORGE_CLIP_ADAPTER_CMD",
   "LOOTFORGE_CLIP_ADAPTER_URL",
   "LOOTFORGE_CLIP_ADAPTER_TIMEOUT_MS",
+  "LOOTFORGE_VLM_GATE_CMD",
+  "LOOTFORGE_VLM_GATE_URL",
+  "LOOTFORGE_VLM_GATE_TIMEOUT_MS",
 ] as const;
 
 const ORIGINAL_ENV = new Map<string, string | undefined>(
@@ -176,5 +179,98 @@ describe("candidate scoring", () => {
       { outDir: dir },
     );
     expect(withClipWeight.bestPath).toBe(flatPath);
+  });
+
+  it("rejects candidates below VLM gate threshold before final selection", async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), "lootforge-candidate-score-vlm-"));
+    await mkdir(dir, { recursive: true });
+
+    const lowPath = path.join(dir, "a-candidate-low.png");
+    const highPath = path.join(dir, "b-candidate-high.png");
+    const vlmScriptPath = path.join(dir, "vlm-gate.js");
+
+    await sharp({
+      create: {
+        width: 64,
+        height: 64,
+        channels: 4,
+        background: { r: 200, g: 60, b: 60, alpha: 0 },
+      },
+    })
+      .png()
+      .toFile(lowPath);
+
+    await sharp({
+      create: {
+        width: 64,
+        height: 64,
+        channels: 4,
+        background: { r: 60, g: 200, b: 60, alpha: 0 },
+      },
+    })
+      .png()
+      .toFile(highPath);
+
+    await writeFile(
+      vlmScriptPath,
+      [
+        'const fs = require("node:fs");',
+        'const payload = JSON.parse(fs.readFileSync(0, "utf8"));',
+        'const isHigh = payload.imagePath.endsWith("b-candidate-high.png");',
+        "const score = isHigh ? 4.6 : 3.2;",
+        'const reason = isHigh ? "clean silhouette" : "cutoff frame";',
+        "process.stdout.write(JSON.stringify({ score, reason }));",
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+
+    process.env.LOOTFORGE_VLM_GATE_CMD = `${process.execPath} ${vlmScriptPath}`;
+
+    const target: PlannedTarget = {
+      id: "vlm-target",
+      kind: "sprite",
+      out: "vlm-target.png",
+      promptSpec: { primary: "vlm target" },
+      acceptance: {
+        size: "64x64",
+        alpha: true,
+        maxFileSizeKB: 256,
+      },
+      runtimeSpec: {
+        alphaRequired: true,
+      },
+      generationPolicy: {
+        outputFormat: "png",
+        background: "transparent",
+        vlmGate: {
+          threshold: 4,
+          rubric: "Score silhouette clarity and framing from 0 to 5.",
+        },
+      },
+    };
+
+    const result = await scoreCandidateImages(target, [lowPath, highPath], { outDir: dir });
+    const low = result.scores.find((score) => score.outputPath === lowPath);
+    const high = result.scores.find((score) => score.outputPath === highPath);
+
+    expect(result.bestPath).toBe(highPath);
+    expect(high?.selected).toBe(true);
+    expect(low?.passedAcceptance).toBe(false);
+    expect(low?.reasons).toContain("vlm_gate_below_threshold");
+    expect(low?.vlm).toMatchObject({
+      score: 3.2,
+      threshold: 4,
+      passed: false,
+      reason: "cutoff frame",
+      evaluator: "command",
+    });
+    expect(high?.vlm).toMatchObject({
+      score: 4.6,
+      threshold: 4,
+      passed: true,
+      reason: "clean silhouette",
+      evaluator: "command",
+    });
   });
 });

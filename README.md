@@ -57,6 +57,7 @@ Key outcomes:
 - Enforced provider runtime contract (manifest/env endpoint, timeout, retry, delay, concurrency)
 - Deterministic job IDs keyed to normalized generation policy
 - Multi-candidate generation with deterministic best-of scoring
+- Optional VLM candidate gating (`generationPolicy.vlmGate`) with per-candidate traceability
 - Post-process operators (`trim`, `pad/extrude`, `quantize`, `outline`, `resizeVariants`)
 - Pixel-level acceptance checks with JSON report output
 - Atlas stage with optional TexturePacker integration plus reproducibility artifacts
@@ -337,6 +338,9 @@ Runs hard/soft quality scoring and writes:
   - `adapterHealth.active`: adapters that returned at least one successful result
   - `adapterHealth.failed`: adapters that failed or were enabled but unconfigured
   - `adapterHealth.adapters[]`: per-adapter mode, target attempt/success/fail counters, warnings
+- `eval-report.json` also includes VLM gate traceability when enabled:
+  - `candidateVlm`: selected candidate VLM score/threshold/decision
+  - `candidateVlmGrades[]`: per-candidate VLM score, threshold, pass/fail, evaluator mode, and reason
 
 Optional CLIP/LPIPS/SSIM adapter execution:
 - Enable adapters with:
@@ -357,6 +361,13 @@ Optional CLIP/LPIPS/SSIM adapter execution:
   - `examples/adapters/stdin-adapter-example.js`
   - `examples/adapters/http-adapter-example.js`
 - Adapter `referenceImages` payload paths are normalized to absolute paths under the active `--out` root.
+- Optional VLM candidate hard gate:
+  - configure per target with `generationPolicy.vlmGate`
+  - evaluator transport:
+    - `LOOTFORGE_VLM_GATE_CMD` (stdin/stdout JSON)
+    - `LOOTFORGE_VLM_GATE_URL` (HTTP JSON POST)
+  - timeout override: `LOOTFORGE_VLM_GATE_TIMEOUT_MS`
+  - candidates below threshold are rejected before final candidate selection
 
 Example:
 ```bash
@@ -367,7 +378,7 @@ lootforge eval --out assets/imagegen --strict true
 
 Builds a review artifact from eval data:
 - `<out>/review/review.html`
-- Includes per-target score breakdown details (candidate reasons/metrics + adapter components/metrics/warnings).
+- Includes per-target score breakdown details (candidate reasons/metrics, VLM gate traces, and adapter components/metrics/warnings).
 
 Example:
 ```bash
@@ -408,6 +419,7 @@ Per target:
 - `edit-first` mode requires a provider with `image-edits` support (`openai`/`local` today; `nano` edit parity is roadmap work)
 - `edit.inputs[].path`: when used, must resolve inside the active `--out` root at runtime (`generate`, `eval`, and `regenerate`)
 - `generationPolicy.background: "transparent"` requires a provider that supports transparent outputs (unsupported providers now fail validation)
+- `generationPolicy.vlmGate?`: optional candidate gate (`threshold` defaults to `4` on a `0..5` scale, optional `rubric`)
 - `prompt` (string or structured object) for non-spritesheet targets
 - `provider?` (`openai|nano|local`)
 - `acceptance`: `{ size, alpha, maxFileSizeKB }`
@@ -555,6 +567,11 @@ Eval adapter transports:
 Eval adapter timeout controls:
 - `LOOTFORGE_ADAPTER_TIMEOUT_MS`: global timeout (ms)
 - `LOOTFORGE_<NAME>_ADAPTER_TIMEOUT_MS`: per-adapter timeout override (ms)
+
+VLM gate transport:
+- `LOOTFORGE_VLM_GATE_CMD`: command transport for VLM candidate gate scoring
+- `LOOTFORGE_VLM_GATE_URL`: HTTP transport for VLM candidate gate scoring
+- `LOOTFORGE_VLM_GATE_TIMEOUT_MS`: timeout override for VLM gate requests (ms)
 
 No network keys are required for `init`, `plan`, `validate`, `atlas`, or `package`.
 

@@ -37,6 +37,75 @@ describe("stage artifact contracts", () => {
     expect(result.targets[0]?.targetId).toBe("hero");
   });
 
+  it("accepts eval-report artifacts with VLM traceability fields", () => {
+    const result = validateStageArtifact(
+      "eval-report",
+      {
+        generatedAt: "2026-02-19T00:00:00.000Z",
+        strict: true,
+        imagesDir: "/tmp/out/assets/imagegen/processed/images",
+        targetCount: 1,
+        passed: 1,
+        failed: 0,
+        hardErrors: 0,
+        adaptersUsed: [],
+        adapterHealth: {
+          configured: [],
+          active: [],
+          failed: [],
+          adapters: [],
+        },
+        adapterWarnings: [],
+        targets: [
+          {
+            targetId: "hero",
+            out: "hero.png",
+            passedHardGates: true,
+            hardGateErrors: [],
+            hardGateWarnings: [],
+            candidateScore: 42,
+            candidateReasons: [],
+            candidateVlm: {
+              score: 4.4,
+              threshold: 4,
+              maxScore: 5,
+              passed: true,
+              reason: "clear silhouette",
+              evaluator: "command",
+            },
+            candidateVlmGrades: [
+              {
+                outputPath: "/tmp/out/assets/imagegen/raw/hero-v1.png",
+                selected: false,
+                score: 3.2,
+                threshold: 4,
+                maxScore: 5,
+                passed: false,
+                reason: "framing cutoff",
+                evaluator: "command",
+              },
+              {
+                outputPath: "/tmp/out/assets/imagegen/raw/hero-v2.png",
+                selected: true,
+                score: 4.4,
+                threshold: 4,
+                maxScore: 5,
+                passed: true,
+                reason: "clear silhouette",
+                evaluator: "command",
+              },
+            ],
+            finalScore: 42,
+          },
+        ],
+      },
+      "/tmp/out/checks/eval-report.json",
+    );
+
+    expect(result.targets[0]?.candidateVlm?.passed).toBe(true);
+    expect(result.targets[0]?.candidateVlmGrades).toHaveLength(2);
+  });
+
   it("reports file/field diagnostics for contract failures", () => {
     expect(() =>
       validateStageArtifact(
@@ -89,4 +158,3 @@ describe("stage artifact contracts", () => {
     throw new Error("expected StageArtifactContractError");
   });
 });
-

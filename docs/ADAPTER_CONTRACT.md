@@ -82,3 +82,60 @@ Rules:
 
 - Command/stdio adapter: `examples/adapters/stdin-adapter-example.js`
 - HTTP adapter: `examples/adapters/http-adapter-example.js`
+
+## VLM Candidate Gate Contract
+
+LootForge can run an optional VLM hard gate during candidate selection when `targets[].generationPolicy.vlmGate` is configured.
+
+### Configure Transport
+
+Set one transport (command is preferred when both are set):
+
+- `LOOTFORGE_VLM_GATE_CMD`
+- `LOOTFORGE_VLM_GATE_URL`
+
+Optional timeout override:
+
+- `LOOTFORGE_VLM_GATE_TIMEOUT_MS`
+
+### Request Payload
+
+LootForge sends one request per candidate image:
+
+```json
+{
+  "imagePath": "/abs/path/to/candidate.png",
+  "prompt": "Use case: ...\nPrimary request: ...",
+  "threshold": 4,
+  "maxScore": 5,
+  "rubric": "Score silhouette clarity and framing quality from 0 to 5.",
+  "target": {
+    "id": "hero",
+    "kind": "sprite",
+    "out": "hero.png",
+    "styleKitId": "default-topdown",
+    "consistencyGroup": "heroes",
+    "evaluationProfileId": "default-sprite-quality"
+  }
+}
+```
+
+Notes:
+
+- `imagePath` is absolute and must resolve inside the active `--out` root.
+- `threshold` defaults to `4` (range `0..5`) when omitted in manifest.
+- `rubric` is optional and comes from `generationPolicy.vlmGate.rubric`.
+
+### Response Contract
+
+VLM gate must return JSON with numeric `score` (`0..5`) and optional `reason`:
+
+```json
+{ "score": 4.4, "reason": "clear silhouette and framing" }
+```
+
+Rules:
+
+- Candidates below threshold are rejected before final candidate selection.
+- Rejection reason is recorded in provenance/eval/review artifacts.
+- Invalid/empty responses fail generation for that target (no silent fallback).

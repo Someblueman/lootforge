@@ -21,6 +21,11 @@ export const PromptSpecSchema = z.object({
 
 export const ManifestGenerationModeSchema = z.enum(["text", "edit-first"]);
 
+export const ManifestVlmGateSchema = z.object({
+  threshold: z.number().min(0).max(5).optional(),
+  rubric: nonEmptyString.optional(),
+});
+
 export const ManifestGenerationPolicySchema = z.object({
   size: nonEmptyString.optional(),
   background: nonEmptyString.optional(),
@@ -33,6 +38,7 @@ export const ManifestGenerationPolicySchema = z.object({
   fallbackProviders: z.array(ProviderNameSchema).optional(),
   providerConcurrency: z.number().int().positive().optional(),
   rateLimitPerMinute: z.number().int().positive().optional(),
+  vlmGate: ManifestVlmGateSchema.optional(),
 });
 
 export const ManifestAcceptanceSchema = z.object({

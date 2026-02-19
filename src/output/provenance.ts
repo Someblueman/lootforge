@@ -23,6 +23,15 @@ export interface ProvenanceJobRecord {
     reasons: string[];
     components?: Record<string, number>;
     metrics?: Record<string, number>;
+    vlm?: {
+      score: number;
+      threshold: number;
+      maxScore: number;
+      passed: boolean;
+      reason: string;
+      rubric?: string;
+      evaluator: "command" | "http";
+    };
     selected?: boolean;
   }>;
   generationMode?: "text" | "edit-first";

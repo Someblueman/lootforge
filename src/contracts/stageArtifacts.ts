@@ -32,6 +32,12 @@ const generationPolicySchema = z.object({
   fallbackProviders: z.array(providerNameSchema),
   providerConcurrency: z.number().int().positive().optional(),
   rateLimitPerMinute: z.number().int().positive().optional(),
+  vlmGate: z
+    .object({
+      threshold: z.number().min(0).max(5).optional(),
+      rubric: nonEmptyString.optional(),
+    })
+    .optional(),
 });
 
 const resizeVariantSchema = z.object({
@@ -228,6 +234,17 @@ const candidateScoreSchema = z.object({
   reasons: z.array(nonEmptyString),
   components: z.record(z.number()).optional(),
   metrics: z.record(z.number()).optional(),
+  vlm: z
+    .object({
+      score: z.number().min(0).max(5),
+      threshold: z.number().min(0).max(5),
+      maxScore: z.number().min(1),
+      passed: z.boolean(),
+      reason: nonEmptyString,
+      rubric: nonEmptyString.optional(),
+      evaluator: z.enum(["command", "http"]),
+    })
+    .optional(),
   warnings: z.array(nonEmptyString).optional(),
   selected: z.boolean().optional(),
 });
@@ -367,6 +384,32 @@ const stageArtifactSchemas = {
         candidateScore: z.number().optional(),
         candidateReasons: z.array(nonEmptyString).optional(),
         candidateMetrics: z.record(z.number()).optional(),
+        candidateVlm: z
+          .object({
+            score: z.number().min(0).max(5),
+            threshold: z.number().min(0).max(5),
+            maxScore: z.number().min(1),
+            passed: z.boolean(),
+            reason: nonEmptyString,
+            rubric: nonEmptyString.optional(),
+            evaluator: z.enum(["command", "http"]),
+          })
+          .optional(),
+        candidateVlmGrades: z
+          .array(
+            z.object({
+              outputPath: nonEmptyString,
+              selected: z.boolean(),
+              score: z.number().min(0).max(5),
+              threshold: z.number().min(0).max(5),
+              maxScore: z.number().min(1),
+              passed: z.boolean(),
+              reason: nonEmptyString,
+              rubric: nonEmptyString.optional(),
+              evaluator: z.enum(["command", "http"]),
+            }),
+          )
+          .optional(),
         adapterMetrics: z.record(z.number()).optional(),
         adapterScore: z.number().optional(),
         adapterScoreComponents: z.record(z.number()).optional(),

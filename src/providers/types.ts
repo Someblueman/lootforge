@@ -117,6 +117,12 @@ export interface GenerationPolicy {
   fallbackProviders?: ProviderName[];
   providerConcurrency?: number;
   rateLimitPerMinute?: number;
+  vlmGate?: VlmGatePolicy;
+}
+
+export interface VlmGatePolicy {
+  threshold?: number;
+  rubric?: string;
 }
 
 export interface TrimOperation {
@@ -299,6 +305,7 @@ export interface NormalizedGenerationPolicy {
   fallbackProviders: ProviderName[];
   providerConcurrency?: number;
   rateLimitPerMinute?: number;
+  vlmGate?: VlmGatePolicy;
 }
 
 export interface PolicyNormalizationIssue {
@@ -345,8 +352,19 @@ export interface CandidateScoreRecord {
   reasons: string[];
   components?: Record<string, number>;
   metrics?: Record<string, number>;
+  vlm?: CandidateVlmScore;
   warnings?: string[];
   selected?: boolean;
+}
+
+export interface CandidateVlmScore {
+  score: number;
+  threshold: number;
+  maxScore: number;
+  passed: boolean;
+  reason: string;
+  rubric?: string;
+  evaluator: "command" | "http";
 }
 
 export interface ProviderRunResult {
@@ -543,7 +561,28 @@ export function getTargetGenerationPolicy(target: PlannedTarget): NormalizedGene
       policy.rateLimitPerMinute > 0
         ? Math.round(policy.rateLimitPerMinute)
         : undefined,
+    vlmGate: normalizeVlmGatePolicy(policy.vlmGate),
   };
+}
+
+function normalizeVlmGatePolicy(policy: VlmGatePolicy | undefined): VlmGatePolicy | undefined {
+  if (!policy) {
+    return undefined;
+  }
+
+  const threshold =
+    typeof policy.threshold === "number" && Number.isFinite(policy.threshold)
+      ? policy.threshold
+      : 4;
+  const normalized: VlmGatePolicy = {
+    threshold: Math.max(0, Math.min(5, threshold)),
+  };
+
+  if (typeof policy.rubric === "string" && policy.rubric.trim()) {
+    normalized.rubric = policy.rubric.trim();
+  }
+
+  return normalized;
 }
 
 export function getTargetGenerationMode(target: PlannedTarget): GenerationMode {

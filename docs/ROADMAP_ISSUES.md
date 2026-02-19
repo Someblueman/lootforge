@@ -1,12 +1,16 @@
 # LootForge Prioritized Issue Backlog
 
-Last updated: 2026-02-18
+Last updated: 2026-02-19
 
 This list translates `docs/ROADMAP.md` into issue-ready work items with explicit acceptance criteria.
 
 ## P0 (Immediate: `0.3.0`)
 
-### 1) Stage Artifact Contract Schemas and Compatibility Tests
+Completed 2026-02-19:
+- ✅ Hardened edit/adapter path safety for in-root normalization of `edit.inputs`, adapter reference expansion, and selection-lock source path consumption (`0.3.0` roadmap item).
+- ✅ Stage Artifact Contract Schemas and Compatibility Tests (implemented in [PR #13](https://github.com/Someblueman/lootforge/pull/13)).
+
+### 1) Stage Artifact Contract Schemas and Compatibility Tests (Completed 2026-02-19)
 - **Release target:** `0.3.0`
 - **Why now:** Prevent stage drift and make artifacts safely reusable across pipeline runs.
 - **Acceptance criteria:**

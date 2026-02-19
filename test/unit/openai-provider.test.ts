@@ -153,4 +153,32 @@ describe("openai provider", () => {
     const outputBytes = await readFile(outPath);
     expect(outputBytes.byteLength).toBeGreaterThan(0);
   });
+
+  it("rejects edit input paths that escape the output root", async () => {
+    process.env.OPENAI_API_KEY = "test-key";
+    const tempRoot = await mkdtemp(path.join(os.tmpdir(), "lootforge-openai-edit-unsafe-"));
+    const outPath = path.join(tempRoot, "hero.png");
+    const outsidePath = path.join(path.dirname(tempRoot), "outside.png");
+    await writeFile(outsidePath, Buffer.from("outside"));
+
+    const provider = new OpenAIProvider();
+    const target = createTarget({
+      generationMode: "edit-first",
+      edit: {
+        inputs: [{ path: "../outside.png", role: "base" }],
+      },
+    });
+
+    await expect(
+      provider.runJob(createJob(target, outPath), {
+        outDir: tempRoot,
+        imagesDir: tempRoot,
+        fetchImpl: async () => {
+          throw new Error("fetch should not be called for unsafe edit paths");
+        },
+      }),
+    ).rejects.toMatchObject({
+      code: "openai_edit_input_unsafe_path",
+    });
+  });
 });

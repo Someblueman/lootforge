@@ -164,4 +164,73 @@ describe("generate pipeline safety", () => {
       }),
     ).rejects.toThrow(/out is invalid/i);
   });
+
+  test("rejects skip-locked source paths that resolve outside the output root", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "lootforge-generate-lock-safety-"));
+    const outDir = path.join(root, "out");
+    const indexPath = path.join(outDir, "jobs", "targets-index.json");
+    const lockPath = path.join(outDir, "locks", "selection-lock.json");
+    const outsideLockedPath = path.join(root, "outside-approved.png");
+    await mkdir(path.dirname(indexPath), { recursive: true });
+    await mkdir(path.dirname(lockPath), { recursive: true });
+    await writeFile(outsideLockedPath, TINY_PNG);
+
+    const target = {
+      id: "hero",
+      out: "hero.png",
+      promptSpec: { primary: "hero" },
+      generationPolicy: {
+        outputFormat: "png",
+        background: "transparent",
+      },
+    };
+
+    await writeFile(
+      indexPath,
+      `${JSON.stringify(
+        {
+          targets: [target],
+        },
+        null,
+        2,
+      )}\n`,
+      "utf8",
+    );
+
+    const job = createProviderJob({
+      provider: "openai",
+      target,
+      model: "gpt-image-1",
+      imagesDir: path.join(outDir, "assets", "imagegen", "raw"),
+    });
+
+    await writeFile(
+      lockPath,
+      `${JSON.stringify(
+        {
+          targets: [
+            {
+              targetId: "hero",
+              approved: true,
+              inputHash: job.inputHash,
+              selectedOutputPath: outsideLockedPath,
+            },
+          ],
+        },
+        null,
+        2,
+      )}\n`,
+      "utf8",
+    );
+
+    await expect(
+      runGeneratePipeline({
+        outDir,
+        provider: "openai",
+        skipLocked: true,
+        selectionLockPath: lockPath,
+        registry: createStubRegistry([]),
+      }),
+    ).rejects.toThrow(/must stay within --out/i);
+  });
 });

@@ -9,7 +9,7 @@ import {
 import type { ProviderRegistry } from "../../providers/registry.js";
 import type { PlannedTarget, ProviderSelection } from "../../providers/types.js";
 import { CliError } from "../../shared/errors.js";
-import { resolveStagePathLayout } from "../../shared/paths.js";
+import { resolvePathWithinRoot, resolveStagePathLayout } from "../../shared/paths.js";
 
 interface SelectionLockItem {
   targetId: string;
@@ -105,6 +105,7 @@ export async function runRegenerateCommand(
   ]);
 
   const prepared = await prepareRegenerateTargets({
+    outDir: layout.outDir,
     targetsIndex,
     selectionLock,
     selectionLockPath,
@@ -200,6 +201,7 @@ async function readSelectionLock(selectionLockPath: string): Promise<SelectionLo
 }
 
 async function prepareRegenerateTargets(params: {
+  outDir: string;
   targetsIndex: TargetsIndexShape;
   selectionLock: SelectionLockFile;
   selectionLockPath: string;
@@ -259,7 +261,24 @@ async function prepareRegenerateTargets(params: {
       );
     }
 
-    const selectedOutputPath = path.resolve(lock.selectedOutputPath);
+    let selectedOutputPath: string;
+    try {
+      selectedOutputPath = resolvePathWithinRoot(
+        params.outDir,
+        lock.selectedOutputPath,
+        `selection lock output path for target "${targetId}"`,
+      );
+    } catch (error) {
+      throw new CliError(
+        `Selection lock output path for "${targetId}" must stay within --out (${params.outDir}).`,
+        {
+          code: "regenerate_unsafe_locked_path",
+          exitCode: 1,
+          cause: error,
+        },
+      );
+    }
+
     let sourceExists = false;
     try {
       await access(selectedOutputPath);

@@ -115,6 +115,46 @@ export function resolvePathWithinDir(
   return resolvedPath;
 }
 
+export function resolvePathWithinRoot(
+  rootDir: string,
+  candidatePath: string,
+  label: string = "path",
+): string {
+  const trimmed = candidatePath.trim();
+  if (!trimmed) {
+    throw new Error(`${label} must be a non-empty string.`);
+  }
+
+  if (trimmed.includes("\0")) {
+    throw new Error(`${label} "${candidatePath}" contains a null byte.`);
+  }
+
+  const resolvedRoot = path.resolve(rootDir);
+  if (WINDOWS_ABSOLUTE_PATH_PATTERN.test(trimmed) && process.platform !== "win32") {
+    throw new Error(
+      `Unsafe ${label} "${candidatePath}" resolves outside ${resolvedRoot}.`,
+    );
+  }
+
+  const resolvedPath = path.resolve(
+    path.isAbsolute(trimmed) ? trimmed : resolvedRoot,
+    path.isAbsolute(trimmed)
+      ? "."
+      : trimmed.replaceAll("\\", path.sep).split("/").join(path.sep),
+  );
+  const relativeToRoot = path.relative(resolvedRoot, resolvedPath);
+  if (
+    relativeToRoot.startsWith("..") ||
+    path.isAbsolute(relativeToRoot)
+  ) {
+    throw new Error(
+      `Unsafe ${label} "${candidatePath}" resolves outside ${resolvedRoot}.`,
+    );
+  }
+
+  return resolvedPath;
+}
+
 export function resolveManifestPath(
   manifestFlag: string | undefined,
   cwd: string = process.cwd(),

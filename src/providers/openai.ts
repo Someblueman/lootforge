@@ -1,6 +1,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
+import { resolvePathWithinRoot } from "../shared/paths.js";
 import {
   createProviderJob,
   GenerationProvider,
@@ -229,7 +230,7 @@ export class OpenAIProvider implements GenerationProvider {
     form.set("n", String(Math.max(1, job.candidateCount)));
 
     for (const input of baseAndReferenceInputs) {
-      const resolvedPath = this.resolveEditInputPath(input.path, ctx.outDir);
+      const resolvedPath = this.resolveEditInputPath(input.path, ctx.outDir, job.targetId);
       const imageBytes = await this.readEditInputBytes(resolvedPath, job.targetId);
       const imageData = new Uint8Array(imageBytes);
 
@@ -249,7 +250,7 @@ export class OpenAIProvider implements GenerationProvider {
     }
 
     if (maskInputs.length > 0) {
-      const maskPath = this.resolveEditInputPath(maskInputs[0].path, ctx.outDir);
+      const maskPath = this.resolveEditInputPath(maskInputs[0].path, ctx.outDir, job.targetId);
       const maskBytes = await this.readEditInputBytes(maskPath, job.targetId);
       const maskData = new Uint8Array(maskBytes);
       form.append(
@@ -268,11 +269,26 @@ export class OpenAIProvider implements GenerationProvider {
     });
   }
 
-  private resolveEditInputPath(inputPath: string, outDir: string): string {
-    if (path.isAbsolute(inputPath)) {
-      return inputPath;
+  private resolveEditInputPath(
+    inputPath: string,
+    outDir: string,
+    targetId: string,
+  ): string {
+    try {
+      return resolvePathWithinRoot(
+        outDir,
+        inputPath,
+        `edit input path for target "${targetId}"`,
+      );
+    } catch (error) {
+      throw new ProviderError({
+        provider: this.name,
+        code: "openai_edit_input_unsafe_path",
+        message: `Unsafe edit input path "${inputPath}" for target "${targetId}".`,
+        actionable: `Edit input paths must stay within the output root (${path.resolve(outDir)}).`,
+        cause: error,
+      });
     }
-    return path.resolve(outDir, inputPath);
   }
 
   private async readEditInputBytes(

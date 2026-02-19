@@ -279,6 +279,7 @@ Key flags:
 Behavior:
 - Uses selection lock approved outputs as edit-base input (`role=base`) for each regenerated target.
 - Preserves lock provenance in `provenance/run.json` (`regenerationSource` metadata) for traceability.
+- For safety, selection-lock output paths must resolve inside the active `--out` root.
 
 Example:
 ```bash
@@ -354,6 +355,7 @@ Optional CLIP/LPIPS/SSIM adapter execution:
   - `docs/ADAPTER_CONTRACT.md`
   - `examples/adapters/stdin-adapter-example.js`
   - `examples/adapters/http-adapter-example.js`
+- Adapter `referenceImages` payload paths are normalized to absolute paths under the active `--out` root.
 
 Example:
 ```bash
@@ -400,6 +402,7 @@ Top-level fields:
 Per target:
 - `id`, `kind`, `out`, `atlasGroup?`, `styleKitId`, `consistencyGroup`, `evaluationProfileId`
 - `generationMode`: `text|edit-first`
+- `edit.inputs[].path`: when used, must resolve inside the active `--out` root at runtime (`generate`, `eval`, and `regenerate`)
 - `prompt` (string or structured object) for non-spritesheet targets
 - `provider?` (`openai|nano|local`)
 - `acceptance`: `{ size, alpha, maxFileSizeKB }`

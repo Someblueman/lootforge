@@ -184,4 +184,69 @@ describe("regenerate command", () => {
       path.resolve(lockedSourcePath),
     );
   });
+
+  it("rejects selection-lock paths that escape the output root", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "lootforge-regenerate-unsafe-lock-"));
+    const outDir = path.join(root, "out");
+    const targetsIndexPath = path.join(outDir, "jobs", "targets-index.json");
+    const lockPath = path.join(outDir, "locks", "selection-lock.json");
+    const outsideLockedSourcePath = path.join(root, "outside-lock-source.png");
+
+    await mkdir(path.dirname(targetsIndexPath), { recursive: true });
+    await mkdir(path.dirname(lockPath), { recursive: true });
+    await writeFile(outsideLockedSourcePath, TINY_PNG);
+
+    await writeFile(
+      targetsIndexPath,
+      `${JSON.stringify(
+        {
+          targets: [
+            {
+              id: "hero",
+              out: "hero.png",
+              promptSpec: { primary: "hero regenerate target" },
+              generationMode: "text",
+              generationPolicy: {
+                outputFormat: "png",
+                background: "transparent",
+                candidates: 1,
+              },
+            },
+          ],
+        },
+        null,
+        2,
+      )}\n`,
+      "utf8",
+    );
+
+    await writeFile(
+      lockPath,
+      `${JSON.stringify(
+        {
+          generatedAt: "2026-02-18T01:00:00.000Z",
+          targets: [
+            {
+              targetId: "hero",
+              approved: true,
+              inputHash: "lock-input-hash-1",
+              selectedOutputPath: outsideLockedSourcePath,
+            },
+          ],
+        },
+        null,
+        2,
+      )}\n`,
+      "utf8",
+    );
+
+    await expect(
+      runRegenerateCommand(
+        ["--out", outDir, "--edit", "true", "--provider", "openai"],
+        { registry: createRegistry([]), onProgress: () => {} },
+      ),
+    ).rejects.toMatchObject({
+      code: "regenerate_unsafe_locked_path",
+    });
+  });
 });

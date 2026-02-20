@@ -165,12 +165,32 @@ export interface ResizeVariantsOperation {
   variants: ResizeVariant[];
 }
 
+export interface PixelPerfectOperation {
+  enabled?: boolean;
+  scale?: number;
+}
+
+export interface SmartCropOperation {
+  enabled?: boolean;
+  mode?: "alpha-bounds" | "center";
+  padding?: number;
+}
+
+export interface VariantOutputsOperation {
+  raw?: boolean;
+  pixel?: boolean;
+  styleRef?: boolean;
+}
+
 export interface PostProcessOperations {
   trim?: TrimOperation;
   pad?: PadOperation;
   quantize?: QuantizeOperation;
   outline?: OutlineOperation;
   resizeVariants?: ResizeVariantsOperation;
+  pixelPerfect?: PixelPerfectOperation;
+  smartCrop?: SmartCropOperation;
+  emitVariants?: VariantOutputsOperation;
 }
 
 export interface PostProcessPolicy {

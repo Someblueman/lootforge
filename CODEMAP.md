@@ -1,5 +1,5 @@
-<!-- codemap-hash: 4f8755904c0394d348749cc30a5d12301f46044361681f5f40321f2a58837131 -->
-<!-- Generated: 2026-02-20 13:34:36 UTC -->
+<!-- codemap-hash: 1b0129cdcbdccb0fb4e39a471035db573ca6acfe9394965db43086902aeb83cc -->
+<!-- Generated: 2026-02-20 22:47:07 UTC -->
 <!-- Regenerate: codemap -->
 
 # Codemap
@@ -19,7 +19,7 @@ Prefer `CODEMAP.paths` for the most token-efficient routing to the files agents 
 | Concern | Files |
 |---------|-------|
 | Error Handling | 2 |
-| Testing | 30 |
+| Testing | 31 |
 | Configuration | 3 |
 
 

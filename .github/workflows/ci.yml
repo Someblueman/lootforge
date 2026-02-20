@@ -36,6 +36,16 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      - name: Manifest policy coverage gate
+        run: npm run check:manifest-policy
+
+      - name: Upload manifest policy coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: manifest-policy-coverage
+          path: coverage/manifest-policy-coverage.json
+          if-no-files-found: error
+
       - name: Verify unit suite exists
         run: test -n "$(find test/unit -type f -name '*test.ts' -print -quit)"
 

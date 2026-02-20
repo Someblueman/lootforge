@@ -5,6 +5,10 @@ Last updated: 2026-02-18
 This list translates `docs/ROADMAP.md` into issue-ready work items with explicit acceptance criteria.
 
 Recent completion (2026-02-20):
+- Implemented Manifest Policy Coverage Gate:
+  - added machine-checkable policy index (`docs/MANIFEST_POLICY_COVERAGE.md`),
+  - added release gate script (`npm run check:manifest-policy`) that enforces `implemented|reserved` status and test evidence for implemented fields,
+  - added CI report artifact output (`coverage/manifest-policy-coverage.json`).
 - Implemented per-kind scoring presets and manifest-level scoring profile overrides:
   - added deterministic default score-weight presets by target kind,
   - added optional manifest `scoringProfiles[]` contract with per-kind overrides,

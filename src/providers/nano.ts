@@ -28,7 +28,7 @@ import {
 } from "./types.js";
 
 const GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
-const DEFAULT_NANO_MODEL = "gemini-2.5-flash-image";
+export const DEFAULT_NANO_MODEL = "gemini-2.5-flash-image";
 const DEFAULT_EDIT_IMAGE_MIME_TYPE = "image/png";
 
 export interface NanoProviderOptions {

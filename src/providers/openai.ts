@@ -28,7 +28,7 @@ import {
 
 const OPENAI_IMAGES_ENDPOINT = "https://api.openai.com/v1/images/generations";
 const OPENAI_EDITS_ENDPOINT = "https://api.openai.com/v1/images/edits";
-const DEFAULT_OPENAI_MODEL = "gpt-image-1";
+export const DEFAULT_OPENAI_MODEL = "gpt-image-1";
 const DEFAULT_EDIT_IMAGE_MIME_TYPE = "image/png";
 
 export interface OpenAIProviderOptions {

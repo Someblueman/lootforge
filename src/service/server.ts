@@ -16,6 +16,11 @@ import {
   getCanonicalGenerationRequestContract,
   runCanonicalGenerationRequest,
 } from "./generationRequest.js";
+import {
+  getProviderCapabilitiesContract,
+  resolveProviderCapabilityDescriptors,
+} from "./providerCapabilities.js";
+import { isProviderName, type ProviderName } from "../providers/types.js";
 import { CliError, getErrorExitCode, getErrorMessage } from "../shared/errors.js";
 
 export const SERVICE_API_VERSION = "v1";
@@ -309,6 +314,8 @@ async function handleRequest(
         aliases: `${API_PREFIX}/:name`,
         generationRequest: `${API_PREFIX}/generation/requests`,
         generationContract: `${API_PREFIX}/contracts/generation-request`,
+        providerCapabilities: `${API_PREFIX}/providers/capabilities`,
+        providerCapabilitiesContract: `${API_PREFIX}/contracts/provider-capabilities`,
       },
       noAuth: true,
     });
@@ -333,6 +340,7 @@ async function handleRequest(
       tools: getServiceToolDescriptors(),
       contracts: {
         generationRequest: getCanonicalGenerationRequestContract(),
+        providerCapabilities: getProviderCapabilitiesContract(),
       },
     });
     return;
@@ -343,6 +351,65 @@ async function handleRequest(
       ok: true,
       apiVersion: SERVICE_API_VERSION,
       contract: getCanonicalGenerationRequestContract(),
+    });
+    return;
+  }
+
+  if (method === "GET" && pathname === `${API_PREFIX}/contracts/provider-capabilities`) {
+    writeJson(res, 200, {
+      ok: true,
+      apiVersion: SERVICE_API_VERSION,
+      contract: getProviderCapabilitiesContract(),
+    });
+    return;
+  }
+
+  if (method === "GET" && pathname === `${API_PREFIX}/providers/capabilities`) {
+    const providerParamRaw = requestUrl.searchParams.get("provider");
+    const providerParam =
+      typeof providerParamRaw === "string" && providerParamRaw.trim()
+        ? providerParamRaw.trim().toLowerCase()
+        : undefined;
+    const modelParamRaw = requestUrl.searchParams.get("model");
+    const modelParam =
+      typeof modelParamRaw === "string" && modelParamRaw.trim()
+        ? modelParamRaw.trim()
+        : undefined;
+
+    if (providerParam && !isProviderName(providerParam)) {
+      writeJson(res, 400, {
+        ok: false,
+        apiVersion: SERVICE_API_VERSION,
+        error: {
+          code: "invalid_query_parameter",
+          message: `Unknown provider "${providerParam}". Use openai|nano|local.`,
+        },
+      });
+      return;
+    }
+
+    if (modelParam && !providerParam) {
+      writeJson(res, 400, {
+        ok: false,
+        apiVersion: SERVICE_API_VERSION,
+        error: {
+          code: "invalid_query_parameter",
+          message: "Query parameter \"model\" requires \"provider\".",
+        },
+      });
+      return;
+    }
+
+    const capabilities = resolveProviderCapabilityDescriptors({
+      ...(providerParam ? { provider: providerParam as ProviderName } : {}),
+      ...(modelParam ? { model: modelParam } : {}),
+    });
+
+    writeJson(res, 200, {
+      ok: true,
+      apiVersion: SERVICE_API_VERSION,
+      endpoint: `${API_PREFIX}/providers/capabilities`,
+      capabilities,
     });
     return;
   }

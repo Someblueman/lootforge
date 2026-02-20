@@ -4,6 +4,12 @@ Last updated: 2026-02-18
 
 This list translates `docs/ROADMAP.md` into issue-ready work items with explicit acceptance criteria.
 
+Recent completion (2026-02-20):
+- Implemented model capability introspection contract and endpoint for provider feature gating:
+  - added service discovery contract endpoint (`GET /v1/contracts/provider-capabilities`),
+  - added runtime introspection endpoint (`GET /v1/providers/capabilities`) with provider/model query support,
+  - exposed explicit provider-gating signals for `pixel`, `highRes`, and `references`.
+
 ## P0 (Immediate: `0.3.0`)
 
 ### 1) Stage Artifact Contract Schemas and Compatibility Tests

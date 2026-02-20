@@ -19,12 +19,18 @@ Optional defaults:
 - `GET /v1/health`
 - `GET /v1/tools`
 - `GET /v1/contracts/generation-request`
+- `GET /v1/contracts/provider-capabilities`
+- `GET /v1/providers/capabilities`
 - `POST /v1/tools/:name`
 - `POST /v1/:name` (alias for tools endpoint)
 - `POST /v1/generation/requests` (canonical generation request contract)
 
 Root helper endpoint:
 - `GET /`
+
+Provider capabilities query options:
+- `provider` (optional): `openai|nano|local`
+- `model` (optional): model override for introspection; requires `provider`
 
 ## Request Shape
 
@@ -101,4 +107,6 @@ Failure:
 - `GET /v1/tools` exposes stable tool metadata and parameter keys.
 - `POST /v1/tools/:name` gives deterministic JSON envelopes for tool-call wrappers.
 - `POST /v1/generation/requests` provides a canonical mapping layer from service request payloads to manifest planning + generation targets.
+- `GET /v1/providers/capabilities` provides provider/model capability introspection for wrapper-side feature gating (`pixel`, `highRes`, `references`).
+- `GET /v1/contracts/provider-capabilities` exposes a machine-readable contract for the capabilities endpoint.
 - CORS headers are permissive (`*`) for local tool hosts.

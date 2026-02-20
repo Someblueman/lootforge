@@ -1,6 +1,6 @@
 # LootForge Public Release Roadmap
 
-Last updated: 2026-02-19
+Last updated: 2026-02-20
 
 ## Goal
 Move LootForge from a strong early foundation (`0.1.x`) to a dependable, public-facing release with:
@@ -207,9 +207,12 @@ Completed 2026-02-19 in this release track:
   - enforce runtime/output uniqueness across non-catalog targets and spritesheet atlas-family integrity checks,
   - add spritesheet continuity checks (adjacent-frame silhouette/anchor drift metrics + optional hard-gate thresholds),
   - add optional profile texture-memory budget gates and propagate pack-level summary into acceptance/eval/review artifacts.
+- Add optional service mode with stable HTTP generation endpoints and MCP wrapper compatibility:
+  - added `lootforge serve` command with stable JSON endpoints (`/v1/health`, `/v1/tools`, `/v1/tools/:name`, `/v1/:name`),
+  - added command/tool metadata discovery and deterministic request/response envelopes for wrapper integration,
+  - kept core service mode intentionally unauthenticated (no auth/credit layer in core).
 
 Remaining queued items:
-- Add optional service mode with stable HTTP generation endpoints and MCP wrapper compatibility (no auth/credit layer in core).
 - Define a canonical generation request contract and mapping layer between service requests and manifest/pipeline targets.
 - Implement Nano/Gemini edit-first parity (where supported) with tests.
 - Add manifest schema scaffolding for directed synthesis controls:

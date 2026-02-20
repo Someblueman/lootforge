@@ -441,6 +441,9 @@ Top-level fields:
   - each provider may define runtime defaults: `endpoint`, `timeoutMs`, `maxRetries`, `minDelayMs`, `defaultConcurrency`
   - `providers.local` may also define `baseUrl` (local endpoint alias)
 - `styleKits[]` (required)
+  - directed-synthesis scaffolding:
+    - `styleReferenceImages[]?` (provider-specific style-image guidance inputs)
+    - `loraPath?`, `loraStrength?` (`0..2`, requires `loraPath`)
 - `consistencyGroups[]` (optional)
 - `evaluationProfiles[]` (required)
 - `atlas` options for packing defaults and per-group overrides
@@ -457,6 +460,10 @@ Per target:
 - `edit.inputs[].path`: when used, must resolve inside the active `--out` root at runtime (`generate`, `eval`, and `regenerate`)
 - `generationPolicy.background: "transparent"` requires a provider that supports transparent outputs (unsupported providers now fail validation)
 - `generationPolicy.vlmGate?`: optional candidate gate (`threshold` defaults to `4` on a `0..5` scale, optional `rubric`)
+- directed-synthesis scaffolding:
+  - `controlImage?` with `controlMode?` (`canny|depth|openpose`) must be provided together
+  - `generationPolicy.highQuality?`
+  - `generationPolicy.hiresFix?` (`enabled?`, `upscale?`, `denoiseStrength?`)
 - `prompt` (string or structured object) for non-spritesheet targets
 - `provider?` (`openai|nano|local`)
 - `acceptance`: `{ size, alpha, maxFileSizeKB }`

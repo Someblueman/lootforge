@@ -162,6 +162,50 @@ describe("manifest normalization", () => {
     });
   });
 
+  it("normalizes smart-crop, pixel-perfect, and variant-output post-process scaffolding", () => {
+    const manifest: ManifestV2 = {
+      ...BASE_MANIFEST,
+      targets: [
+        {
+          ...BASE_MANIFEST.targets[0],
+          postProcess: {
+            resizeTo: "64x64",
+            operations: {
+              smartCrop: {
+                mode: "center",
+                padding: 3,
+              },
+              pixelPerfect: {
+                scale: 2,
+              },
+              emitVariants: {
+                raw: true,
+                styleRef: true,
+                pixel: true,
+              },
+            },
+          },
+        },
+      ],
+    };
+
+    const artifacts = createPlanArtifacts(manifest, "/tmp/manifest.json");
+    expect(artifacts.targets[0].postProcess?.operations?.smartCrop).toEqual({
+      enabled: true,
+      mode: "center",
+      padding: 3,
+    });
+    expect(artifacts.targets[0].postProcess?.operations?.pixelPerfect).toEqual({
+      enabled: true,
+      scale: 2,
+    });
+    expect(artifacts.targets[0].postProcess?.operations?.emitVariants).toEqual({
+      raw: true,
+      styleRef: true,
+      pixel: true,
+    });
+  });
+
   it("normalizes seam-heal and wrap-grid target policies", () => {
     const manifest: ManifestV2 = {
       ...BASE_MANIFEST,

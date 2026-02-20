@@ -1007,6 +1007,15 @@ function resolvePostProcess(
           },
         }
       : {}),
+    ...(postProcess.operations?.pixelPerfect
+      ? { pixelPerfect: normalizePixelPerfectOperation(postProcess.operations.pixelPerfect) }
+      : {}),
+    ...(postProcess.operations?.smartCrop
+      ? { smartCrop: normalizeSmartCropOperation(postProcess.operations.smartCrop) }
+      : {}),
+    ...(postProcess.operations?.emitVariants
+      ? { emitVariants: normalizeEmitVariantsOperation(postProcess.operations.emitVariants) }
+      : {}),
   };
 
   const normalizedPalette = paletteOverride ?? normalizePalettePolicy(target);
@@ -1274,6 +1283,55 @@ function resolvePostProcessAlgorithm(value: string | undefined): "nearest" | "la
     return "nearest";
   }
   return "lanczos3";
+}
+
+function normalizePixelPerfectOperation(operation: {
+  enabled?: boolean;
+  scale?: number;
+}): {
+  enabled?: boolean;
+  scale?: number;
+} {
+  return {
+    enabled: operation.enabled ?? true,
+    ...(typeof operation.scale === "number" && Number.isFinite(operation.scale)
+      ? { scale: Math.max(1, Math.round(operation.scale)) }
+      : {}),
+  };
+}
+
+function normalizeSmartCropOperation(operation: {
+  enabled?: boolean;
+  mode?: "alpha-bounds" | "center";
+  padding?: number;
+}): {
+  enabled?: boolean;
+  mode?: "alpha-bounds" | "center";
+  padding?: number;
+} {
+  return {
+    enabled: operation.enabled ?? true,
+    mode: operation.mode ?? "alpha-bounds",
+    ...(typeof operation.padding === "number" && Number.isFinite(operation.padding)
+      ? { padding: Math.max(0, Math.round(operation.padding)) }
+      : {}),
+  };
+}
+
+function normalizeEmitVariantsOperation(operation: {
+  raw?: boolean;
+  pixel?: boolean;
+  styleRef?: boolean;
+}): {
+  raw?: boolean;
+  pixel?: boolean;
+  styleRef?: boolean;
+} {
+  return {
+    ...(typeof operation.raw === "boolean" ? { raw: operation.raw } : {}),
+    ...(typeof operation.pixel === "boolean" ? { pixel: operation.pixel } : {}),
+    ...(typeof operation.styleRef === "boolean" ? { styleRef: operation.styleRef } : {}),
+  };
 }
 
 function parseResizeVariant(variant: {

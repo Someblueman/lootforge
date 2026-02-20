@@ -82,12 +82,32 @@ export const ManifestPostProcessResizeVariantSchema = z.object({
   algorithm: nonEmptyString.optional(),
 });
 
+export const ManifestPostProcessOperationPixelPerfectSchema = z.object({
+  enabled: z.boolean().optional(),
+  scale: z.number().int().min(1).max(16).optional(),
+});
+
+export const ManifestPostProcessOperationSmartCropSchema = z.object({
+  enabled: z.boolean().optional(),
+  mode: z.enum(["alpha-bounds", "center"]).optional(),
+  padding: z.number().int().min(0).max(256).optional(),
+});
+
+export const ManifestPostProcessOperationEmitVariantsSchema = z.object({
+  raw: z.boolean().optional(),
+  pixel: z.boolean().optional(),
+  styleRef: z.boolean().optional(),
+});
+
 export const ManifestPostProcessOperationsSchema = z.object({
   trim: ManifestPostProcessOperationTrimSchema.optional(),
   pad: ManifestPostProcessOperationPadSchema.optional(),
   quantize: ManifestPostProcessOperationQuantizeSchema.optional(),
   outline: ManifestPostProcessOperationOutlineSchema.optional(),
   resizeVariants: z.array(ManifestPostProcessResizeVariantSchema).optional(),
+  pixelPerfect: ManifestPostProcessOperationPixelPerfectSchema.optional(),
+  smartCrop: ManifestPostProcessOperationSmartCropSchema.optional(),
+  emitVariants: ManifestPostProcessOperationEmitVariantsSchema.optional(),
 });
 
 export const ManifestPostProcessSchema = z.object({

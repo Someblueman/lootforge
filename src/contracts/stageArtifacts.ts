@@ -89,6 +89,26 @@ const postProcessSchema = z.object({
           variants: z.array(resizeVariantSchema),
         })
         .optional(),
+      pixelPerfect: z
+        .object({
+          enabled: z.boolean().optional(),
+          scale: z.number().int().min(1).max(16).optional(),
+        })
+        .optional(),
+      smartCrop: z
+        .object({
+          enabled: z.boolean().optional(),
+          mode: z.enum(["alpha-bounds", "center"]).optional(),
+          padding: z.number().int().min(0).max(256).optional(),
+        })
+        .optional(),
+      emitVariants: z
+        .object({
+          raw: z.boolean().optional(),
+          pixel: z.boolean().optional(),
+          styleRef: z.boolean().optional(),
+        })
+        .optional(),
     })
     .optional(),
 });

@@ -1031,6 +1031,8 @@ function toNormalizedGenerationPolicy(target: ManifestTarget): NormalizedGenerat
   return {
     size: target.generationPolicy?.size?.trim() || target.acceptance?.size || "1024x1024",
     quality: target.generationPolicy?.quality?.trim() || "high",
+    draftQuality: target.generationPolicy?.draftQuality?.trim() || undefined,
+    finalQuality: target.generationPolicy?.finalQuality?.trim() || undefined,
     background: target.generationPolicy?.background?.trim() || "opaque",
     outputFormat,
     ...(typeof target.generationPolicy?.highQuality === "boolean"
@@ -1043,6 +1045,7 @@ function toNormalizedGenerationPolicy(target: ManifestTarget): NormalizedGenerat
     providerConcurrency: target.generationPolicy?.providerConcurrency,
     rateLimitPerMinute: target.generationPolicy?.rateLimitPerMinute,
     vlmGate: normalizeVlmGatePolicy(target.generationPolicy?.vlmGate),
+    coarseToFine: normalizeCoarseToFinePolicy(target.generationPolicy?.coarseToFine),
   };
 }
 
@@ -1091,6 +1094,30 @@ function normalizeVlmGatePolicy(
   }
 
   return normalized;
+}
+
+function normalizeCoarseToFinePolicy(
+  policy: NonNullable<ManifestTarget["generationPolicy"]>["coarseToFine"] | undefined,
+): NormalizedGenerationPolicy["coarseToFine"] {
+  if (!policy) {
+    return undefined;
+  }
+
+  const promoteTopK =
+    typeof policy.promoteTopK === "number" && Number.isFinite(policy.promoteTopK)
+      ? Math.max(1, Math.round(policy.promoteTopK))
+      : 1;
+  const minDraftScore =
+    typeof policy.minDraftScore === "number" && Number.isFinite(policy.minDraftScore)
+      ? policy.minDraftScore
+      : undefined;
+
+  return {
+    enabled: policy.enabled ?? true,
+    promoteTopK,
+    ...(typeof minDraftScore === "number" ? { minDraftScore } : {}),
+    requireDraftAcceptance: policy.requireDraftAcceptance ?? true,
+  };
 }
 
 function resolvePostProcess(

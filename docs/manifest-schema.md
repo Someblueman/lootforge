@@ -69,6 +69,8 @@ Generation + processing:
   - `generationPolicy.hiresFix?`: `{ enabled?, upscale?, denoiseStrength? }`
   - `generationPolicy.vlmGate?`: `{ threshold?, rubric? }`
   - `threshold` defaults to `4` (scored on `0..5`) when gate is configured
+  - `generationPolicy.coarseToFine?`: `{ enabled?, promoteTopK?, minDraftScore?, requireDraftAcceptance? }`
+  - optional quality split: `draftQuality` (coarse pass) and `finalQuality` (refinement pass)
 - `postProcess`
   - `postProcess.operations.smartCrop?`: `{ enabled?, mode?, padding? }`
     - `mode`: `alpha-bounds|center`

@@ -110,11 +110,20 @@ export interface PalettePolicy {
   strict?: boolean;
 }
 
+export interface CoarseToFinePolicy {
+  enabled?: boolean;
+  promoteTopK?: number;
+  minDraftScore?: number;
+  requireDraftAcceptance?: boolean;
+}
+
 export interface GenerationPolicy {
   size?: string;
   background?: "transparent" | "opaque" | string;
   outputFormat?: string;
   quality?: string;
+  draftQuality?: string;
+  finalQuality?: string;
   highQuality?: boolean;
   hiresFix?: {
     enabled?: boolean;
@@ -127,6 +136,7 @@ export interface GenerationPolicy {
   providerConcurrency?: number;
   rateLimitPerMinute?: number;
   vlmGate?: VlmGatePolicy;
+  coarseToFine?: CoarseToFinePolicy;
 }
 
 export interface VlmGatePolicy {
@@ -338,6 +348,8 @@ export interface PlannedTargetsIndex {
 export interface NormalizedGenerationPolicy {
   size: string;
   quality: string;
+  draftQuality?: string;
+  finalQuality?: string;
   background: "transparent" | "opaque" | string;
   outputFormat: NormalizedOutputFormat;
   highQuality?: boolean;
@@ -352,6 +364,12 @@ export interface NormalizedGenerationPolicy {
   providerConcurrency?: number;
   rateLimitPerMinute?: number;
   vlmGate?: VlmGatePolicy;
+  coarseToFine?: {
+    enabled: boolean;
+    promoteTopK: number;
+    minDraftScore?: number;
+    requireDraftAcceptance: boolean;
+  };
 }
 
 export interface PolicyNormalizationIssue {
@@ -396,6 +414,9 @@ export interface CandidateScoreRecord {
   score: number;
   passedAcceptance: boolean;
   reasons: string[];
+  stage?: "draft" | "refine";
+  promoted?: boolean;
+  sourceOutputPath?: string;
   components?: Record<string, number>;
   metrics?: Record<string, number>;
   vlm?: CandidateVlmScore;
@@ -426,6 +447,29 @@ export interface ProviderRunResult {
   skipped?: boolean;
   candidateOutputs?: ProviderCandidateOutput[];
   candidateScores?: CandidateScoreRecord[];
+  coarseToFine?: {
+    enabled: boolean;
+    draftQuality: string;
+    finalQuality: string;
+    promoteTopK: number;
+    minDraftScore?: number;
+    requireDraftAcceptance: boolean;
+    draftCandidateCount: number;
+    promoted: Array<{
+      outputPath: string;
+      score: number;
+      passedAcceptance: boolean;
+      refinedOutputPath?: string;
+    }>;
+    discarded: Array<{
+      outputPath: string;
+      score: number;
+      passedAcceptance: boolean;
+      reason: string;
+    }>;
+    skippedReason?: string;
+    warnings?: string[];
+  };
   generationMode?: GenerationMode;
   edit?: TargetEditSpec;
   regenerationSource?: RegenerationSource;
@@ -585,10 +629,14 @@ export function getTargetGenerationPolicy(target: PlannedTarget): NormalizedGene
     typeof policy.maxRetries === "number" && Number.isFinite(policy.maxRetries)
       ? Math.round(policy.maxRetries)
       : undefined;
+  const draftQuality = policy.draftQuality?.trim();
+  const finalQuality = policy.finalQuality?.trim();
 
   return {
     size: policy.size?.trim() || DEFAULT_SIZE,
     quality: policy.quality?.trim() || DEFAULT_QUALITY,
+    ...(draftQuality ? { draftQuality } : {}),
+    ...(finalQuality ? { finalQuality } : {}),
     background: policy.background?.trim() || DEFAULT_BACKGROUND,
     outputFormat: normalizeOutputFormatAlias(policy.outputFormat || DEFAULT_OUTPUT_FORMAT),
     ...(typeof policy.highQuality === "boolean" ? { highQuality: policy.highQuality } : {}),
@@ -611,6 +659,7 @@ export function getTargetGenerationPolicy(target: PlannedTarget): NormalizedGene
         ? Math.round(policy.rateLimitPerMinute)
         : undefined,
     vlmGate: normalizeVlmGatePolicy(policy.vlmGate),
+    coarseToFine: normalizeCoarseToFinePolicy(policy.coarseToFine),
   };
 }
 
@@ -657,6 +706,30 @@ function normalizeVlmGatePolicy(policy: VlmGatePolicy | undefined): VlmGatePolic
   }
 
   return normalized;
+}
+
+function normalizeCoarseToFinePolicy(
+  policy: CoarseToFinePolicy | undefined,
+): NormalizedGenerationPolicy["coarseToFine"] {
+  if (!policy) {
+    return undefined;
+  }
+
+  const promoteTopK =
+    typeof policy.promoteTopK === "number" && Number.isFinite(policy.promoteTopK)
+      ? Math.max(1, Math.round(policy.promoteTopK))
+      : 1;
+  const minDraftScore =
+    typeof policy.minDraftScore === "number" && Number.isFinite(policy.minDraftScore)
+      ? policy.minDraftScore
+      : undefined;
+
+  return {
+    enabled: policy.enabled ?? true,
+    promoteTopK,
+    ...(typeof minDraftScore === "number" ? { minDraftScore } : {}),
+    requireDraftAcceptance: policy.requireDraftAcceptance ?? true,
+  };
 }
 
 export function getTargetGenerationMode(target: PlannedTarget): GenerationMode {
@@ -711,6 +784,15 @@ export function normalizeGenerationPolicyForProvider(
       message: `${provider} max candidates is ${capabilities.maxCandidates}; clamped requested value.`,
     });
     policy.candidates = capabilities.maxCandidates;
+  }
+
+  if (policy.coarseToFine && policy.coarseToFine.promoteTopK > policy.candidates) {
+    issues.push({
+      level: "warning",
+      code: "coarse_to_fine_topk_clamped",
+      message: `coarseToFine.promoteTopK exceeds candidates; clamped to ${policy.candidates}.`,
+    });
+    policy.coarseToFine.promoteTopK = policy.candidates;
   }
 
   policy.fallbackProviders = policy.fallbackProviders.filter((name) => name !== provider);

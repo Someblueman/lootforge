@@ -27,6 +27,13 @@ export const ManifestVlmGateSchema = z.object({
   rubric: nonEmptyString.optional(),
 });
 
+export const ManifestCoarseToFineSchema = z.object({
+  enabled: z.boolean().optional(),
+  promoteTopK: z.number().int().min(1).optional(),
+  minDraftScore: z.number().optional(),
+  requireDraftAcceptance: z.boolean().optional(),
+});
+
 export const ManifestGenerationPolicySchema = z.object({
   size: nonEmptyString.optional(),
   background: nonEmptyString.optional(),
@@ -48,6 +55,7 @@ export const ManifestGenerationPolicySchema = z.object({
   providerConcurrency: z.number().int().positive().optional(),
   rateLimitPerMinute: z.number().int().positive().optional(),
   vlmGate: ManifestVlmGateSchema.optional(),
+  coarseToFine: ManifestCoarseToFineSchema.optional(),
 });
 
 export const ManifestAcceptanceSchema = z.object({

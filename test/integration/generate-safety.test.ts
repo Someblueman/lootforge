@@ -566,6 +566,157 @@ describe("generate pipeline safety", () => {
     expect(selectedScore?.outputPath.endsWith(".candidate-2.png")).toBe(true);
   });
 
+  test("runs coarse-to-fine promotion and records promotion metadata", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "lootforge-generate-coarse-to-fine-"));
+    const outDir = path.join(root, "out");
+    const indexPath = path.join(outDir, "jobs", "targets-index.json");
+    await mkdir(path.dirname(indexPath), { recursive: true });
+
+    const target: PlannedTarget = {
+      id: "hero-coarse",
+      kind: "sprite",
+      out: "hero-coarse.png",
+      promptSpec: { primary: "hero coarse to fine" },
+      generationPolicy: {
+        outputFormat: "png",
+        background: "transparent",
+        quality: "high",
+        draftQuality: "medium",
+        finalQuality: "high",
+        candidates: 2,
+        coarseToFine: {
+          enabled: true,
+          promoteTopK: 1,
+          requireDraftAcceptance: true,
+        },
+      },
+      acceptance: {
+        size: "64x64",
+        alpha: true,
+        maxFileSizeKB: 256,
+      },
+      runtimeSpec: {
+        alphaRequired: true,
+      },
+    };
+
+    await writeFile(
+      indexPath,
+      `${JSON.stringify({ targets: [target] }, null, 2)}\n`,
+      "utf8",
+    );
+
+    const opaqueCandidate = await sharp({
+      create: {
+        width: 64,
+        height: 64,
+        channels: 4,
+        background: { r: 120, g: 50, b: 20, alpha: 1 },
+      },
+    })
+      .png()
+      .toBuffer();
+    const transparentCandidate = await sharp({
+      create: {
+        width: 64,
+        height: 64,
+        channels: 4,
+        background: { r: 120, g: 50, b: 20, alpha: 0 },
+      },
+    })
+      .png()
+      .toBuffer();
+    const refinedBest = await sharp({
+      create: {
+        width: 64,
+        height: 64,
+        channels: 4,
+        background: { r: 20, g: 180, b: 80, alpha: 0 },
+      },
+    })
+      .png()
+      .toBuffer();
+
+    const openaiProvider = createTestProvider({
+      name: "openai",
+      runJob: async (job) => {
+        await mkdir(path.dirname(job.outPath), { recursive: true });
+
+        if (job.target.generationMode === "edit-first") {
+          const source = job.target.edit?.inputs?.[0]?.path ?? "";
+          expect(source.endsWith(".candidate-2.png")).toBe(true);
+          await writeFile(job.outPath, refinedBest);
+          return {
+            jobId: job.id,
+            provider: "openai",
+            model: job.model,
+            targetId: job.targetId,
+            outputPath: job.outPath,
+            bytesWritten: refinedBest.byteLength,
+            inputHash: job.inputHash,
+            startedAt: new Date().toISOString(),
+            finishedAt: new Date().toISOString(),
+          };
+        }
+
+        const candidateTwoPath = path.join(
+          path.dirname(job.outPath),
+          `${path.basename(job.outPath, ".png")}.candidate-2.png`,
+        );
+        await writeFile(job.outPath, opaqueCandidate);
+        await writeFile(candidateTwoPath, transparentCandidate);
+        return {
+          jobId: job.id,
+          provider: "openai",
+          model: job.model,
+          targetId: job.targetId,
+          outputPath: job.outPath,
+          bytesWritten: opaqueCandidate.byteLength,
+          inputHash: job.inputHash,
+          startedAt: new Date().toISOString(),
+          finishedAt: new Date().toISOString(),
+          candidateOutputs: [
+            {
+              outputPath: job.outPath,
+              bytesWritten: opaqueCandidate.byteLength,
+            },
+            {
+              outputPath: candidateTwoPath,
+              bytesWritten: transparentCandidate.byteLength,
+            },
+          ],
+        };
+      },
+    });
+
+    const result = await runGeneratePipeline({
+      outDir,
+      provider: "openai",
+      skipLocked: false,
+      registry: {
+        openai: openaiProvider,
+        nano: openaiProvider,
+        local: openaiProvider,
+      },
+    });
+
+    const finalBytes = await readFile(result.jobs[0]!.outputPath);
+    expect(finalBytes.equals(refinedBest)).toBe(true);
+    expect(result.jobs[0]?.coarseToFine?.enabled).toBe(true);
+    expect(result.jobs[0]?.coarseToFine?.promoted).toHaveLength(1);
+    expect(result.jobs[0]?.coarseToFine?.promoted[0]?.outputPath.endsWith(".candidate-2.png")).toBe(
+      true,
+    );
+    expect(
+      result.jobs[0]?.coarseToFine?.discarded.some((row) => row.reason === "draft_failed_acceptance"),
+    ).toBe(true);
+    expect(
+      result.jobs[0]?.candidateScores?.some(
+        (score) => score.stage === "refine" && score.selected === true,
+      ),
+    ).toBe(true);
+  });
+
   test("fails fast when selected provider does not support edit-first generation", async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "lootforge-generate-edit-capability-"));
     const outDir = path.join(root, "out");

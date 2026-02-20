@@ -19,3 +19,4 @@ Current scope: rewrite LootForge for the strongest asset-generation pipeline out
 - 2026-02-20: Added canonical generation request contract endpoint (`POST /v1/generation/requests`) plus mapping layer from service requests to `plan -> generate` pipeline targets.
 - 2026-02-20: Implemented optional service mode (`lootforge serve`) with stable HTTP `v1` command endpoints and discovery metadata for MCP wrapper compatibility.
 - 2026-02-20: Implemented Nano/Gemini edit-first parity for image-capable models with safe edit-input path handling and provider-level tests.
+- 2026-02-20: Implemented first-class post-process semantics for smart-crop/pixel-perfect controls and explicit processed `raw`/`style_ref`/`pixel` artifact variants.

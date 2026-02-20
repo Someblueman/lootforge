@@ -209,6 +209,78 @@ describe("process -> atlas -> package integration", () => {
     expect((report.items[0]?.metrics?.seamScore ?? Number.POSITIVE_INFINITY)).toBeLessThanOrEqual(8);
   });
 
+  test("applies alpha-safe exact-palette quantization for strict pixel outputs", async () => {
+    const tempRoot = await mkdtemp(path.join(os.tmpdir(), "lootforge-process-palette-strict-"));
+    const outDir = path.join(tempRoot, "work");
+    const indexPath = path.join(outDir, "jobs", "targets-index.json");
+    const rawImagePath = path.join(outDir, "assets", "imagegen", "raw", "hero.png");
+
+    await mkdir(path.dirname(indexPath), { recursive: true });
+    await mkdir(path.dirname(rawImagePath), { recursive: true });
+
+    await writeFile(
+      indexPath,
+      `${JSON.stringify(
+        {
+          targets: [
+            {
+              id: "hero",
+              kind: "sprite",
+              out: "hero.png",
+              promptSpec: { primary: "hero sprite" },
+              generationPolicy: {
+                outputFormat: "png",
+                background: "transparent",
+              },
+              palette: {
+                mode: "exact",
+                colors: ["#0000ff", "#00ff00"],
+                strict: true,
+              },
+              acceptance: { size: "2x1", alpha: true, maxFileSizeKB: 256 },
+              runtimeSpec: { alphaRequired: true },
+            },
+          ],
+        },
+        null,
+        2,
+      )}\n`,
+      "utf8",
+    );
+
+    const raw = Buffer.from([
+      255,
+      255,
+      255,
+      0, // fully transparent pixel should be zeroed
+      10,
+      20,
+      200,
+      255, // should quantize to #0000ff
+    ]);
+    await sharp(raw, { raw: { width: 2, height: 1, channels: 4 } }).png().toFile(rawImagePath);
+
+    await runProcessPipeline({
+      outDir,
+      targetsIndexPath: indexPath,
+      strict: true,
+      mirrorLegacyImages: false,
+    });
+
+    const processedPath = path.join(outDir, "assets", "imagegen", "processed", "images", "hero.png");
+    const decoded = await sharp(processedPath).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+    const data = decoded.data;
+
+    expect(data[0]).toBe(0);
+    expect(data[1]).toBe(0);
+    expect(data[2]).toBe(0);
+    expect(data[3]).toBe(0);
+
+    const quantizedPacked = ((data[4] << 16) | (data[5] << 8) | data[6]) >>> 0;
+    expect(new Set([0x0000ff, 0x00ff00]).has(quantizedPacked)).toBe(true);
+    expect(data[7]).toBe(255);
+  });
+
   test("emits resize variants and auxiliary maps for processed outputs", async () => {
     const tempRoot = await mkdtemp(path.join(os.tmpdir(), "lootforge-process-derived-"));
     const outDir = path.join(tempRoot, "work");

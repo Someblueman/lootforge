@@ -316,6 +316,77 @@ describe("candidate scoring", () => {
     });
   });
 
+  it("rejects non-compliant candidates in strict exact palette mode", async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), "lootforge-candidate-score-palette-strict-"));
+    await mkdir(dir, { recursive: true });
+
+    const compliantPath = path.join(dir, "candidate-compliant.png");
+    const nonCompliantPath = path.join(dir, "candidate-non-compliant.png");
+
+    const writeRow = async (filePath: string, row: Array<[number, number, number, number]>) => {
+      const width = row.length;
+      const height = 1;
+      const channels = 4;
+      const raw = Buffer.alloc(width * height * channels, 0);
+      for (let x = 0; x < width; x += 1) {
+        const index = x * channels;
+        raw[index] = row[x][0];
+        raw[index + 1] = row[x][1];
+        raw[index + 2] = row[x][2];
+        raw[index + 3] = row[x][3];
+      }
+
+      await sharp(raw, { raw: { width, height, channels } }).png().toFile(filePath);
+    };
+
+    await writeRow(compliantPath, [
+      [255, 0, 0, 255],
+      [0, 255, 0, 255],
+      [255, 0, 0, 255],
+      [0, 255, 0, 255],
+    ]);
+
+    await writeRow(nonCompliantPath, [
+      [255, 0, 0, 255],
+      [0, 255, 0, 255],
+      [0, 0, 255, 255],
+      [255, 0, 0, 255],
+    ]);
+
+    const target: PlannedTarget = {
+      id: "palette-strict-target",
+      kind: "sprite",
+      out: "palette-strict-target.png",
+      promptSpec: { primary: "palette strict target" },
+      acceptance: {
+        size: "4x1",
+        alpha: false,
+        maxFileSizeKB: 256,
+      },
+      runtimeSpec: {
+        alphaRequired: false,
+      },
+      generationPolicy: {
+        outputFormat: "png",
+        background: "opaque",
+      },
+      palette: {
+        mode: "exact",
+        colors: ["#ff0000", "#00ff00"],
+        strict: true,
+      },
+    };
+
+    const result = await scoreCandidateImages(target, [nonCompliantPath, compliantPath]);
+    const compliant = result.scores.find((score) => score.outputPath === compliantPath);
+    const nonCompliant = result.scores.find((score) => score.outputPath === nonCompliantPath);
+
+    expect(result.bestPath).toBe(compliantPath);
+    expect(compliant?.passedAcceptance).toBe(true);
+    expect(nonCompliant?.passedAcceptance).toBe(false);
+    expect(nonCompliant?.reasons).toContain("palette_strict_noncompliant");
+  });
+
   it("rejects boundary artifacts when boundary hard-gate thresholds are configured", async () => {
     const dir = await mkdtemp(path.join(os.tmpdir(), "lootforge-candidate-score-boundary-"));
     await mkdir(dir, { recursive: true });

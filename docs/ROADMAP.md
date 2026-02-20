@@ -167,6 +167,9 @@ Focus: stable public contract and operational readiness.
 - Temporal Consistency via Video-to-Sprite Inference (Future Focus):
   - implement `video-to-sprite` target mode utilizing frame-interpolation over generated video,
   - deliver drift-free 60fps sprite animation exceeding pure image-diffusion bounds.
+- Native 3D Asset Generation (Future Focus):
+  - expand target kinds to support `.gltf`/`.glb` 3D mesh generation for engines like Three.js.
+  - apply QA validation gates for polygon budgets, clean topology, and PBR material consistency.
 
 ### Exit Criteria
 - Public users can adopt LootForge without internal tribal knowledge.
@@ -251,6 +254,9 @@ Completed 2026-02-20 in this release track:
   - added Gemini/Nano edit-first request mapping with role-aware input handling for `base`, `mask`, and `reference` inputs,
   - enforce safe in-root edit input path resolution and explicit Nano edit error codes for unsupported models / unreadable inputs,
   - added deterministic unit coverage for Nano text-mode and edit-first request execution paths.
+- Harden pixel-perfect quantization behavior:
+  - enforce deterministic nearest-color exact-palette mapping with alpha-safe handling (transparent RGB zeroing),
+  - add exact-palette strict mode (`palette.strict`) that enforces 100% visible-pixel compliance during process/acceptance/scoring.
 
 Remaining queued items:
 - Add manifest schema scaffolding for directed synthesis controls:
@@ -258,9 +264,6 @@ Remaining queued items:
   - `styleKits[].styleReferenceImages`, `styleKits[].loraPath`, `styleKits[].loraStrength`,
   - `generationPolicy.highQuality` and optional `generationPolicy.hiresFix` controls.
 - Implement first-class post-process semantics for pixel-perfect/smart-crop behaviors and emit explicit `raw`/`pixel`/`style_ref` artifact variants.
-- Harden pixel-perfect quantization behavior:
-  - deterministic nearest-color exact-palette mapping with alpha-safe handling,
-  - strict palette-enforcement mode for low-color sprite/pixel-art outputs.
 - Add coarse-to-fine candidate promotion controls:
   - run lower-cost candidate generation/scoring first,
   - promote top-K candidates into high-fidelity refinement passes only when quality gates justify extra compute.

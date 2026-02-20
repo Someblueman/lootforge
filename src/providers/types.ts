@@ -105,6 +105,7 @@ export interface PalettePolicy {
   colors?: string[];
   maxColors?: number;
   dither?: number;
+  strict?: boolean;
 }
 
 export interface GenerationPolicy {

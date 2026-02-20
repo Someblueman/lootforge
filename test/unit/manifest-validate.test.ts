@@ -141,6 +141,30 @@ describe("manifest normalization", () => {
     });
   });
 
+  it("preserves strict exact palette policy during normalization", () => {
+    const manifest: ManifestV2 = {
+      ...BASE_MANIFEST,
+      targets: [
+        {
+          ...BASE_MANIFEST.targets[0],
+          palette: {
+            mode: "exact",
+            colors: ["112233", "#445566"],
+            strict: true,
+          },
+        },
+      ],
+    };
+
+    const artifacts = createPlanArtifacts(manifest, "/tmp/manifest.json");
+    expect(artifacts.targets[0].palette).toEqual({
+      mode: "exact",
+      colors: ["#112233", "#445566"],
+      dither: undefined,
+      strict: true,
+    });
+  });
+
   it("normalizes numeric postProcess resize with default lanczos3 algorithm", () => {
     const manifest: ManifestV2 = {
       ...BASE_MANIFEST,
@@ -284,6 +308,37 @@ describe("manifest normalization", () => {
     expect(validation.report.errors).toBeGreaterThan(0);
     expect(
       validation.report.issues.some((issue) => issue.code === "invalid_postprocess_resize"),
+    ).toBe(true);
+  });
+
+  it("rejects strict palette mode for non-exact palettes", () => {
+    const manifest: ManifestV2 = {
+      ...BASE_MANIFEST,
+      targets: [
+        {
+          ...BASE_MANIFEST.targets[0],
+          palette: {
+            mode: "max-colors",
+            maxColors: 16,
+            strict: true,
+          },
+        },
+      ],
+    };
+
+    const validation = validateManifestSource({
+      manifestPath: "/tmp/manifest.json",
+      raw: JSON.stringify(manifest),
+      data: manifest,
+    });
+
+    expect(validation.report.errors).toBeGreaterThan(0);
+    expect(
+      validation.report.issues.some(
+        (issue) =>
+          issue.path === "targets[0].palette.strict" &&
+          issue.message === "Palette strict mode is only supported for exact palettes.",
+      ),
     ).toBe(true);
   });
 

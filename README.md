@@ -461,6 +461,7 @@ Per target:
 - `provider?` (`openai|nano|local`)
 - `acceptance`: `{ size, alpha, maxFileSizeKB }`
 - optional generation/runtime fields (`generationPolicy`, `postProcess`, `runtimeSpec`, `model`, `edit`, `auxiliaryMaps`, `palette`, `tileable`, `seamThreshold`, `seamStripPx`, `seamHeal`, `wrapGrid`)
+- `palette.strict` (exact mode only): enforces 100% visible-pixel compliance with the declared exact palette in process/acceptance/scoring.
 - `seamHeal`: optional pass for tileables (`enabled`, `stripPx`, `strength`) applied during process before final encode.
 - `wrapGrid`: optional per-cell tile validation (`columns`, `rows`, optional seam thresholds) enforced in image acceptance.
 - edge-aware boundary gates are configured via `evaluationProfiles[].hardGates`:

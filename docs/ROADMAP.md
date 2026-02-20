@@ -254,15 +254,15 @@ Completed 2026-02-20 in this release track:
   - added Gemini/Nano edit-first request mapping with role-aware input handling for `base`, `mask`, and `reference` inputs,
   - enforce safe in-root edit input path resolution and explicit Nano edit error codes for unsupported models / unreadable inputs,
   - added deterministic unit coverage for Nano text-mode and edit-first request execution paths.
+- Add manifest schema scaffolding for directed synthesis controls:
+  - added manifest + planner scaffolding for `targets[].controlImage`, `targets[].controlMode` (`canny|depth|openpose`),
+  - added style-kit scaffolding for `styleKits[].styleReferenceImages`, `styleKits[].loraPath`, and `styleKits[].loraStrength`,
+  - added generation-policy scaffolding for `generationPolicy.highQuality` and optional `generationPolicy.hiresFix`.
 - Harden pixel-perfect quantization behavior:
   - enforce deterministic nearest-color exact-palette mapping with alpha-safe handling (transparent RGB zeroing),
   - add exact-palette strict mode (`palette.strict`) that enforces 100% visible-pixel compliance during process/acceptance/scoring.
 
 Remaining queued items:
-- Add manifest schema scaffolding for directed synthesis controls:
-  - `targets[].controlImage`, `targets[].controlMode` (`canny|depth|openpose`),
-  - `styleKits[].styleReferenceImages`, `styleKits[].loraPath`, `styleKits[].loraStrength`,
-  - `generationPolicy.highQuality` and optional `generationPolicy.hiresFix` controls.
 - Implement first-class post-process semantics for pixel-perfect/smart-crop behaviors and emit explicit `raw`/`pixel`/`style_ref` artifact variants.
 - Add coarse-to-fine candidate promotion controls:
   - run lower-cost candidate generation/scoring first,

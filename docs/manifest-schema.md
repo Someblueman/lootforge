@@ -20,8 +20,11 @@
   - `rulesPath`
   - `palettePath?`
   - `referenceImages[]`
+  - `styleReferenceImages[]?` (directed style-image scaffold inputs; provider support varies)
   - `lightingModel`
   - `negativeRulesPath?`
+  - `loraPath?`
+  - `loraStrength?` (`0..2`, requires `loraPath`)
 - `consistencyGroups[]` (optional)
   - `id`
   - `description?`
@@ -62,12 +65,15 @@ Generation + processing:
 
 - `prompt` or `promptSpec` (required for non-`spritesheet` targets)
 - `generationPolicy`
+  - `generationPolicy.highQuality?` (directed-synthesis scaffold flag)
+  - `generationPolicy.hiresFix?`: `{ enabled?, upscale?, denoiseStrength? }`
   - `generationPolicy.vlmGate?`: `{ threshold?, rubric? }`
   - `threshold` defaults to `4` (scored on `0..5`) when gate is configured
 - `postProcess`
 - `acceptance`
 - `runtimeSpec`
 - `provider`, `model`, `edit`, `auxiliaryMaps`
+- `controlImage?` + `controlMode?` (`canny|depth|openpose`) must be provided together
 - `generationMode: "edit-first"` requires an edit-capable provider (`openai`, `local`, or `nano` with an image-edit-capable Gemini model)
 - `edit.inputs[].path` must resolve inside the active `--out` root at runtime
 - `generationPolicy.background: "transparent"` requires a provider that supports transparent outputs (unsupported providers now fail validation)

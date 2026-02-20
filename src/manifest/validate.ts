@@ -22,7 +22,11 @@ import type {
   TargetKind,
   TargetScoreWeights,
 } from "../providers/types.js";
-import { normalizeManifestAssetPath, normalizeTargetOutPath } from "../shared/paths.js";
+import {
+  normalizeManifestAssetPath,
+  normalizeTargetOutPath,
+} from "../shared/paths.js";
+import { formatIssuePath } from "../shared/zod.js";
 import { safeParseManifestV2 } from "./schema.js";
 import type {
   ManifestConsistencyGroup,
@@ -51,7 +55,10 @@ const SCORE_WEIGHT_KEYS: Array<keyof TargetScoreWeights> = [
   "lpips",
   "ssim",
 ];
-const DEFAULT_KIND_SCORE_WEIGHT_PRESETS: Record<TargetKind, TargetScoreWeights> = {
+const DEFAULT_KIND_SCORE_WEIGHT_PRESETS: Record<
+  TargetKind,
+  TargetScoreWeights
+> = {
   sprite: {
     readability: 1.15,
     fileSize: 0.85,
@@ -192,7 +199,10 @@ export function normalizeManifestTargets(
       );
     }
 
-    if (target.scoringProfile && !scoringProfileById.has(target.scoringProfile)) {
+    if (
+      target.scoringProfile &&
+      !scoringProfileById.has(target.scoringProfile)
+    ) {
       throw new Error(
         `Target "${target.id}" references missing scoringProfile "${target.scoringProfile}".`,
       );
@@ -319,7 +329,10 @@ function collectSemanticIssues(
       });
     }
 
-    for (const [referenceIndex, referencePath] of kit.referenceImages.entries()) {
+    for (const [
+      referenceIndex,
+      referencePath,
+    ] of kit.referenceImages.entries()) {
       checkManifestAssetPath({
         issues,
         manifestDir,
@@ -329,7 +342,9 @@ function collectSemanticIssues(
       });
     }
 
-    for (const [referenceIndex, referencePath] of (kit.styleReferenceImages ?? []).entries()) {
+    for (const [referenceIndex, referencePath] of (
+      kit.styleReferenceImages ?? []
+    ).entries()) {
       checkManifestAssetPath({
         issues,
         manifestDir,
@@ -377,7 +392,10 @@ function collectSemanticIssues(
       });
     }
 
-    for (const [referenceIndex, referencePath] of group.referenceImages.entries()) {
+    for (const [
+      referenceIndex,
+      referencePath,
+    ] of group.referenceImages.entries()) {
       checkManifestAssetPath({
         issues,
         manifestDir,
@@ -475,7 +493,10 @@ function collectSemanticIssues(
       });
     }
 
-    if (target.scoringProfile && !scoringProfileIds.has(target.scoringProfile)) {
+    if (
+      target.scoringProfile &&
+      !scoringProfileIds.has(target.scoringProfile)
+    ) {
       issues.push({
         level: "error",
         code: "missing_scoring_profile",
@@ -485,7 +506,9 @@ function collectSemanticIssues(
     }
 
     if (consistencyGroups.length > 0) {
-      const consistencyGroup = consistencyGroupById.get(target.consistencyGroup);
+      const consistencyGroup = consistencyGroupById.get(
+        target.consistencyGroup,
+      );
       if (!consistencyGroup) {
         issues.push({
           level: "error",
@@ -519,7 +542,10 @@ function collectSemanticIssues(
       });
     }
 
-    if (typeof target.postProcess?.resizeTo === "string" && !SIZE_PATTERN.test(target.postProcess.resizeTo)) {
+    if (
+      typeof target.postProcess?.resizeTo === "string" &&
+      !SIZE_PATTERN.test(target.postProcess.resizeTo)
+    ) {
       issues.push({
         level: "error",
         code: "invalid_postprocess_resize",
@@ -542,7 +568,12 @@ function collectSemanticIssues(
     }
 
     const algorithm = target.postProcess?.algorithm?.trim().toLowerCase();
-    if (algorithm && !SUPPORTED_POST_PROCESS_ALGORITHMS.has(algorithm as "nearest" | "lanczos3")) {
+    if (
+      algorithm &&
+      !SUPPORTED_POST_PROCESS_ALGORITHMS.has(
+        algorithm as "nearest" | "lanczos3",
+      )
+    ) {
       issues.push({
         level: "warning",
         code: "unusual_postprocess_algorithm",
@@ -552,7 +583,9 @@ function collectSemanticIssues(
     }
 
     if (target.palette?.mode === "exact") {
-      for (const [colorIndex, color] of (target.palette.colors ?? []).entries()) {
+      for (const [colorIndex, color] of (
+        target.palette.colors ?? []
+      ).entries()) {
         if (!HEX_COLOR_PATTERN.test(color.trim())) {
           issues.push({
             level: "error",
@@ -569,7 +602,8 @@ function collectSemanticIssues(
         level: "warning",
         code: "tile_without_seam_threshold",
         path: `targets[${index}].seamThreshold`,
-        message: "Tileable targets should define seamThreshold for deterministic acceptance.",
+        message:
+          "Tileable targets should define seamThreshold for deterministic acceptance.",
       });
     }
 
@@ -614,12 +648,16 @@ function collectSemanticIssues(
       }
     }
 
-    if (target.generationMode === "edit-first" && (!target.edit || !target.edit.inputs?.length)) {
+    if (
+      target.generationMode === "edit-first" &&
+      (!target.edit || !target.edit.inputs?.length)
+    ) {
       issues.push({
         level: "warning",
         code: "edit_mode_without_inputs",
         path: `targets[${index}].edit`,
-        message: "generationMode=edit-first should include edit inputs for reliable consistency.",
+        message:
+          "generationMode=edit-first should include edit inputs for reliable consistency.",
       });
     }
 
@@ -680,7 +718,9 @@ function collectSemanticIssues(
       target.generationPolicy?.outputFormat ??
         path.extname(normalizedOut ?? target.out).replace(".", ""),
     );
-    const alphaRequired = target.runtimeSpec?.alphaRequired === true || target.acceptance?.alpha === true;
+    const alphaRequired =
+      target.runtimeSpec?.alphaRequired === true ||
+      target.acceptance?.alpha === true;
     if (alphaRequired && outputFormat === "jpeg") {
       issues.push({
         level: "error",
@@ -760,7 +800,10 @@ function normalizeOptionalManifestAssetPath(
   }
 }
 
-function normalizeManifestAssetPathList(values: string[], label: string): string[] {
+function normalizeManifestAssetPathList(
+  values: string[],
+  label: string,
+): string[] {
   const normalized: string[] = [];
   for (const [index, value] of values.entries()) {
     const itemLabel = `${label}[${index}]`;
@@ -811,8 +854,11 @@ function resolveTargetScoring(params: {
   scoreWeights?: TargetScoreWeights;
 } {
   const kind = normalizeTargetKindForScoring(params.target.kind);
-  const profileId = params.target.scoringProfile ?? params.target.evaluationProfileId;
-  const profile = profileId ? params.scoringProfileById.get(profileId) : undefined;
+  const profileId =
+    params.target.scoringProfile ?? params.target.evaluationProfileId;
+  const profile = profileId
+    ? params.scoringProfileById.get(profileId)
+    : undefined;
   const scoreWeights: TargetScoreWeights = {};
 
   if (kind) {
@@ -882,7 +928,9 @@ function normalizeTargetForGeneration(params: {
     provider,
     toNormalizedGenerationPolicy(params.target),
   );
-  const policyErrors = normalizedPolicy.issues.filter((issue) => issue.level === "error");
+  const policyErrors = normalizedPolicy.issues.filter(
+    (issue) => issue.level === "error",
+  );
   if (policyErrors.length > 0) {
     throw new Error(
       `Invalid generation policy for target "${params.target.id}": ${policyErrors
@@ -892,13 +940,21 @@ function normalizeTargetForGeneration(params: {
   }
 
   const acceptance = {
-    ...(params.target.acceptance?.size ? { size: params.target.acceptance.size.trim() } : {}),
+    ...(params.target.acceptance?.size
+      ? { size: params.target.acceptance.size.trim() }
+      : {}),
     alpha:
-      params.target.acceptance?.alpha ?? params.evalProfile.hardGates?.requireAlpha ?? false,
+      params.target.acceptance?.alpha ??
+      params.evalProfile.hardGates?.requireAlpha ??
+      false,
     maxFileSizeKB:
-      params.target.acceptance?.maxFileSizeKB ?? params.evalProfile.hardGates?.maxFileSizeKB,
+      params.target.acceptance?.maxFileSizeKB ??
+      params.evalProfile.hardGates?.maxFileSizeKB,
   };
-  const palette = resolveTargetPalettePolicy(params.target, params.styleKitPaletteDefault);
+  const palette = resolveTargetPalettePolicy(
+    params.target,
+    params.styleKitPaletteDefault,
+  );
   const seamHeal = normalizeSeamHealPolicy(params.target, params.evalProfile);
   const wrapGrid = normalizeWrapGridPolicy(params.target, params.evalProfile);
   const styleReferenceImages = normalizeManifestAssetPathList(
@@ -935,19 +991,24 @@ function normalizeTargetForGeneration(params: {
     evaluationProfileId: params.target.evaluationProfileId,
     ...(scoring.profileId ? { scoringProfile: scoring.profileId } : {}),
     ...(controlImage ? { controlImage } : {}),
-    ...(params.target.controlMode ? { controlMode: params.target.controlMode } : {}),
+    ...(params.target.controlMode
+      ? { controlMode: params.target.controlMode }
+      : {}),
     ...(scoring.scoreWeights ? { scoreWeights: scoring.scoreWeights } : {}),
     tileable: params.target.tileable,
     seamThreshold:
-      params.target.seamThreshold ?? params.evalProfile.hardGates?.seamThreshold,
-    seamStripPx: params.target.seamStripPx ?? params.evalProfile.hardGates?.seamStripPx,
+      params.target.seamThreshold ??
+      params.evalProfile.hardGates?.seamThreshold,
+    seamStripPx:
+      params.target.seamStripPx ?? params.evalProfile.hardGates?.seamStripPx,
     alphaHaloRiskMax: params.evalProfile.hardGates?.alphaHaloRiskMax,
     alphaStrayNoiseMax: params.evalProfile.hardGates?.alphaStrayNoiseMax,
     alphaEdgeSharpnessMin: params.evalProfile.hardGates?.alphaEdgeSharpnessMin,
     packTextureBudgetMB: params.evalProfile.hardGates?.packTextureBudgetMB,
     spritesheetSilhouetteDriftMax:
       params.evalProfile.hardGates?.spritesheetSilhouetteDriftMax,
-    spritesheetAnchorDriftMax: params.evalProfile.hardGates?.spritesheetAnchorDriftMax,
+    spritesheetAnchorDriftMax:
+      params.evalProfile.hardGates?.spritesheetAnchorDriftMax,
     ...(seamHeal ? { seamHeal } : {}),
     ...(wrapGrid ? { wrapGrid } : {}),
     ...(palette ? { palette } : {}),
@@ -974,7 +1035,9 @@ function normalizeTargetForGeneration(params: {
     generationPolicy: normalizedPolicy.policy,
     postProcess: resolvePostProcess(params.target, palette),
     ...(params.target.edit ? { edit: params.target.edit } : {}),
-    ...(params.target.auxiliaryMaps ? { auxiliaryMaps: params.target.auxiliaryMaps } : {}),
+    ...(params.target.auxiliaryMaps
+      ? { auxiliaryMaps: params.target.auxiliaryMaps }
+      : {}),
     ...(params.spritesheet ? { spritesheet: params.spritesheet } : {}),
     ...(params.generationDisabled ? { generationDisabled: true } : {}),
     ...(params.catalogDisabled ? { catalogDisabled: true } : {}),
@@ -1001,7 +1064,8 @@ function expandSpritesheetTarget(params: {
   const outExt = path.extname(normalizedSheetOut) || ".png";
   const outBase = path.basename(normalizedSheetOut, outExt);
   const frameTargets: PlannedTarget[] = [];
-  const animations: NonNullable<PlannedTarget["spritesheet"]>["animations"] = [];
+  const animations: NonNullable<PlannedTarget["spritesheet"]>["animations"] =
+    [];
 
   const entries = Object.entries(params.target.animations ?? {}).sort((a, b) =>
     a[0].localeCompare(b[0]),
@@ -1155,7 +1219,9 @@ function mergeStyleKitPrompt(params: {
   return {
     ...params.promptSpec,
     style: [params.promptSpec.style, styleHint].filter(Boolean).join(" "),
-    lighting: [params.promptSpec.lighting, lightingHint].filter(Boolean).join(" "),
+    lighting: [params.promptSpec.lighting, lightingHint]
+      .filter(Boolean)
+      .join(" "),
     constraints: [
       params.promptSpec.constraints,
       `Consistency group: ${params.consistencyGroupId}.`,
@@ -1177,9 +1243,15 @@ function mergeStyleKitPrompt(params: {
   };
 }
 
-function toNormalizedGenerationPolicy(target: ManifestTarget): NormalizedGenerationPolicy {
-  const outputFormat = normalizeOutputFormatAlias(target.generationPolicy?.outputFormat);
-  const normalizedHiresFix = normalizeHiresFixPolicy(target.generationPolicy?.hiresFix);
+function toNormalizedGenerationPolicy(
+  target: ManifestTarget,
+): NormalizedGenerationPolicy {
+  const outputFormat = normalizeOutputFormatAlias(
+    target.generationPolicy?.outputFormat,
+  );
+  const normalizedHiresFix = normalizeHiresFixPolicy(
+    target.generationPolicy?.hiresFix,
+  );
   const candidates =
     typeof target.generationPolicy?.candidates === "number"
       ? Math.max(1, Math.round(target.generationPolicy.candidates))
@@ -1190,7 +1262,10 @@ function toNormalizedGenerationPolicy(target: ManifestTarget): NormalizedGenerat
       : undefined;
 
   return {
-    size: target.generationPolicy?.size?.trim() || target.acceptance?.size || "1024x1024",
+    size:
+      target.generationPolicy?.size?.trim() ||
+      target.acceptance?.size ||
+      "1024x1024",
     quality: target.generationPolicy?.quality?.trim() || "high",
     draftQuality: target.generationPolicy?.draftQuality?.trim() || undefined,
     finalQuality: target.generationPolicy?.finalQuality?.trim() || undefined,
@@ -1206,12 +1281,16 @@ function toNormalizedGenerationPolicy(target: ManifestTarget): NormalizedGenerat
     providerConcurrency: target.generationPolicy?.providerConcurrency,
     rateLimitPerMinute: target.generationPolicy?.rateLimitPerMinute,
     vlmGate: normalizeVlmGatePolicy(target.generationPolicy?.vlmGate),
-    coarseToFine: normalizeCoarseToFinePolicy(target.generationPolicy?.coarseToFine),
+    coarseToFine: normalizeCoarseToFinePolicy(
+      target.generationPolicy?.coarseToFine,
+    ),
   };
 }
 
 function normalizeHiresFixPolicy(
-  policy: NonNullable<ManifestTarget["generationPolicy"]>["hiresFix"] | undefined,
+  policy:
+    | NonNullable<ManifestTarget["generationPolicy"]>["hiresFix"]
+    | undefined,
 ): NonNullable<NormalizedGenerationPolicy["hiresFix"]> | undefined {
   if (!policy) {
     return undefined;
@@ -1229,14 +1308,19 @@ function normalizeHiresFixPolicy(
     typeof policy.denoiseStrength === "number" &&
     Number.isFinite(policy.denoiseStrength)
   ) {
-    normalized.denoiseStrength = Math.max(0, Math.min(1, policy.denoiseStrength));
+    normalized.denoiseStrength = Math.max(
+      0,
+      Math.min(1, policy.denoiseStrength),
+    );
   }
 
   return Object.keys(normalized).length > 0 ? normalized : undefined;
 }
 
 function normalizeVlmGatePolicy(
-  policy: NonNullable<ManifestTarget["generationPolicy"]>["vlmGate"] | undefined,
+  policy:
+    | NonNullable<ManifestTarget["generationPolicy"]>["vlmGate"]
+    | undefined,
 ): NormalizedGenerationPolicy["vlmGate"] {
   if (!policy) {
     return undefined;
@@ -1258,18 +1342,22 @@ function normalizeVlmGatePolicy(
 }
 
 function normalizeCoarseToFinePolicy(
-  policy: NonNullable<ManifestTarget["generationPolicy"]>["coarseToFine"] | undefined,
+  policy:
+    | NonNullable<ManifestTarget["generationPolicy"]>["coarseToFine"]
+    | undefined,
 ): NormalizedGenerationPolicy["coarseToFine"] {
   if (!policy) {
     return undefined;
   }
 
   const promoteTopK =
-    typeof policy.promoteTopK === "number" && Number.isFinite(policy.promoteTopK)
+    typeof policy.promoteTopK === "number" &&
+    Number.isFinite(policy.promoteTopK)
       ? Math.max(1, Math.round(policy.promoteTopK))
       : 1;
   const minDraftScore =
-    typeof policy.minDraftScore === "number" && Number.isFinite(policy.minDraftScore)
+    typeof policy.minDraftScore === "number" &&
+    Number.isFinite(policy.minDraftScore)
       ? policy.minDraftScore
       : undefined;
 
@@ -1292,10 +1380,16 @@ function resolvePostProcess(
 
   const resizeTo = parseResizeTo(postProcess.resizeTo, target.acceptance?.size);
   const operations = {
-    ...(postProcess.operations?.trim ? { trim: postProcess.operations.trim } : {}),
+    ...(postProcess.operations?.trim
+      ? { trim: postProcess.operations.trim }
+      : {}),
     ...(postProcess.operations?.pad ? { pad: postProcess.operations.pad } : {}),
-    ...(postProcess.operations?.outline ? { outline: postProcess.operations.outline } : {}),
-    ...(postProcess.operations?.quantize ? { quantize: postProcess.operations.quantize } : {}),
+    ...(postProcess.operations?.outline
+      ? { outline: postProcess.operations.outline }
+      : {}),
+    ...(postProcess.operations?.quantize
+      ? { quantize: postProcess.operations.quantize }
+      : {}),
     ...(postProcess.operations?.resizeVariants
       ? {
           resizeVariants: {
@@ -1306,13 +1400,25 @@ function resolvePostProcess(
         }
       : {}),
     ...(postProcess.operations?.pixelPerfect
-      ? { pixelPerfect: normalizePixelPerfectOperation(postProcess.operations.pixelPerfect) }
+      ? {
+          pixelPerfect: normalizePixelPerfectOperation(
+            postProcess.operations.pixelPerfect,
+          ),
+        }
       : {}),
     ...(postProcess.operations?.smartCrop
-      ? { smartCrop: normalizeSmartCropOperation(postProcess.operations.smartCrop) }
+      ? {
+          smartCrop: normalizeSmartCropOperation(
+            postProcess.operations.smartCrop,
+          ),
+        }
       : {}),
     ...(postProcess.operations?.emitVariants
-      ? { emitVariants: normalizeEmitVariantsOperation(postProcess.operations.emitVariants) }
+      ? {
+          emitVariants: normalizeEmitVariantsOperation(
+            postProcess.operations.emitVariants,
+          ),
+        }
       : {}),
   };
 
@@ -1340,7 +1446,9 @@ function resolvePostProcess(
   };
 }
 
-function normalizePalettePolicy(target: ManifestTarget): PalettePolicy | undefined {
+function normalizePalettePolicy(
+  target: ManifestTarget,
+): PalettePolicy | undefined {
   const palette = target.palette;
   if (!palette) {
     return undefined;
@@ -1371,10 +1479,15 @@ function normalizeSeamHealPolicy(
     return undefined;
   }
 
-  const stripPx = seamHeal.stripPx ?? target.seamStripPx ?? evalProfile.hardGates?.seamStripPx;
+  const stripPx =
+    seamHeal.stripPx ??
+    target.seamStripPx ??
+    evalProfile.hardGates?.seamStripPx;
   return {
     enabled: seamHeal.enabled ?? true,
-    ...(typeof stripPx === "number" ? { stripPx: Math.max(1, Math.round(stripPx)) } : {}),
+    ...(typeof stripPx === "number"
+      ? { stripPx: Math.max(1, Math.round(stripPx)) }
+      : {}),
     ...(typeof seamHeal.strength === "number"
       ? { strength: Math.max(0, Math.min(1, seamHeal.strength)) }
       : {}),
@@ -1391,15 +1504,21 @@ function normalizeWrapGridPolicy(
   }
 
   const seamThreshold =
-    wrapGrid.seamThreshold ?? target.seamThreshold ?? evalProfile.hardGates?.seamThreshold;
+    wrapGrid.seamThreshold ??
+    target.seamThreshold ??
+    evalProfile.hardGates?.seamThreshold;
   const seamStripPx =
-    wrapGrid.seamStripPx ?? target.seamStripPx ?? evalProfile.hardGates?.seamStripPx;
+    wrapGrid.seamStripPx ??
+    target.seamStripPx ??
+    evalProfile.hardGates?.seamStripPx;
 
   return {
     columns: Math.max(1, Math.round(wrapGrid.columns)),
     rows: Math.max(1, Math.round(wrapGrid.rows)),
     ...(typeof seamThreshold === "number" ? { seamThreshold } : {}),
-    ...(typeof seamStripPx === "number" ? { seamStripPx: Math.max(1, Math.round(seamStripPx)) } : {}),
+    ...(typeof seamStripPx === "number"
+      ? { seamStripPx: Math.max(1, Math.round(seamStripPx)) }
+      : {}),
   };
 }
 
@@ -1522,8 +1641,9 @@ function parsePaletteFileColors(rawPalette: string): string[] {
     }
 
     const rgbTriple =
-      /^\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})(?:\s+.*)?$/u.exec(trimmed) ??
-      /^\s*(\d{1,3})\s+(\d{1,3})\s+(\d{1,3})(?:\s+.*)?$/u.exec(trimmed);
+      /^\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})(?:\s+.*)?$/u.exec(
+        trimmed,
+      ) ?? /^\s*(\d{1,3})\s+(\d{1,3})\s+(\d{1,3})(?:\s+.*)?$/u.exec(trimmed);
     if (rgbTriple) {
       const r = Number.parseInt(rgbTriple[1], 10);
       const g = Number.parseInt(rgbTriple[2], 10);
@@ -1577,7 +1697,9 @@ function resolveTargetModel(
   return manifest.providers.local?.model?.trim();
 }
 
-function resolvePostProcessAlgorithm(value: string | undefined): "nearest" | "lanczos3" {
+function resolvePostProcessAlgorithm(
+  value: string | undefined,
+): "nearest" | "lanczos3" {
   const normalized = value?.trim().toLowerCase();
   if (normalized === "nearest") {
     return "nearest";
@@ -1612,7 +1734,8 @@ function normalizeSmartCropOperation(operation: {
   return {
     enabled: operation.enabled ?? true,
     mode: operation.mode ?? "alpha-bounds",
-    ...(typeof operation.padding === "number" && Number.isFinite(operation.padding)
+    ...(typeof operation.padding === "number" &&
+    Number.isFinite(operation.padding)
       ? { padding: Math.max(0, Math.round(operation.padding)) }
       : {}),
   };
@@ -1630,7 +1753,9 @@ function normalizeEmitVariantsOperation(operation: {
   return {
     ...(typeof operation.raw === "boolean" ? { raw: operation.raw } : {}),
     ...(typeof operation.pixel === "boolean" ? { pixel: operation.pixel } : {}),
-    ...(typeof operation.styleRef === "boolean" ? { styleRef: operation.styleRef } : {}),
+    ...(typeof operation.styleRef === "boolean"
+      ? { styleRef: operation.styleRef }
+      : {}),
   };
 }
 
@@ -1656,7 +1781,11 @@ function parseResizeTo(
   resizeTo: ManifestPostProcess["resizeTo"],
   fallbackSize?: string,
 ): { width: number; height: number } | undefined {
-  if (typeof resizeTo === "number" && Number.isFinite(resizeTo) && resizeTo > 0) {
+  if (
+    typeof resizeTo === "number" &&
+    Number.isFinite(resizeTo) &&
+    resizeTo > 0
+  ) {
     const rounded = Math.max(1, Math.round(resizeTo));
     return { width: rounded, height: rounded };
   }
@@ -1684,7 +1813,9 @@ function resolveWrapGridValidationSize(
   );
 }
 
-function parseSize(size: string | undefined): { width: number; height: number } | undefined {
+function parseSize(
+  size: string | undefined,
+): { width: number; height: number } | undefined {
   if (!size) {
     return undefined;
   }
@@ -1696,14 +1827,22 @@ function parseSize(size: string | undefined): { width: number; height: number } 
 
   const width = Number.parseInt(match[1], 10);
   const height = Number.parseInt(match[2], 10);
-  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+  if (
+    !Number.isFinite(width) ||
+    !Number.isFinite(height) ||
+    width <= 0 ||
+    height <= 0
+  ) {
     return undefined;
   }
 
   return { width, height };
 }
 
-function toProviderJobSpec(target: PlannedTarget, provider: ProviderName): PlannedProviderJobSpec {
+function toProviderJobSpec(
+  target: PlannedTarget,
+  provider: ProviderName,
+): PlannedProviderJobSpec {
   return {
     targetId: target.id,
     out: target.out,
@@ -1728,21 +1867,6 @@ function toSchemaValidationIssue(issue: ZodIssue): ValidationIssue {
   };
 }
 
-function formatIssuePath(pathItems: Array<string | number>): string {
-  if (!pathItems.length) {
-    return "$";
-  }
-
-  return pathItems
-    .map((item, index) => {
-      if (typeof item === "number") {
-        return `[${item}]`;
-      }
-      return index === 0 ? item : `.${item}`;
-    })
-    .join("");
-}
-
 function normalizeHexColor(input: string): string {
   const trimmed = input.trim();
   if (trimmed.startsWith("#")) {
@@ -1751,6 +1875,8 @@ function normalizeHexColor(input: string): string {
   return `#${trimmed.toLowerCase()}`;
 }
 
-export function parseManifestProviderFlag(value: string | undefined): ProviderName | "auto" {
+export function parseManifestProviderFlag(
+  value: string | undefined,
+): ProviderName | "auto" {
   return parseProviderSelection(value);
 }

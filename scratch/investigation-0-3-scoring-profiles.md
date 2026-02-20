@@ -59,3 +59,4 @@ Implement roadmap item: introduce per-kind scoring presets and manifest-level sc
 - `npm test -- test/unit/manifest-validate.test.ts` ✅
 - `npm run typecheck && npm test && npm run build` ✅
 - Updated rollout tracking in `progress.md`.
+- Opened PR: https://github.com/Someblueman/lootforge/pull/31

@@ -54,6 +54,14 @@ This list translates `docs/ROADMAP.md` into issue-ready work items with explicit
   - A policy coverage report is generated in CI.
   - New manifest fields require tests before merge.
 
+### 7) Agentic Auto-Correction (Self-Healing Pipeline)
+- **Release target:** `0.3.0` to `0.4.0` bridge
+- **Why now:** Reduce human review load by actively reacting to VLM and edge-boundary failures.
+- **Acceptance criteria:**
+  - When a candidate hard-fails a VLM or Boundary gate, its critique string automatically drives an `edit-first` regeneration attempt.
+  - Generative loops have a configurable max retry limit.
+  - Provenance accurately captures auto-correction attempts and their deltas.
+
 ## P1 (Next: `0.4.0`)
 
 ### 7) Directed Synthesis Schema + Capability Gating
@@ -87,6 +95,14 @@ This list translates `docs/ROADMAP.md` into issue-ready work items with explicit
   - Pipeline supports low-cost first pass and top-K promotion into high-fidelity refinement.
   - Promotion decisions and discarded candidates are recorded in provenance.
   - Benchmarks show reduced provider cost per approved asset for equivalent acceptance rate.
+
+### 11) 3D-to-2D Projection & Automating ControlNets
+- **Release target:** `0.4.0`
+- **Why now:** Drawing or gathering boundary maps manually for ControlNet scales poorly.
+- **Acceptance criteria:**
+  - Node ingest layer handles `.obj` or voxel primitives and headless rendering scripts.
+  - Configurable isometric 8-way camera array directly outputs precise Depth/Normal rasterized maps to the pipeline's ControlNet payload queue.
+  - Target output perfectly preserves the 3D footprint constraint.
 
 ## P2 (Scale-up: `0.5.0` and `1.0.0`)
 
@@ -139,6 +155,44 @@ This list translates `docs/ROADMAP.md` into issue-ready work items with explicit
   - Versioned adapter I/O schema and compatibility guarantees are published.
   - Deprecation policy includes grace periods and migration guidance.
   - Conformance tests validate adapter implementations against contract versions.
+
+### 17) First-Class Audio Generation Pipeline
+- **Release target:** `0.5.0`
+- **Why now:** Games need unified aesthetics spanning both visual and auditory spheres.
+- **Acceptance criteria:**
+  - Audio Target specifications support text prompts, timing instructions, and stem definitions.
+  - Pipeline connects to audio generation logic (SFX parameterized models + loop models).
+  - Implements ITU-R BS.1770 / EBU R128 loudness and true peak compliance QA.
+  - Automated loop seam Click/Warble anomaly detectors.
+  - Introduce LLM-driven generation to automatically create structured audio manifests.
+
+### 18) Generative Dependency DAG ("Asset Lineage")
+- **Release target:** `0.5.0`
+- **Why now:** True collection-level coherence requires downstream assets to inherit their predecessors perfectly.
+- **Acceptance criteria:**
+  - Support execution DAG where target dependencies physically block child generators until the parent target is "Locked/Approved".
+  - Auto-injection of Parent Lock artifacts into Child inference (e.g., as IP-Adapter styling).
+
+### 19) Native Engine Editor Plugins
+- **Release target:** `0.5.0`
+- **Why now:** Reduce workflow friction between generating an asset and verifying it physically fits a map scene.
+- **Acceptance criteria:**
+  - Godot and Unity plugins that wrap `/v1/` `serve` module endpoints.
+  - Developers can type prompts per-GameObject and directly fetch/auto-apply materials/sprites to the scene graph.
+
+### 20) Native SVG & UI Generation
+- **Release target:** `0.5.0`
+- **Why now:** Real UI components require cleanly separated vector layers, not just edge-traced bitmaps.
+- **Acceptance criteria:**
+  - Diffusion-driven SVG tools (e.g., LayerTracer) explicitly emit manipulatable, grouped path files.
+  - Implementation of style-reference set distillation rules for icon packs mapping.
+
+### 21) The Multimodal Style Bible
+- **Release target:** `1.0.0`
+- **Why now:** Massive projects require absolute guardrails guaranteeing consistency across teams.
+- **Acceptance criteria:**
+  - `styleKits` expands schema validating visual layout, palette rules, and global acoustic footprints.
+  - Validation physically halts runs whose generated artifacts violate the style bible assertions.
 
 ### 17) Roadmap-to-Delivery Traceability Policy
 - **Release target:** `1.0.0`

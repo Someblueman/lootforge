@@ -10,9 +10,15 @@ import {
   resolveTargetProviderRoute,
 } from "../providers/registry.js";
 import {
+  CandidateScoreRecord,
+  GenerationProvider,
+  getTargetGenerationPolicy,
+  normalizeGenerationPolicyForProvider,
   nowIso,
   parseProviderSelection,
   PlannedTarget,
+  ProviderCandidateOutput,
+  ProviderError,
   ProviderJob,
   ProviderName,
   ProviderRunResult,
@@ -100,6 +106,12 @@ interface SelectionLockItem {
 interface SelectionLockFile {
   generatedAt?: string;
   targets?: SelectionLockItem[];
+}
+
+interface ScoredCandidateSet {
+  candidateOutputs: ProviderCandidateOutput[];
+  scores: CandidateScoreRecord[];
+  bestPath: string;
 }
 
 export async function runGeneratePipeline(
@@ -288,6 +300,7 @@ export async function runGeneratePipeline(
       skipped: result.skipped,
       candidateOutputs: result.candidateOutputs,
       candidateScores: result.candidateScores,
+      coarseToFine: result.coarseToFine,
       generationMode: result.generationMode,
       edit: result.edit,
       regenerationSource: result.regenerationSource,
@@ -404,13 +417,15 @@ async function runTaskWithFallback(params: {
 
   for (const providerName of providerChain) {
     const provider = getProvider(params.registry, providerName);
+    const normalizedPolicy = resolveProviderGenerationPolicy(params.task.target, providerName);
+    const draftTarget = materializeDraftTarget(params.task.target, normalizedPolicy);
     if (targetRequiresEditSupport(params.task.target) && !provider.supports("image-edits")) {
       lastError = new Error(
         `Provider "${providerName}" does not support edit-first generation for target "${params.task.target.id}".`,
       );
       continue;
     }
-    const preparedJobs = await provider.prepareJobs([params.task.target], {
+    const preparedJobs = await provider.prepareJobs([draftTarget], {
       outDir: params.outDir,
       imagesDir: params.imagesDir,
       now: params.now,
@@ -474,27 +489,54 @@ async function runTaskWithFallback(params: {
           fetchImpl: params.fetchImpl,
         });
 
-        const candidatePaths =
-          runResult.candidateOutputs?.map((candidate) => candidate.outputPath) ??
-          [runResult.outputPath];
+        const draftCandidates = await scoreProviderRunCandidates({
+          target: params.task.target,
+          runResult,
+          outDir: params.outDir,
+        });
 
-        const candidateSelection = await scoreCandidateImages(
-          params.task.target,
-          candidatePaths,
-          { outDir: params.outDir },
-        );
-        const bestPath = candidateSelection.bestPath;
-        if (bestPath !== job.outPath) {
-          await cp(bestPath, job.outPath, { force: true });
+        const coarseToFinePolicy = normalizedPolicy.coarseToFine;
+        if (coarseToFinePolicy?.enabled) {
+          const coarseToFineResult = await runCoarseToFineRefinement({
+            provider,
+            providerName,
+            task: params.task,
+            runContext: {
+              outDir: params.outDir,
+              imagesDir: params.imagesDir,
+              now: params.now,
+              fetchImpl: params.fetchImpl,
+            },
+            policy: coarseToFinePolicy,
+            normalizedPolicy,
+            draftCandidates,
+          });
+          await copyIfDifferent(coarseToFineResult.bestPath, job.outPath);
+
+          const fileStat = await stat(job.outPath);
+          return {
+            ...runResult,
+            provider: providerName,
+            outputPath: job.outPath,
+            bytesWritten: fileStat.size,
+            candidateOutputs: coarseToFineResult.candidateOutputs,
+            candidateScores: coarseToFineResult.scores,
+            coarseToFine: coarseToFineResult.coarseToFine,
+            generationMode: params.task.target.generationMode,
+            edit: params.task.target.edit,
+            regenerationSource: params.task.target.regenerationSource,
+          };
         }
 
+        await copyIfDifferent(draftCandidates.bestPath, job.outPath);
         const fileStat = await stat(job.outPath);
         return {
           ...runResult,
           provider: providerName,
           outputPath: job.outPath,
           bytesWritten: fileStat.size,
-          candidateScores: candidateSelection.scores,
+          candidateOutputs: draftCandidates.candidateOutputs,
+          candidateScores: draftCandidates.scores,
           generationMode: params.task.target.generationMode,
           edit: params.task.target.edit,
           regenerationSource: params.task.target.regenerationSource,
@@ -511,6 +553,335 @@ async function runTaskWithFallback(params: {
   throw lastError instanceof Error
     ? lastError
     : new Error(`Generation failed for target ${params.task.target.id}`);
+}
+
+function resolveProviderGenerationPolicy(
+  target: PlannedTarget,
+  providerName: ProviderName,
+) {
+  return normalizeGenerationPolicyForProvider(
+    providerName,
+    getTargetGenerationPolicy(target),
+  ).policy;
+}
+
+function materializeDraftTarget(
+  target: PlannedTarget,
+  normalizedPolicy: ReturnType<typeof resolveProviderGenerationPolicy>,
+): PlannedTarget {
+  if (!normalizedPolicy.coarseToFine?.enabled || !normalizedPolicy.draftQuality) {
+    return target;
+  }
+
+  return {
+    ...target,
+    generationPolicy: {
+      ...(target.generationPolicy ?? {}),
+      quality: normalizedPolicy.draftQuality,
+    },
+  };
+}
+
+async function scoreProviderRunCandidates(params: {
+  target: PlannedTarget;
+  runResult: ProviderRunResult;
+  outDir: string;
+}): Promise<ScoredCandidateSet> {
+  const candidateOutputs =
+    params.runResult.candidateOutputs && params.runResult.candidateOutputs.length > 0
+      ? params.runResult.candidateOutputs
+      : [
+          {
+            outputPath: params.runResult.outputPath,
+            bytesWritten: params.runResult.bytesWritten,
+          },
+        ];
+
+  const candidateSelection = await scoreCandidateImages(
+    params.target,
+    candidateOutputs.map((candidate) => candidate.outputPath),
+    { outDir: params.outDir },
+  );
+
+  return {
+    candidateOutputs,
+    scores: candidateSelection.scores,
+    bestPath: candidateSelection.bestPath,
+  };
+}
+
+async function runCoarseToFineRefinement(params: {
+  provider: GenerationProvider;
+  providerName: ProviderName;
+  task: TargetTask;
+  runContext: {
+    outDir: string;
+    imagesDir: string;
+    now?: () => Date;
+    fetchImpl?: typeof fetch;
+  };
+  policy: NonNullable<ReturnType<typeof resolveProviderGenerationPolicy>["coarseToFine"]>;
+  normalizedPolicy: ReturnType<typeof resolveProviderGenerationPolicy>;
+  draftCandidates: ScoredCandidateSet;
+}): Promise<{
+  bestPath: string;
+  candidateOutputs: ProviderCandidateOutput[];
+  scores: CandidateScoreRecord[];
+  coarseToFine: NonNullable<ProviderRunResult["coarseToFine"]>;
+}> {
+  const draftQuality = params.normalizedPolicy.draftQuality ?? params.normalizedPolicy.quality;
+  const finalQuality = params.normalizedPolicy.finalQuality ?? params.normalizedPolicy.quality;
+
+  const promotedRows: Array<{
+    outputPath: string;
+    score: number;
+    passedAcceptance: boolean;
+    refinedOutputPath?: string;
+  }> = [];
+  const discardedRows: Array<{
+    outputPath: string;
+    score: number;
+    passedAcceptance: boolean;
+    reason: string;
+  }> = [];
+  const warnings: string[] = [];
+  const promotedSet = new Set<string>();
+
+  for (const score of params.draftCandidates.scores) {
+    let discardReason: string | null = null;
+    if (params.policy.requireDraftAcceptance && !score.passedAcceptance) {
+      discardReason = "draft_failed_acceptance";
+    } else if (
+      typeof params.policy.minDraftScore === "number" &&
+      score.score < params.policy.minDraftScore
+    ) {
+      discardReason = "below_min_draft_score";
+    } else if (promotedRows.length >= params.policy.promoteTopK) {
+      discardReason = "outside_top_k";
+    }
+
+    if (discardReason) {
+      discardedRows.push({
+        outputPath: score.outputPath,
+        score: score.score,
+        passedAcceptance: score.passedAcceptance,
+        reason: discardReason,
+      });
+      continue;
+    }
+
+    promotedRows.push({
+      outputPath: score.outputPath,
+      score: score.score,
+      passedAcceptance: score.passedAcceptance,
+    });
+    promotedSet.add(score.outputPath);
+  }
+
+  const draftScoresDecorated = params.draftCandidates.scores.map((score) => ({
+    ...score,
+    stage: "draft" as const,
+    promoted: promotedSet.has(score.outputPath),
+    selected: false,
+  }));
+
+  const coarseSummaryBase: Omit<
+    NonNullable<ProviderRunResult["coarseToFine"]>,
+    "discarded" | "promoted"
+  > = {
+    enabled: true,
+    draftQuality,
+    finalQuality,
+    promoteTopK: params.policy.promoteTopK,
+    ...(typeof params.policy.minDraftScore === "number"
+      ? { minDraftScore: params.policy.minDraftScore }
+      : {}),
+    requireDraftAcceptance: params.policy.requireDraftAcceptance,
+    draftCandidateCount: params.draftCandidates.candidateOutputs.length,
+  };
+
+  if (promotedRows.length === 0) {
+    return {
+      bestPath: params.draftCandidates.bestPath,
+      candidateOutputs: params.draftCandidates.candidateOutputs,
+      scores: draftScoresDecorated.map((score) => ({
+        ...score,
+        selected: score.outputPath === params.draftCandidates.bestPath,
+      })),
+      coarseToFine: {
+        ...coarseSummaryBase,
+        promoted: promotedRows,
+        discarded: discardedRows,
+        skippedReason: "no_candidates_promoted",
+      },
+    };
+  }
+
+  if (!params.provider.supports("image-edits")) {
+    warnings.push(
+      `Provider "${params.providerName}" lacks image-edits support; coarse-to-fine refinement skipped.`,
+    );
+    return {
+      bestPath: params.draftCandidates.bestPath,
+      candidateOutputs: params.draftCandidates.candidateOutputs,
+      scores: draftScoresDecorated.map((score) => ({
+        ...score,
+        selected: score.outputPath === params.draftCandidates.bestPath,
+      })),
+      coarseToFine: {
+        ...coarseSummaryBase,
+        promoted: promotedRows,
+        discarded: discardedRows,
+        skippedReason: "provider_missing_image_edit_support",
+        warnings,
+      },
+    };
+  }
+
+  if (params.task.target.generationMode === "edit-first") {
+    warnings.push("Coarse-to-fine refinement is skipped for edit-first targets.");
+    return {
+      bestPath: params.draftCandidates.bestPath,
+      candidateOutputs: params.draftCandidates.candidateOutputs,
+      scores: draftScoresDecorated.map((score) => ({
+        ...score,
+        selected: score.outputPath === params.draftCandidates.bestPath,
+      })),
+      coarseToFine: {
+        ...coarseSummaryBase,
+        promoted: promotedRows,
+        discarded: discardedRows,
+        skippedReason: "target_already_edit_first",
+        warnings,
+      },
+    };
+  }
+
+  const refinedOutputs: ProviderCandidateOutput[] = [];
+  const sourceByRefinedOutput = new Map<string, string>();
+
+  for (const [index, promoted] of promotedRows.entries()) {
+    const refineTarget = createRefineTarget({
+      target: params.task.target,
+      sourceOutputPath: promoted.outputPath,
+      outDir: params.runContext.outDir,
+      finalQuality,
+      refineIndex: index + 1,
+    });
+
+    const refineJobs = await params.provider.prepareJobs([refineTarget], {
+      outDir: params.runContext.outDir,
+      imagesDir: params.runContext.imagesDir,
+      now: params.runContext.now,
+    });
+    if (refineJobs.length === 0) {
+      throw new ProviderError({
+        provider: params.providerName,
+        code: "coarse_to_fine_no_refine_job",
+        message: `Provider ${params.providerName} did not produce refine job for ${params.task.target.id}.`,
+      });
+    }
+
+    const refineJob = refineJobs[0];
+    const refineRunResult = await params.provider.runJob(refineJob, {
+      outDir: params.runContext.outDir,
+      imagesDir: params.runContext.imagesDir,
+      now: params.runContext.now,
+      fetchImpl: params.runContext.fetchImpl,
+    });
+
+    const refineSelection = await scoreProviderRunCandidates({
+      target: params.task.target,
+      runResult: refineRunResult,
+      outDir: params.runContext.outDir,
+    });
+
+    await copyIfDifferent(refineSelection.bestPath, refineJob.outPath);
+    const refinedStat = await stat(refineJob.outPath);
+    refinedOutputs.push({
+      outputPath: refineJob.outPath,
+      bytesWritten: refinedStat.size,
+    });
+    sourceByRefinedOutput.set(refineJob.outPath, promoted.outputPath);
+    promoted.refinedOutputPath = refineJob.outPath;
+  }
+
+  const finalRefineSelection = await scoreCandidateImages(
+    params.task.target,
+    refinedOutputs.map((row) => row.outputPath),
+    { outDir: params.runContext.outDir },
+  );
+
+  const refineScoresDecorated = finalRefineSelection.scores.map((score) => ({
+    ...score,
+    stage: "refine" as const,
+    promoted: true,
+    sourceOutputPath: sourceByRefinedOutput.get(score.outputPath),
+  }));
+
+  return {
+    bestPath: finalRefineSelection.bestPath,
+    candidateOutputs: [...params.draftCandidates.candidateOutputs, ...refinedOutputs],
+    scores: [...draftScoresDecorated, ...refineScoresDecorated],
+    coarseToFine: {
+      ...coarseSummaryBase,
+      promoted: promotedRows,
+      discarded: discardedRows,
+      ...(warnings.length > 0 ? { warnings } : {}),
+    },
+  };
+}
+
+function createRefineTarget(params: {
+  target: PlannedTarget;
+  sourceOutputPath: string;
+  outDir: string;
+  finalQuality: string;
+  refineIndex: number;
+}): PlannedTarget {
+  const relativeSource = toPortableRelativePath(params.outDir, params.sourceOutputPath);
+  return {
+    ...params.target,
+    out: withRefineSuffix(params.target.out, params.refineIndex),
+    generationMode: "edit-first",
+    generationPolicy: {
+      ...(params.target.generationPolicy ?? {}),
+      quality: params.finalQuality,
+      candidates: 1,
+    },
+    edit: {
+      mode: "iterate",
+      instruction:
+        params.target.edit?.instruction ??
+        "Refine the supplied draft candidate at higher fidelity while preserving composition and silhouette.",
+      preserveComposition: params.target.edit?.preserveComposition ?? true,
+      inputs: [
+        {
+          path: relativeSource,
+          role: "base",
+          fidelity: "high",
+        },
+      ],
+    },
+  };
+}
+
+function withRefineSuffix(filePath: string, refineIndex: number): string {
+  const ext = path.extname(filePath);
+  const base = filePath.slice(0, filePath.length - ext.length);
+  return `${base}.refine-${refineIndex}${ext}`;
+}
+
+function toPortableRelativePath(rootDir: string, filePath: string): string {
+  const relative = path.relative(rootDir, filePath);
+  return relative.split(path.sep).join("/");
+}
+
+async function copyIfDifferent(sourcePath: string, destinationPath: string): Promise<void> {
+  if (sourcePath === destinationPath) {
+    return;
+  }
+  await cp(sourcePath, destinationPath, { force: true });
 }
 
 function backoffMsForAttempt(attempt: number): number {

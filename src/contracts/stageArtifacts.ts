@@ -25,6 +25,8 @@ const promptSpecSchema = z.object({
 const generationPolicySchema = z.object({
   size: nonEmptyString,
   quality: nonEmptyString,
+  draftQuality: nonEmptyString.optional(),
+  finalQuality: nonEmptyString.optional(),
   background: nonEmptyString,
   outputFormat: z.enum(["png", "jpeg", "webp"]),
   candidates: z.number().int().min(1),
@@ -36,6 +38,14 @@ const generationPolicySchema = z.object({
     .object({
       threshold: z.number().min(0).max(5).optional(),
       rubric: nonEmptyString.optional(),
+    })
+    .optional(),
+  coarseToFine: z
+    .object({
+      enabled: z.boolean(),
+      promoteTopK: z.number().int().min(1),
+      minDraftScore: z.number().optional(),
+      requireDraftAcceptance: z.boolean(),
     })
     .optional(),
 });
@@ -238,6 +248,9 @@ const candidateScoreSchema = z.object({
   score: z.number(),
   passedAcceptance: z.boolean(),
   reasons: z.array(nonEmptyString),
+  stage: z.enum(["draft", "refine"]).optional(),
+  promoted: z.boolean().optional(),
+  sourceOutputPath: nonEmptyString.optional(),
   components: z.record(z.number()).optional(),
   metrics: z.record(z.number()).optional(),
   vlm: z
@@ -325,6 +338,35 @@ const stageArtifactSchemas = {
           )
           .optional(),
         candidateScores: z.array(candidateScoreSchema).optional(),
+        coarseToFine: z
+          .object({
+            enabled: z.boolean(),
+            draftQuality: nonEmptyString,
+            finalQuality: nonEmptyString,
+            promoteTopK: z.number().int().min(1),
+            minDraftScore: z.number().optional(),
+            requireDraftAcceptance: z.boolean(),
+            draftCandidateCount: z.number().int().min(0),
+            promoted: z.array(
+              z.object({
+                outputPath: nonEmptyString,
+                score: z.number(),
+                passedAcceptance: z.boolean(),
+                refinedOutputPath: nonEmptyString.optional(),
+              }),
+            ),
+            discarded: z.array(
+              z.object({
+                outputPath: nonEmptyString,
+                score: z.number(),
+                passedAcceptance: z.boolean(),
+                reason: nonEmptyString,
+              }),
+            ),
+            skippedReason: nonEmptyString.optional(),
+            warnings: z.array(nonEmptyString).optional(),
+          })
+          .optional(),
         generationMode: generationModeSchema.optional(),
         edit: targetEditSchema.optional(),
         regenerationSource: regenerationSourceSchema.optional(),

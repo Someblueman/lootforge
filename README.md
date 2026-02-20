@@ -457,6 +457,8 @@ Per target:
 - `edit.inputs[].path`: when used, must resolve inside the active `--out` root at runtime (`generate`, `eval`, and `regenerate`)
 - `generationPolicy.background: "transparent"` requires a provider that supports transparent outputs (unsupported providers now fail validation)
 - `generationPolicy.vlmGate?`: optional candidate gate (`threshold` defaults to `4` on a `0..5` scale, optional `rubric`)
+- `generationPolicy.coarseToFine?`: optional promotion controls (`enabled`, `promoteTopK`, `minDraftScore`, `requireDraftAcceptance`)
+- `generationPolicy.draftQuality` / `generationPolicy.finalQuality`: optional quality split used by coarse-pass and refinement-pass generation
 - `prompt` (string or structured object) for non-spritesheet targets
 - `provider?` (`openai|nano|local`)
 - `acceptance`: `{ size, alpha, maxFileSizeKB }`

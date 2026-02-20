@@ -114,6 +114,37 @@ describe("manifest normalization", () => {
     });
   });
 
+  it("normalizes coarse-to-fine generation policy controls", () => {
+    const manifest: ManifestV2 = {
+      ...BASE_MANIFEST,
+      targets: [
+        {
+          ...BASE_MANIFEST.targets[0],
+          generationPolicy: {
+            ...BASE_MANIFEST.targets[0].generationPolicy,
+            quality: "high",
+            draftQuality: "medium",
+            finalQuality: "high",
+            candidates: 4,
+            coarseToFine: {
+              enabled: true,
+              promoteTopK: 2,
+            },
+          },
+        },
+      ],
+    };
+
+    const artifacts = createPlanArtifacts(manifest, "/tmp/manifest.json");
+    expect(artifacts.targets[0].generationPolicy?.coarseToFine).toEqual({
+      enabled: true,
+      promoteTopK: 2,
+      requireDraftAcceptance: true,
+    });
+    expect(artifacts.targets[0].generationPolicy?.draftQuality).toBe("medium");
+    expect(artifacts.targets[0].generationPolicy?.finalQuality).toBe("high");
+  });
+
   it("defaults target palette from style-kit palette files when target palette is unset", async () => {
     const tempRoot = await mkdtemp(path.join(os.tmpdir(), "lootforge-style-kit-palette-"));
     const styleDir = path.join(tempRoot, "style", "default");

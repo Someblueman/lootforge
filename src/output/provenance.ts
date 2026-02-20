@@ -21,6 +21,9 @@ export interface ProvenanceJobRecord {
     score: number;
     passedAcceptance: boolean;
     reasons: string[];
+    stage?: "draft" | "refine";
+    promoted?: boolean;
+    sourceOutputPath?: string;
     components?: Record<string, number>;
     metrics?: Record<string, number>;
     vlm?: {
@@ -34,6 +37,29 @@ export interface ProvenanceJobRecord {
     };
     selected?: boolean;
   }>;
+  coarseToFine?: {
+    enabled: boolean;
+    draftQuality: string;
+    finalQuality: string;
+    promoteTopK: number;
+    minDraftScore?: number;
+    requireDraftAcceptance: boolean;
+    draftCandidateCount: number;
+    promoted: Array<{
+      outputPath: string;
+      score: number;
+      passedAcceptance: boolean;
+      refinedOutputPath?: string;
+    }>;
+    discarded: Array<{
+      outputPath: string;
+      score: number;
+      passedAcceptance: boolean;
+      reason: string;
+    }>;
+    skippedReason?: string;
+    warnings?: string[];
+  };
   generationMode?: "text" | "edit-first";
   edit?: {
     mode?: "edit" | "iterate";

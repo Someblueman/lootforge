@@ -1,5 +1,5 @@
-# codemap-hash: 16b8b22129067eb02d617dff6a4ebcf4cb3a3de2d246e608318f5da1ce70ef60
-# Generated: 2026-02-20 22:38:26 UTC
+# codemap-hash: 5c12a1c44438c670e44e450d01aeaaaee4ebd36cd08d0912eb54d69a3338091f
+# Generated: 2026-02-20 22:49:44 UTC
 # Regenerate: codemap
 # Format: <package>\t<entry_file>\t[purpose]
 .	src/checks/boundaryMetrics.ts	TypeScript package lootforge

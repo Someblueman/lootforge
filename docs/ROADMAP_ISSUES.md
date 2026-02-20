@@ -5,6 +5,10 @@ Last updated: 2026-02-18
 This list translates `docs/ROADMAP.md` into issue-ready work items with explicit acceptance criteria.
 
 Recent completion (2026-02-20):
+- Implemented per-kind scoring presets and manifest-level scoring profile overrides:
+  - added deterministic default score-weight presets by target kind,
+  - added optional manifest `scoringProfiles[]` contract with per-kind overrides,
+  - validated `targets[].scoringProfile` references and normalized scoring resolution into planned targets.
 - Implemented model capability introspection contract and endpoint for provider feature gating:
   - added service discovery contract endpoint (`GET /v1/contracts/provider-capabilities`),
   - added runtime introspection endpoint (`GET /v1/providers/capabilities`) with provider/model query support,

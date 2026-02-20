@@ -58,3 +58,13 @@ Implement roadmap item: model capability introspection contract and endpoint for
 - `npm test -- test/unit/provider-capability-contract.test.ts test/integration/service-mode.test.ts` ✅
 - `npm run typecheck && npm test && npm run build` ✅
 - Opened PR: https://github.com/Someblueman/lootforge/pull/33
+
+## Merge sync (2026-02-20)
+- Merged `origin/release/0.3` into `codex/0-3-provider-capability-introspection` to resolve PR conflicts.
+- Conflict files reconciled:
+  - `CODEMAP.md`
+  - `CODEMAP.paths`
+  - `docs/ROADMAP.md`
+  - `docs/ROADMAP_ISSUES.md`
+  - `progress.md`
+- Resolution decision: keep both completion records from `release/0.3` (scoring profiles) and this branch (provider capability introspection) so roadmap/progress history remains complete.

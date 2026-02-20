@@ -10,6 +10,8 @@ import type {
   PromptSpec,
   ProviderName,
   SeamHealPolicy,
+  TargetKind,
+  TargetScoreWeights,
   TargetEditSpec,
   WrapGridPolicy,
 } from "../providers/types.js";
@@ -77,14 +79,13 @@ export interface ManifestEvaluationProfile {
     spritesheetSilhouetteDriftMax?: number;
     spritesheetAnchorDriftMax?: number;
   };
-  scoreWeights?: {
-    readability?: number;
-    fileSize?: number;
-    consistency?: number;
-    clip?: number;
-    lpips?: number;
-    ssim?: number;
-  };
+  scoreWeights?: TargetScoreWeights;
+}
+
+export interface ManifestScoringProfile {
+  id: string;
+  scoreWeights?: TargetScoreWeights;
+  kindScoreWeights?: Partial<Record<TargetKind, TargetScoreWeights>>;
 }
 
 export interface ManifestAcceptance {
@@ -217,6 +218,7 @@ export interface ManifestV2 {
   styleKits: ManifestStyleKit[];
   consistencyGroups?: ManifestConsistencyGroup[];
   evaluationProfiles: ManifestEvaluationProfile[];
+  scoringProfiles?: ManifestScoringProfile[];
   atlas?: ManifestAtlasOptions;
   targets: ManifestTarget[];
 }

@@ -146,6 +146,56 @@ describe("stage artifact contracts", () => {
     expect(result.items[0]?.metrics?.alphaHaloRisk).toBe(0.02);
   });
 
+  it("accepts targets-index artifacts with pixel/smart-crop post-process fields", () => {
+    const result = validateStageArtifact(
+      "targets-index",
+      {
+        generatedAt: "2026-02-20T00:00:00.000Z",
+        manifestPath: "/tmp/out/assets/imagegen/manifest.json",
+        targets: [
+          {
+            id: "hero",
+            kind: "sprite",
+            out: "hero.png",
+            promptSpec: { primary: "hero sprite" },
+            generationPolicy: {
+              size: "1024x1024",
+              quality: "high",
+              background: "transparent",
+              outputFormat: "png",
+              candidates: 1,
+              maxRetries: 1,
+              fallbackProviders: [],
+            },
+            postProcess: {
+              resizeTo: { width: 32, height: 32 },
+              operations: {
+                smartCrop: {
+                  enabled: true,
+                  mode: "alpha-bounds",
+                  padding: 2,
+                },
+                pixelPerfect: {
+                  enabled: true,
+                  scale: 2,
+                },
+                emitVariants: {
+                  raw: true,
+                  styleRef: true,
+                  pixel: true,
+                },
+              },
+            },
+          },
+        ],
+      },
+      "/tmp/out/jobs/targets-index.json",
+    );
+
+    expect(result.targets[0]?.postProcess?.operations?.emitVariants?.styleRef).toBe(true);
+    expect(result.targets[0]?.postProcess?.operations?.smartCrop?.mode).toBe("alpha-bounds");
+  });
+
   it("accepts optional pack invariant summaries in acceptance/eval reports", () => {
     const acceptance = validateStageArtifact(
       "acceptance-report",

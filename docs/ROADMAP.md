@@ -258,12 +258,15 @@ Completed 2026-02-20 in this release track:
   - added manifest + planner scaffolding for `targets[].controlImage`, `targets[].controlMode` (`canny|depth|openpose`),
   - added style-kit scaffolding for `styleKits[].styleReferenceImages`, `styleKits[].loraPath`, and `styleKits[].loraStrength`,
   - added generation-policy scaffolding for `generationPolicy.highQuality` and optional `generationPolicy.hiresFix`.
+- Implement first-class post-process semantics for pixel-perfect/smart-crop behaviors and explicit variant artifacts:
+  - added manifest schema + normalized planner support for `postProcess.operations.smartCrop`, `pixelPerfect`, and `emitVariants`,
+  - implemented process-stage semantics for smart-crop behavior and pixel-perfect nearest-neighbor resize handling,
+  - added explicit processed artifact emission for `__raw`, `__style_ref`, and `__pixel` variants.
 - Harden pixel-perfect quantization behavior:
   - enforce deterministic nearest-color exact-palette mapping with alpha-safe handling (transparent RGB zeroing),
   - add exact-palette strict mode (`palette.strict`) that enforces 100% visible-pixel compliance during process/acceptance/scoring.
 
 Remaining queued items:
-- Implement first-class post-process semantics for pixel-perfect/smart-crop behaviors and emit explicit `raw`/`pixel`/`style_ref` artifact variants.
 - Add coarse-to-fine candidate promotion controls:
   - run lower-cost candidate generation/scoring first,
   - promote top-K candidates into high-fidelity refinement passes only when quality gates justify extra compute.

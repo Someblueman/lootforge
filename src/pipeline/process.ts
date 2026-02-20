@@ -120,6 +120,125 @@ function withVariantSuffix(filePath: string, variantName: string): string {
   return `${base}__${safeName}${ext}`;
 }
 
+async function writeDerivedVariant(params: {
+  buffer: Buffer;
+  processedPath: string;
+  legacyPath: string;
+  mirrorLegacy: boolean;
+}): Promise<void> {
+  const encoded = await sharp(params.buffer, { failOn: "none" })
+    .png({ compressionLevel: 9 })
+    .toBuffer();
+  await mkdir(path.dirname(params.processedPath), { recursive: true });
+  await writeFile(params.processedPath, encoded);
+  if (params.mirrorLegacy) {
+    await mkdir(path.dirname(params.legacyPath), { recursive: true });
+    await writeFile(params.legacyPath, encoded);
+  }
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
+}
+
+async function smartCropImage(
+  imageBuffer: Buffer,
+  options: {
+    mode?: "alpha-bounds" | "center";
+    padding?: number;
+    targetAspect?: number;
+  },
+): Promise<Buffer> {
+  const mode = options.mode ?? "alpha-bounds";
+  const padding = clamp(Math.round(options.padding ?? 0), 0, 256);
+  const metadata = await sharp(imageBuffer, { failOn: "none" }).metadata();
+  const width = metadata.width ?? 0;
+  const height = metadata.height ?? 0;
+  if (width <= 0 || height <= 0) {
+    return imageBuffer;
+  }
+
+  let cropLeft = 0;
+  let cropTop = 0;
+  let cropWidth = width;
+  let cropHeight = height;
+
+  if (mode === "center") {
+    const targetAspect = options.targetAspect;
+    if (typeof targetAspect === "number" && Number.isFinite(targetAspect) && targetAspect > 0) {
+      const currentAspect = width / height;
+      if (currentAspect > targetAspect) {
+        cropWidth = Math.max(1, Math.round(height * targetAspect));
+        cropHeight = height;
+        cropLeft = Math.floor((width - cropWidth) / 2);
+        cropTop = 0;
+      } else if (currentAspect < targetAspect) {
+        cropWidth = width;
+        cropHeight = Math.max(1, Math.round(width / targetAspect));
+        cropLeft = 0;
+        cropTop = Math.floor((height - cropHeight) / 2);
+      } else {
+        return imageBuffer;
+      }
+    } else {
+      return imageBuffer;
+    }
+  } else {
+    const rawResult = await sharp(imageBuffer, { failOn: "none" })
+      .ensureAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+    const data = rawResult.data;
+    const channels = rawResult.info.channels;
+    const rawWidth = rawResult.info.width;
+    const rawHeight = rawResult.info.height;
+
+    let minX = rawWidth;
+    let minY = rawHeight;
+    let maxX = -1;
+    let maxY = -1;
+
+    for (let y = 0; y < rawHeight; y += 1) {
+      for (let x = 0; x < rawWidth; x += 1) {
+        const index = (y * rawWidth + x) * channels;
+        const alpha = channels >= 4 ? data[index + 3] : 255;
+        if (alpha === 0) {
+          continue;
+        }
+        minX = Math.min(minX, x);
+        minY = Math.min(minY, y);
+        maxX = Math.max(maxX, x);
+        maxY = Math.max(maxY, y);
+      }
+    }
+
+    if (maxX < minX || maxY < minY) {
+      return imageBuffer;
+    }
+
+    cropLeft = clamp(minX - padding, 0, rawWidth - 1);
+    cropTop = clamp(minY - padding, 0, rawHeight - 1);
+    const right = clamp(maxX + padding, 0, rawWidth - 1);
+    const bottom = clamp(maxY + padding, 0, rawHeight - 1);
+    cropWidth = Math.max(1, right - cropLeft + 1);
+    cropHeight = Math.max(1, bottom - cropTop + 1);
+  }
+
+  if (cropLeft === 0 && cropTop === 0 && cropWidth === width && cropHeight === height) {
+    return imageBuffer;
+  }
+
+  return sharp(imageBuffer, { failOn: "none" })
+    .extract({
+      left: cropLeft,
+      top: cropTop,
+      width: cropWidth,
+      height: cropHeight,
+    })
+    .png()
+    .toBuffer();
+}
+
 function parsePaletteColors(colors: string[] | undefined): Array<{ r: number; g: number; b: number }> {
   if (!colors || colors.length === 0) {
     return [];
@@ -249,45 +368,112 @@ async function processSingleTarget(params: {
   legacyImagePath: string;
 }): Promise<{ variantCount: number }> {
   const postProcess = getTargetPostProcessPolicy(params.target);
+  const emitVariants = postProcess.operations?.emitVariants;
+  const pixelPerfect = postProcess.operations?.pixelPerfect;
+  const pixelPerfectEnabled = pixelPerfect ? pixelPerfect.enabled !== false : false;
 
-  let pipeline = sharp(params.rawImagePath, { failOn: "none" }).ensureAlpha();
+  let variantCount = 0;
+  let outputBuffer = await sharp(params.rawImagePath, { failOn: "none" })
+    .ensureAlpha()
+    .png()
+    .toBuffer();
+
+  if (emitVariants?.raw === true) {
+    await writeDerivedVariant({
+      buffer: outputBuffer,
+      processedPath: withVariantSuffix(params.processedImagePath, "raw"),
+      legacyPath: withVariantSuffix(params.legacyImagePath, "raw"),
+      mirrorLegacy: params.mirrorLegacy,
+    });
+    variantCount += 1;
+  }
 
   const trimConfig = postProcess.operations?.trim;
   if (trimConfig?.enabled === true || trimConfig?.threshold !== undefined) {
-    pipeline = pipeline.trim({ threshold: trimConfig.threshold ?? 10 });
+    outputBuffer = await sharp(outputBuffer, { failOn: "none" })
+      .trim({ threshold: trimConfig.threshold ?? 10 })
+      .png()
+      .toBuffer();
   }
 
   const padConfig = postProcess.operations?.pad;
   if (padConfig && padConfig.pixels > 0) {
     const background = parseColorHex(padConfig.background);
-    pipeline = pipeline.extend({
-      top: padConfig.pixels,
-      bottom: padConfig.pixels,
-      left: padConfig.pixels,
-      right: padConfig.pixels,
-      background: {
-        r: background.r,
-        g: background.g,
-        b: background.b,
-        alpha: params.target.acceptance?.alpha === true ? 0 : 1,
-      },
+    outputBuffer = await sharp(outputBuffer, { failOn: "none" })
+      .extend({
+        top: padConfig.pixels,
+        bottom: padConfig.pixels,
+        left: padConfig.pixels,
+        right: padConfig.pixels,
+        background: {
+          r: background.r,
+          g: background.g,
+          b: background.b,
+          alpha: params.target.acceptance?.alpha === true ? 0 : 1,
+        },
+      })
+      .png()
+      .toBuffer();
+  }
+
+  const smartCrop = postProcess.operations?.smartCrop;
+  if (smartCrop && smartCrop.enabled !== false) {
+    const targetAspect =
+      postProcess.resizeTo && postProcess.resizeTo.height > 0
+        ? postProcess.resizeTo.width / postProcess.resizeTo.height
+        : undefined;
+    outputBuffer = await smartCropImage(outputBuffer, {
+      mode: smartCrop.mode,
+      padding: smartCrop.padding,
+      targetAspect,
     });
   }
 
   if (postProcess.resizeTo) {
-    pipeline = pipeline.resize(postProcess.resizeTo.width, postProcess.resizeTo.height, {
-      fit: "contain",
-      background:
-        params.target.acceptance?.alpha === true ||
-        params.target.runtimeSpec?.alphaRequired === true
-          ? { r: 0, g: 0, b: 0, alpha: 0 }
-          : { r: 0, g: 0, b: 0, alpha: 1 },
-      kernel: kernelForAlgorithm(postProcess.algorithm),
-      withoutEnlargement: true,
-    });
+    outputBuffer = await sharp(outputBuffer, { failOn: "none" })
+      .resize(postProcess.resizeTo.width, postProcess.resizeTo.height, {
+        fit: "contain",
+        background:
+          params.target.acceptance?.alpha === true ||
+          params.target.runtimeSpec?.alphaRequired === true
+            ? { r: 0, g: 0, b: 0, alpha: 0 }
+            : { r: 0, g: 0, b: 0, alpha: 1 },
+        kernel: pixelPerfectEnabled
+          ? kernelForAlgorithm("nearest")
+          : kernelForAlgorithm(postProcess.algorithm),
+        withoutEnlargement: true,
+      })
+      .png()
+      .toBuffer();
   }
 
-  let outputBuffer = await pipeline.png().toBuffer();
+  if (
+    pixelPerfectEnabled &&
+    !postProcess.resizeTo &&
+    typeof pixelPerfect?.scale === "number" &&
+    pixelPerfect.scale > 1
+  ) {
+    const metadata = await sharp(outputBuffer, { failOn: "none" }).metadata();
+    if (metadata.width && metadata.height) {
+      outputBuffer = await sharp(outputBuffer, { failOn: "none" })
+        .resize(metadata.width * pixelPerfect.scale, metadata.height * pixelPerfect.scale, {
+          fit: "fill",
+          kernel: kernelForAlgorithm("nearest"),
+        })
+        .png()
+        .toBuffer();
+    }
+  }
+
+  if (emitVariants?.styleRef === true) {
+    await writeDerivedVariant({
+      buffer: outputBuffer,
+      processedPath: withVariantSuffix(params.processedImagePath, "style_ref"),
+      legacyPath: withVariantSuffix(params.legacyImagePath, "style_ref"),
+      mirrorLegacy: params.mirrorLegacy,
+    });
+    variantCount += 1;
+  }
 
   const outlineConfig = postProcess.operations?.outline;
   if (outlineConfig?.size) {
@@ -352,7 +538,20 @@ async function processSingleTarget(params: {
     await cp(params.processedImagePath, params.legacyImagePath, { force: true });
   }
 
-  let variantCount = 0;
+  if (emitVariants?.pixel === true) {
+    await mkdir(path.dirname(withVariantSuffix(params.processedImagePath, "pixel")), {
+      recursive: true,
+    });
+    await writeFile(withVariantSuffix(params.processedImagePath, "pixel"), encodedMain);
+    if (params.mirrorLegacy) {
+      await mkdir(path.dirname(withVariantSuffix(params.legacyImagePath, "pixel")), {
+        recursive: true,
+      });
+      await writeFile(withVariantSuffix(params.legacyImagePath, "pixel"), encodedMain);
+    }
+    variantCount += 1;
+  }
+
   const variants = postProcess.operations?.resizeVariants?.variants ?? [];
   for (const variant of variants) {
     const variantPath = withVariantSuffix(params.processedImagePath, variant.name);

@@ -129,6 +129,20 @@ export interface ManifestPostProcessOperations {
     size: string;
     algorithm?: string;
   }>;
+  pixelPerfect?: {
+    enabled?: boolean;
+    scale?: number;
+  };
+  smartCrop?: {
+    enabled?: boolean;
+    mode?: "alpha-bounds" | "center";
+    padding?: number;
+  };
+  emitVariants?: {
+    raw?: boolean;
+    pixel?: boolean;
+    styleRef?: boolean;
+  };
 }
 
 export interface ManifestPostProcess {

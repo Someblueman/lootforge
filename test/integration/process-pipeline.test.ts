@@ -366,4 +366,131 @@ describe("process -> atlas -> package integration", () => {
       await exists(path.join(outDir, "assets", "imagegen", "processed", "images", "hero__ao.png")),
     ).toBe(true);
   });
+
+  test("emits raw/style_ref/pixel variants for smart-crop and pixel-perfect processing", async () => {
+    const tempRoot = await mkdtemp(path.join(os.tmpdir(), "lootforge-process-variant-outputs-"));
+    const outDir = path.join(tempRoot, "work");
+    const indexPath = path.join(outDir, "jobs", "targets-index.json");
+    const rawImagePath = path.join(outDir, "assets", "imagegen", "raw", "badge.png");
+
+    await mkdir(path.dirname(indexPath), { recursive: true });
+    await mkdir(path.dirname(rawImagePath), { recursive: true });
+
+    await writeFile(
+      indexPath,
+      `${JSON.stringify(
+        {
+          targets: [
+            {
+              id: "badge",
+              kind: "sprite",
+              out: "badge.png",
+              promptSpec: { primary: "badge icon" },
+              generationPolicy: {
+                outputFormat: "png",
+                background: "transparent",
+              },
+              postProcess: {
+                resizeTo: { width: 16, height: 16 },
+                operations: {
+                  smartCrop: {
+                    enabled: true,
+                    mode: "center",
+                  },
+                  pixelPerfect: {
+                    enabled: true,
+                  },
+                  emitVariants: {
+                    raw: true,
+                    styleRef: true,
+                    pixel: true,
+                  },
+                },
+              },
+              acceptance: { size: "16x16", alpha: true, maxFileSizeKB: 256 },
+              runtimeSpec: { alphaRequired: true },
+            },
+          ],
+        },
+        null,
+        2,
+      )}\n`,
+      "utf8",
+    );
+
+    await sharp({
+      create: {
+        width: 64,
+        height: 32,
+        channels: 4,
+        background: { r: 0, g: 0, b: 0, alpha: 0 },
+      },
+    })
+      .composite([
+        {
+          input: await sharp({
+            create: {
+              width: 40,
+              height: 20,
+              channels: 4,
+              background: { r: 240, g: 120, b: 40, alpha: 1 },
+            },
+          })
+            .png()
+            .toBuffer(),
+          left: 12,
+          top: 6,
+        },
+      ])
+      .png()
+      .toFile(rawImagePath);
+
+    const result = await runProcessPipeline({
+      outDir,
+      targetsIndexPath: indexPath,
+      strict: true,
+      mirrorLegacyImages: false,
+    });
+
+    expect(result.variantCount).toBe(3);
+
+    const rawVariantPath = path.join(
+      outDir,
+      "assets",
+      "imagegen",
+      "processed",
+      "images",
+      "badge__raw.png",
+    );
+    const styleRefVariantPath = path.join(
+      outDir,
+      "assets",
+      "imagegen",
+      "processed",
+      "images",
+      "badge__style_ref.png",
+    );
+    const pixelVariantPath = path.join(
+      outDir,
+      "assets",
+      "imagegen",
+      "processed",
+      "images",
+      "badge__pixel.png",
+    );
+
+    expect(await exists(rawVariantPath)).toBe(true);
+    expect(await exists(styleRefVariantPath)).toBe(true);
+    expect(await exists(pixelVariantPath)).toBe(true);
+
+    const rawMetadata = await sharp(rawVariantPath).metadata();
+    const styleMetadata = await sharp(styleRefVariantPath).metadata();
+    const pixelMetadata = await sharp(pixelVariantPath).metadata();
+    expect(rawMetadata.width).toBe(64);
+    expect(rawMetadata.height).toBe(32);
+    expect(styleMetadata.width).toBe(16);
+    expect(styleMetadata.height).toBe(16);
+    expect(pixelMetadata.width).toBe(16);
+    expect(pixelMetadata.height).toBe(16);
+  });
 });

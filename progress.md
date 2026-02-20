@@ -21,3 +21,4 @@ Current scope: rewrite LootForge for the strongest asset-generation pipeline out
 - 2026-02-20: Implemented Nano/Gemini edit-first parity for image-capable models with safe edit-input path handling and provider-level tests.
 - 2026-02-20: Implemented first-class post-process semantics for smart-crop/pixel-perfect controls and explicit processed `raw`/`style_ref`/`pixel` artifact variants.
 - 2026-02-20: Added directed-synthesis manifest scaffolding for `controlImage/controlMode`, style-kit `styleReferenceImages` + `loraPath/loraStrength`, and `generationPolicy.highQuality/hiresFix` propagation into planned targets/contracts.
+- 2026-02-20: Implemented manifest policy coverage gate with machine-checkable policy index docs, CI-enforced implemented/reserved coverage checks, and generated coverage report artifact output.

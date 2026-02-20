@@ -16,7 +16,8 @@
     "test:integration": "vitest run test/integration",
     "test:coverage:critical": "vitest run --coverage",
     "lint": "tsc --noEmit -p tsconfig.json",
-    "typecheck": "tsc --noEmit -p tsconfig.json"
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "check:manifest-policy": "node scripts/check-manifest-policy-coverage.mjs --report coverage/manifest-policy-coverage.json"
   },
   "dependencies": {
     "sharp": "^0.34.5",

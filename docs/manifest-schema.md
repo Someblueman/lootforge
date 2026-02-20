@@ -2,6 +2,10 @@
 
 `next` is the only supported manifest contract in this rewrite.
 
+Manifest policy coverage gate:
+- `docs/MANIFEST_POLICY_COVERAGE.md` is the machine-checkable index of documented policy fields.
+- `npm run check:manifest-policy` validates coverage status (`implemented|reserved`) and required test evidence, then emits `coverage/manifest-policy-coverage.json`.
+
 ## Top-level fields
 
 - `version`: must be `"next"`

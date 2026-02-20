@@ -265,13 +265,15 @@ Completed 2026-02-20 in this release track:
 - Harden pixel-perfect quantization behavior:
   - enforce deterministic nearest-color exact-palette mapping with alpha-safe handling (transparent RGB zeroing),
   - add exact-palette strict mode (`palette.strict`) that enforces 100% visible-pixel compliance during process/acceptance/scoring.
+- Add manifest policy coverage checks:
+  - added machine-checkable policy coverage index (`docs/MANIFEST_POLICY_COVERAGE.md`) for documented manifest policy fields,
+  - added `check:manifest-policy` release gate that fails when documented fields are neither `implemented` nor `reserved`,
+  - require test evidence for every implemented policy field and emit CI report artifacts at `coverage/manifest-policy-coverage.json`.
 
 Remaining queued items:
 - Add coarse-to-fine candidate promotion controls:
   - run lower-cost candidate generation/scoring first,
   - promote top-K candidates into high-fidelity refinement passes only when quality gates justify extra compute.
-- Add manifest policy coverage checks:
-  - fail release gates when documented manifest policy fields are neither implemented nor marked as reserved.
 - Add model capability introspection contract and endpoint for provider feature gating (pixel/high-res/references).
 - Add template-driven pack orchestration layer with dependency-aware style-reference chaining across generated assets.
 - Add consistency-group drift/outlier scoring using CLIP/LPIPS signals.

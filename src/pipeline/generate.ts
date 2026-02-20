@@ -934,10 +934,28 @@ async function readSelectionLock(filePath: string): Promise<SelectionLockFile> {
   try {
     const raw = await readFile(filePath, "utf8");
     const parsed = JSON.parse(raw) as SelectionLockFile;
-    return parsed && typeof parsed === "object" ? parsed : {};
-  } catch {
-    return {};
+    if (!parsed || typeof parsed !== "object") {
+      throw new Error(`selection lock file content is not a JSON object (${filePath}).`);
+    }
+    return parsed;
+  } catch (error) {
+    if (isNoSuchFileError(error)) {
+      return {};
+    }
+    throw new Error(
+      `Failed to parse selection lock JSON (${filePath}): ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
   }
+}
+
+function isNoSuchFileError(error: unknown): error is { code: string } {
+  return (
+    Boolean(error) &&
+    typeof error === "object" &&
+    (error as { code?: unknown }).code === "ENOENT"
+  );
 }
 
 async function fileExists(filePath: string): Promise<boolean> {

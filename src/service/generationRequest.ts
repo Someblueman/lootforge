@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { z } from "zod";
@@ -139,47 +139,56 @@ export async function runCanonicalGenerationRequest(
     ? path.resolve(request.selectionLockPath)
     : undefined;
 
-  const planResult = await runPlanCommand([
-    "--manifest",
-    manifestResolution.manifestPath,
-    "--out",
-    outDir,
-  ]);
+  const requestManifestPath = manifestResolution.manifestPath;
+  const shouldCleanupManifest = manifestResolution.source === "inline";
 
-  const generateResult = await runGeneratePipeline({
-    outDir,
-    targetsIndexPath: planResult.targetsIndexPath,
-    provider,
-    ids: targetIds,
-    skipLocked,
-    selectionLockPath,
-  });
-
-  return {
-    ...(envelope.requestId !== undefined ? { requestId: envelope.requestId } : {}),
-    mappingVersion: CANONICAL_GENERATION_REQUEST_VERSION,
-    normalizedRequest: {
+  try {
+    const planResult = await runPlanCommand([
+      "--manifest",
+      requestManifestPath,
+      "--out",
       outDir,
-      manifestPath: manifestResolution.manifestPath,
-      manifestSource: manifestResolution.source,
-      provider,
-      targetIds,
-      skipLocked,
-      ...(selectionLockPath ? { selectionLockPath } : {}),
-    },
-    plan: {
-      targets: planResult.targets,
-      warnings: planResult.warnings,
+    ]);
+
+    const generateResult = await runGeneratePipeline({
+      outDir,
       targetsIndexPath: planResult.targetsIndexPath,
-    },
-    generate: {
-      runId: generateResult.runId,
-      jobs: generateResult.jobs.length,
-      imagesDir: generateResult.imagesDir,
-      provenancePath: generateResult.provenancePath,
-      targetsIndexPath: generateResult.targetsIndexPath,
-    },
-  };
+      provider,
+      ids: targetIds,
+      skipLocked,
+      selectionLockPath,
+    });
+
+    return {
+      ...(envelope.requestId !== undefined ? { requestId: envelope.requestId } : {}),
+      mappingVersion: CANONICAL_GENERATION_REQUEST_VERSION,
+      normalizedRequest: {
+        outDir,
+        manifestPath: manifestResolution.manifestPath,
+        manifestSource: manifestResolution.source,
+        provider,
+        targetIds,
+        skipLocked,
+        ...(selectionLockPath ? { selectionLockPath } : {}),
+      },
+      plan: {
+        targets: planResult.targets,
+        warnings: planResult.warnings,
+        targetsIndexPath: planResult.targetsIndexPath,
+      },
+      generate: {
+        runId: generateResult.runId,
+        jobs: generateResult.jobs.length,
+        imagesDir: generateResult.imagesDir,
+        provenancePath: generateResult.provenancePath,
+        targetsIndexPath: generateResult.targetsIndexPath,
+      },
+    };
+  } finally {
+    if (shouldCleanupManifest) {
+      await rm(requestManifestPath, { force: true });
+    }
+  }
 }
 
 function parseCanonicalGenerationEnvelope(value: unknown): CanonicalGenerationRequestEnvelope {

@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 
 import { buildStructuredPrompt } from "../providers/types.js";
 import type { CandidateVlmScore, PlannedTarget } from "../providers/types.js";
+import { parseCommandLine } from "./commandParser.js";
 import { resolvePathWithinRoot } from "../shared/paths.js";
 
 const DEFAULT_VLM_GATE_THRESHOLD = 4;
@@ -164,10 +165,9 @@ async function runVlmGateCommand(
     throw new Error("VLM gate command was not configured.");
   }
 
-  const shell = resolveShell();
-  const args = resolveShellArgs(config.command);
+  const { command, args } = parseCommandLine(config.command);
   const stdout = await new Promise<string>((resolve, reject) => {
-    const child = spawn(shell, args, {
+    const child = spawn(command, args, {
       stdio: ["pipe", "pipe", "pipe"],
     });
 
@@ -311,20 +311,6 @@ function parseTimeoutMs(value: string | undefined): number | undefined {
   }
 
   return parsed;
-}
-
-function resolveShell(): string {
-  if (process.platform === "win32") {
-    return process.env.ComSpec ?? "cmd.exe";
-  }
-  return process.env.SHELL?.trim() || "/bin/sh";
-}
-
-function resolveShellArgs(command: string): string[] {
-  if (process.platform === "win32") {
-    return ["/d", "/s", "/c", command];
-  }
-  return ["-lc", command];
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

@@ -1,5 +1,5 @@
 import { createServer, type Server } from "node:http";
-import { mkdtemp } from "node:fs/promises";
+import { access, mkdtemp } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
@@ -202,6 +202,39 @@ describe("service mode", () => {
       expect(badRequestPayload.ok).toBe(false);
       expect(badRequestPayload.error?.code).toBe("unknown_parameter");
 
+      const emptyBodyResponse = await fetch(`${service.baseUrl}/v1/generate`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: "{}",
+      });
+      const emptyBodyPayload = (await emptyBodyResponse.json()) as {
+        ok: boolean;
+        error?: { code: string };
+      };
+      expect(emptyBodyResponse.status).toBe(400);
+      expect(emptyBodyPayload.ok).toBe(false);
+      expect(emptyBodyPayload.error?.code).toBe("invalid_request_body");
+
+      const argsAndParamsResponse = await fetch(`${service.baseUrl}/v1/generate`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          args: ["--out", workspace],
+          params: { out: workspace },
+        }),
+      });
+      const argsAndParamsPayload = (await argsAndParamsResponse.json()) as {
+        ok: boolean;
+        error?: { code: string };
+      };
+      expect(argsAndParamsResponse.status).toBe(400);
+      expect(argsAndParamsPayload.ok).toBe(false);
+      expect(argsAndParamsPayload.error?.code).toBe("invalid_request_body");
+
       const canonicalResponse = await fetch(`${service.baseUrl}/v1/generation/requests`, {
         method: "POST",
         headers: {
@@ -288,6 +321,7 @@ describe("service mode", () => {
       expect(canonicalPayload.result.plan.targets).toBe(1);
       expect(canonicalPayload.result.generate.jobs).toBe(1);
       expect(typeof canonicalPayload.result.generate.runId).toBe("string");
+      await expect(access(canonicalPayload.result.normalizedRequest.manifestPath)).rejects.toThrow();
 
       const canonicalBadResponse = await fetch(`${service.baseUrl}/v1/generation/requests`, {
         method: "POST",

@@ -840,7 +840,7 @@ export async function runProcessPipeline(
   }
 
   let variantCount = 0;
-  for (const target of generationTargets) {
+  const processJobs = generationTargets.map(async (target) => {
     const rawImagePath = resolvePathWithinDir(
       layout.rawDir,
       target.out,
@@ -857,33 +857,39 @@ export async function runProcessPipeline(
       `legacy image for target "${target.id}"`,
     );
 
-    // eslint-disable-next-line no-await-in-loop
-    const result = await processSingleTarget({
+    return processSingleTarget({
       target,
       rawImagePath,
       processedImagePath,
       mirrorLegacy,
       legacyImagePath,
     });
-    variantCount += result.variantCount;
+  });
+  const processedResults = await Promise.all(processJobs);
+  variantCount = processedResults.reduce((sum, result) => sum + result.variantCount, 0);
+
+  const frameTargetsBySheetId = new Map<string, PlannedTarget[]>();
+  for (const target of generationTargets) {
+    const sheetTargetId = target.spritesheet?.sheetTargetId;
+    if (!sheetTargetId) {
+      continue;
+    }
+
+    const list = frameTargetsBySheetId.get(sheetTargetId) ?? [];
+    list.push(target);
+    frameTargetsBySheetId.set(sheetTargetId, list);
   }
 
-  for (const sheetTarget of spritesheetSheetTargets) {
-    const frameTargets = generationTargets.filter(
-      (target) =>
-        target.spritesheet?.sheetTargetId === sheetTarget.id &&
-        target.spritesheet?.isSheet !== true,
-    );
-
-    // eslint-disable-next-line no-await-in-loop
-    await assembleSpritesheetTarget({
+  const sheetJobs = spritesheetSheetTargets.map((sheetTarget) =>
+    assembleSpritesheetTarget({
       sheetTarget,
-      frameTargets,
+      frameTargets: frameTargetsBySheetId.get(sheetTarget.id) ?? [],
       processedImagesDir: layout.processedImagesDir,
       legacyImagesDir: layout.legacyImagesDir,
       mirrorLegacy,
-    });
-  }
+    }),
+  );
+  await Promise.all(sheetJobs);
 
   const acceptanceReport = await runImageAcceptanceChecks({
     targets,

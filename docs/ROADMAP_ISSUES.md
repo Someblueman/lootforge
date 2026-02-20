@@ -194,7 +194,15 @@ This list translates `docs/ROADMAP.md` into issue-ready work items with explicit
   - `styleKits` expands schema validating visual layout, palette rules, and global acoustic footprints.
   - Validation physically halts runs whose generated artifacts violate the style bible assertions.
 
-### 17) Roadmap-to-Delivery Traceability Policy
+### 22) Native 3D Asset Generation (`.gltf` / Three.js)
+- **Release target:** `Post-1.0`
+- **Why now:** Broaden the LootForge paradigm from purely 2D/Audio space into the lightweight web 3D ecosystem.
+- **Acceptance criteria:**
+  - Supports structural definitions and LLM parsing to synthesize 3D models directly from prompt boundaries.
+  - Pipeline explicitly emits standard web-ready formats (e.g. `.gltf` or `.glb`).
+  - Validation metrics actively enforce polygon limits, detect broken UV layouts, and ensure standardized PBR materials.
+
+### 23) Roadmap-to-Delivery Traceability Policy
 - **Release target:** `1.0.0`
 - **Why now:** Keep roadmap trustworthy as scope expands.
 - **Acceptance criteria:**

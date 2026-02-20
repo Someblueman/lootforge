@@ -441,6 +441,9 @@ Top-level fields:
   - each provider may define runtime defaults: `endpoint`, `timeoutMs`, `maxRetries`, `minDelayMs`, `defaultConcurrency`
   - `providers.local` may also define `baseUrl` (local endpoint alias)
 - `styleKits[]` (required)
+  - directed-synthesis scaffolding:
+    - `styleReferenceImages[]?` (provider-specific style-image guidance inputs)
+    - `loraPath?`, `loraStrength?` (`0..2`, requires `loraPath`)
 - `consistencyGroups[]` (optional)
 - `evaluationProfiles[]` (required)
 - `atlas` options for packing defaults and per-group overrides
@@ -459,12 +462,21 @@ Per target:
 - `generationPolicy.vlmGate?`: optional candidate gate (`threshold` defaults to `4` on a `0..5` scale, optional `rubric`)
 - `generationPolicy.coarseToFine?`: optional promotion controls (`enabled`, `promoteTopK`, `minDraftScore`, `requireDraftAcceptance`)
 - `generationPolicy.draftQuality` / `generationPolicy.finalQuality`: optional quality split used by coarse-pass and refinement-pass generation
+- directed-synthesis scaffolding:
+  - `controlImage?` with `controlMode?` (`canny|depth|openpose`) must be provided together
+  - `generationPolicy.highQuality?`
+  - `generationPolicy.hiresFix?` (`enabled?`, `upscale?`, `denoiseStrength?`)
 - `prompt` (string or structured object) for non-spritesheet targets
 - `provider?` (`openai|nano|local`)
 - `acceptance`: `{ size, alpha, maxFileSizeKB }`
 - optional generation/runtime fields (`generationPolicy`, `postProcess`, `runtimeSpec`, `model`, `edit`, `auxiliaryMaps`, `palette`, `tileable`, `seamThreshold`, `seamStripPx`, `seamHeal`, `wrapGrid`)
+- `palette.strict` (exact mode only): enforces 100% visible-pixel compliance with the declared exact palette in process/acceptance/scoring.
 - `seamHeal`: optional pass for tileables (`enabled`, `stripPx`, `strength`) applied during process before final encode.
 - `wrapGrid`: optional per-cell tile validation (`columns`, `rows`, optional seam thresholds) enforced in image acceptance.
+- post-process semantic controls:
+  - `postProcess.operations.smartCrop` (`enabled`, `mode: alpha-bounds|center`, `padding`)
+  - `postProcess.operations.pixelPerfect` (`enabled`, optional integer `scale`)
+  - `postProcess.operations.emitVariants` (`raw`, `styleRef`, `pixel`) for explicit `__raw` / `__style_ref` / `__pixel` outputs
 - edge-aware boundary gates are configured via `evaluationProfiles[].hardGates`:
   - `alphaHaloRiskMax` (`0..1`)
   - `alphaStrayNoiseMax` (`0..1`)

@@ -15,6 +15,7 @@ export const TARGET_KINDS = [
   "effect",
   "spritesheet",
 ] as const;
+export const CONTROL_MODES = ["canny", "depth", "openpose"] as const;
 
 export type ProviderName = (typeof PROVIDER_NAMES)[number];
 export type ProviderSelection = ProviderName | "auto";
@@ -28,6 +29,7 @@ export type KnownStylePreset = (typeof KNOWN_STYLE_PRESETS)[number];
 export type PostProcessAlgorithm = (typeof POST_PROCESS_ALGORITHMS)[number];
 export type NormalizedOutputFormat = "png" | "jpeg" | "webp";
 export type TargetKind = (typeof TARGET_KINDS)[number];
+export type ControlMode = (typeof CONTROL_MODES)[number];
 export type GenerationMode = "text" | "edit-first";
 export type PaletteMode = "exact" | "max-colors";
 
@@ -105,6 +107,7 @@ export interface PalettePolicy {
   colors?: string[];
   maxColors?: number;
   dither?: number;
+  strict?: boolean;
 }
 
 export interface CoarseToFinePolicy {
@@ -121,6 +124,12 @@ export interface GenerationPolicy {
   quality?: string;
   draftQuality?: string;
   finalQuality?: string;
+  highQuality?: boolean;
+  hiresFix?: {
+    enabled?: boolean;
+    upscale?: number;
+    denoiseStrength?: number;
+  };
   candidates?: number;
   maxRetries?: number;
   fallbackProviders?: ProviderName[];
@@ -167,12 +176,32 @@ export interface ResizeVariantsOperation {
   variants: ResizeVariant[];
 }
 
+export interface PixelPerfectOperation {
+  enabled?: boolean;
+  scale?: number;
+}
+
+export interface SmartCropOperation {
+  enabled?: boolean;
+  mode?: "alpha-bounds" | "center";
+  padding?: number;
+}
+
+export interface VariantOutputsOperation {
+  raw?: boolean;
+  pixel?: boolean;
+  styleRef?: boolean;
+}
+
 export interface PostProcessOperations {
   trim?: TrimOperation;
   pad?: PadOperation;
   quantize?: QuantizeOperation;
   outline?: OutlineOperation;
   resizeVariants?: ResizeVariantsOperation;
+  pixelPerfect?: PixelPerfectOperation;
+  smartCrop?: SmartCropOperation;
+  emitVariants?: VariantOutputsOperation;
 }
 
 export interface PostProcessPolicy {
@@ -241,10 +270,15 @@ export interface PlannedTarget {
   out: string;
   atlasGroup?: string | null;
   styleKitId?: string;
+  styleReferenceImages?: string[];
+  loraPath?: string;
+  loraStrength?: number;
   consistencyGroup?: string;
   generationMode?: GenerationMode;
   evaluationProfileId?: string;
   scoringProfile?: string;
+  controlImage?: string;
+  controlMode?: ControlMode;
   scoreWeights?: TargetScoreWeights;
   tileable?: boolean;
   seamThreshold?: number;
@@ -318,6 +352,12 @@ export interface NormalizedGenerationPolicy {
   finalQuality?: string;
   background: "transparent" | "opaque" | string;
   outputFormat: NormalizedOutputFormat;
+  highQuality?: boolean;
+  hiresFix?: {
+    enabled?: boolean;
+    upscale?: number;
+    denoiseStrength?: number;
+  };
   candidates: number;
   maxRetries?: number;
   fallbackProviders: ProviderName[];
@@ -580,6 +620,7 @@ export function getProviderCapabilities(provider: ProviderName): ProviderCapabil
 
 export function getTargetGenerationPolicy(target: PlannedTarget): NormalizedGenerationPolicy {
   const policy = target.generationPolicy ?? {};
+  const normalizedHiresFix = normalizeHiresFixPolicy(policy.hiresFix);
   const candidatesRaw =
     typeof policy.candidates === "number" && Number.isFinite(policy.candidates)
       ? Math.round(policy.candidates)
@@ -598,6 +639,8 @@ export function getTargetGenerationPolicy(target: PlannedTarget): NormalizedGene
     ...(finalQuality ? { finalQuality } : {}),
     background: policy.background?.trim() || DEFAULT_BACKGROUND,
     outputFormat: normalizeOutputFormatAlias(policy.outputFormat || DEFAULT_OUTPUT_FORMAT),
+    ...(typeof policy.highQuality === "boolean" ? { highQuality: policy.highQuality } : {}),
+    ...(normalizedHiresFix ? { hiresFix: normalizedHiresFix } : {}),
     candidates: Math.max(1, candidatesRaw),
     ...(typeof maxRetriesRaw === "number" ? { maxRetries: Math.max(0, maxRetriesRaw) } : {}),
     fallbackProviders: Array.isArray(policy.fallbackProviders)
@@ -618,6 +661,31 @@ export function getTargetGenerationPolicy(target: PlannedTarget): NormalizedGene
     vlmGate: normalizeVlmGatePolicy(policy.vlmGate),
     coarseToFine: normalizeCoarseToFinePolicy(policy.coarseToFine),
   };
+}
+
+function normalizeHiresFixPolicy(
+  policy: GenerationPolicy["hiresFix"] | undefined,
+): NormalizedGenerationPolicy["hiresFix"] {
+  if (!policy) {
+    return undefined;
+  }
+
+  const normalized: NonNullable<NormalizedGenerationPolicy["hiresFix"]> = {};
+
+  if (typeof policy.enabled === "boolean") {
+    normalized.enabled = policy.enabled;
+  }
+  if (typeof policy.upscale === "number" && Number.isFinite(policy.upscale)) {
+    normalized.upscale = Math.max(1.01, Math.min(4, policy.upscale));
+  }
+  if (
+    typeof policy.denoiseStrength === "number" &&
+    Number.isFinite(policy.denoiseStrength)
+  ) {
+    normalized.denoiseStrength = Math.max(0, Math.min(1, policy.denoiseStrength));
+  }
+
+  return Object.keys(normalized).length > 0 ? normalized : undefined;
 }
 
 function normalizeVlmGatePolicy(policy: VlmGatePolicy | undefined): VlmGatePolicy | undefined {

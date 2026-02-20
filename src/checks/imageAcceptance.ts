@@ -314,6 +314,13 @@ function computeExactPaletteCompliance(
   };
 }
 
+function requiredExactPaletteCompliance(target: PlannedTarget): number {
+  if (target.palette?.mode === "exact" && target.palette.strict === true) {
+    return 1;
+  }
+  return DEFAULT_PALETTE_COMPLIANCE_MIN;
+}
+
 export async function evaluateImageAcceptance(
   target: PlannedTarget,
   imagesDir: string,
@@ -571,20 +578,31 @@ export async function evaluateImageAcceptance(
   if (target.palette?.mode === "exact") {
     const allowed = new Set((target.palette.colors ?? []).map((color) => hexToPackedColor(color)));
     const compliance = computeExactPaletteCompliance(inspected, allowed);
+    const requiredCompliance = requiredExactPaletteCompliance(target);
     report.metrics = {
       ...report.metrics,
       paletteCompliance: compliance.compliance,
       distinctColors: compliance.distinctColors,
     };
 
-    if (compliance.compliance < DEFAULT_PALETTE_COMPLIANCE_MIN) {
-      report.issues.push({
-        level: "error",
-        code: "palette_compliance_too_low",
-        targetId: target.id,
-        imagePath,
-        message: `Palette compliance ${(compliance.compliance * 100).toFixed(1)}% is below required ${(DEFAULT_PALETTE_COMPLIANCE_MIN * 100).toFixed(0)}%.`,
-      });
+    if (compliance.compliance < requiredCompliance) {
+      if (target.palette.strict === true) {
+        report.issues.push({
+          level: "error",
+          code: "palette_strict_noncompliant",
+          targetId: target.id,
+          imagePath,
+          message: `Strict exact palette mode requires 100% compliance, but got ${(compliance.compliance * 100).toFixed(1)}%.`,
+        });
+      } else {
+        report.issues.push({
+          level: "error",
+          code: "palette_compliance_too_low",
+          targetId: target.id,
+          imagePath,
+          message: `Palette compliance ${(compliance.compliance * 100).toFixed(1)}% is below required ${(requiredCompliance * 100).toFixed(0)}%.`,
+        });
+      }
     }
   }
 

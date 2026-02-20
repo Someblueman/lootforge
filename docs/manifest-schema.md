@@ -20,8 +20,11 @@
   - `rulesPath`
   - `palettePath?`
   - `referenceImages[]`
+  - `styleReferenceImages[]?` (directed style-image scaffold inputs; provider support varies)
   - `lightingModel`
   - `negativeRulesPath?`
+  - `loraPath?`
+  - `loraStrength?` (`0..2`, requires `loraPath`)
 - `consistencyGroups[]` (optional)
   - `id`
   - `description?`
@@ -52,7 +55,8 @@ Required on every target:
 
 Optional quality controls:
 
-- `palette`: `{ mode: exact|max-colors, colors?, maxColors?, dither? }`
+- `palette`: `{ mode: exact|max-colors, colors?, maxColors?, dither?, strict? }`
+  - `strict` is supported only in `mode: "exact"` and enforces 100% visible-pixel palette compliance.
 - `tileable`, `seamThreshold`, `seamStripPx`
 - `seamHeal?`: `{ enabled?, stripPx?, strength? }` (optional edge blending pass for tileable targets)
 - `wrapGrid?`: `{ columns, rows, seamThreshold?, seamStripPx? }` (per-cell wrap validation gates)
@@ -61,14 +65,23 @@ Generation + processing:
 
 - `prompt` or `promptSpec` (required for non-`spritesheet` targets)
 - `generationPolicy`
+  - `generationPolicy.highQuality?` (directed-synthesis scaffold flag)
+  - `generationPolicy.hiresFix?`: `{ enabled?, upscale?, denoiseStrength? }`
   - `generationPolicy.vlmGate?`: `{ threshold?, rubric? }`
   - `threshold` defaults to `4` (scored on `0..5`) when gate is configured
   - `generationPolicy.coarseToFine?`: `{ enabled?, promoteTopK?, minDraftScore?, requireDraftAcceptance? }`
   - optional quality split: `draftQuality` (coarse pass) and `finalQuality` (refinement pass)
 - `postProcess`
+  - `postProcess.operations.smartCrop?`: `{ enabled?, mode?, padding? }`
+    - `mode`: `alpha-bounds|center`
+  - `postProcess.operations.pixelPerfect?`: `{ enabled?, scale? }`
+    - favors nearest-neighbor semantics during resize when enabled
+  - `postProcess.operations.emitVariants?`: `{ raw?, pixel?, styleRef? }`
+    - writes explicit `__raw`, `__pixel`, and `__style_ref` processed artifacts when enabled
 - `acceptance`
 - `runtimeSpec`
 - `provider`, `model`, `edit`, `auxiliaryMaps`
+- `controlImage?` + `controlMode?` (`canny|depth|openpose`) must be provided together
 - `generationMode: "edit-first"` requires an edit-capable provider (`openai`, `local`, or `nano` with an image-edit-capable Gemini model)
 - `edit.inputs[].path` must resolve inside the active `--out` root at runtime
 - `generationPolicy.background: "transparent"` requires a provider that supports transparent outputs (unsupported providers now fail validation)

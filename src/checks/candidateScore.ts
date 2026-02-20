@@ -63,6 +63,13 @@ function targetNeedsAlpha(target: PlannedTarget): boolean {
   return target.runtimeSpec?.alphaRequired === true || target.acceptance?.alpha === true;
 }
 
+function requiredExactPaletteCompliance(target: PlannedTarget): number {
+  if (target.palette?.mode === "exact" && target.palette.strict === true) {
+    return 1;
+  }
+  return DEFAULT_EXACT_PALETTE_COMPLIANCE;
+}
+
 function computeSeamScore(raw: Buffer, width: number, height: number, channels: number, strip: number): number {
   const stripPx = Math.max(1, Math.min(strip, Math.floor(Math.min(width, height) / 2)));
   let total = 0;
@@ -481,12 +488,15 @@ export async function scoreCandidateImages(
 
     if (target.palette?.mode === "exact" && typeof inspection.paletteCompliance === "number") {
       metrics.paletteCompliance = inspection.paletteCompliance;
-      if (inspection.paletteCompliance < DEFAULT_EXACT_PALETTE_COMPLIANCE) {
+      const requiredCompliance = requiredExactPaletteCompliance(target);
+      if (inspection.paletteCompliance < requiredCompliance) {
         passedAcceptance = false;
-        const penalty = Math.round((DEFAULT_EXACT_PALETTE_COMPLIANCE - inspection.paletteCompliance) * 2000);
+        const penalty = Math.round((requiredCompliance - inspection.paletteCompliance) * 2000);
         components.paletteCompliancePenalty = -penalty;
         score -= penalty;
-        reasons.push("palette_compliance_too_low");
+        reasons.push(
+          target.palette.strict === true ? "palette_strict_noncompliant" : "palette_compliance_too_low",
+        );
       } else {
         const reward = Math.round(inspection.paletteCompliance * 100);
         components.paletteComplianceReward = reward;

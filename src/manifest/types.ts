@@ -1,5 +1,6 @@
 import type {
   AuxiliaryMapPolicy,
+  ControlMode,
   GenerationMode,
   GenerationPolicy,
   PalettePolicy,
@@ -47,8 +48,11 @@ export interface ManifestStyleKit {
   rulesPath: string;
   palettePath?: string;
   referenceImages: string[];
+  styleReferenceImages?: string[];
   lightingModel: string;
   negativeRulesPath?: string;
+  loraPath?: string;
+  loraStrength?: number;
 }
 
 export interface ManifestConsistencyGroup {
@@ -125,6 +129,20 @@ export interface ManifestPostProcessOperations {
     size: string;
     algorithm?: string;
   }>;
+  pixelPerfect?: {
+    enabled?: boolean;
+    scale?: number;
+  };
+  smartCrop?: {
+    enabled?: boolean;
+    mode?: "alpha-bounds" | "center";
+    padding?: number;
+  };
+  emitVariants?: {
+    raw?: boolean;
+    pixel?: boolean;
+    styleRef?: boolean;
+  };
 }
 
 export interface ManifestPostProcess {
@@ -185,6 +203,8 @@ export interface ManifestTarget {
   runtimeSpec?: ManifestRuntimeSpec;
   provider?: ProviderName;
   model?: string;
+  controlImage?: string;
+  controlMode?: ControlMode;
   edit?: TargetEditSpec;
   auxiliaryMaps?: AuxiliaryMapPolicy;
   animations?: Record<string, ManifestSpriteAnimation>;

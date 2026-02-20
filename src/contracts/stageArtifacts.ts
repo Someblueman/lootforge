@@ -29,6 +29,14 @@ const generationPolicySchema = z.object({
   finalQuality: nonEmptyString.optional(),
   background: nonEmptyString,
   outputFormat: z.enum(["png", "jpeg", "webp"]),
+  highQuality: z.boolean().optional(),
+  hiresFix: z
+    .object({
+      enabled: z.boolean().optional(),
+      upscale: z.number().min(1.01).max(4).optional(),
+      denoiseStrength: z.number().min(0).max(1).optional(),
+    })
+    .optional(),
   candidates: z.number().int().min(1),
   maxRetries: z.number().int().min(0),
   fallbackProviders: z.array(providerNameSchema),
@@ -99,6 +107,26 @@ const postProcessSchema = z.object({
           variants: z.array(resizeVariantSchema),
         })
         .optional(),
+      pixelPerfect: z
+        .object({
+          enabled: z.boolean().optional(),
+          scale: z.number().int().min(1).max(16).optional(),
+        })
+        .optional(),
+      smartCrop: z
+        .object({
+          enabled: z.boolean().optional(),
+          mode: z.enum(["alpha-bounds", "center"]).optional(),
+          padding: z.number().int().min(0).max(256).optional(),
+        })
+        .optional(),
+      emitVariants: z
+        .object({
+          raw: z.boolean().optional(),
+          pixel: z.boolean().optional(),
+          styleRef: z.boolean().optional(),
+        })
+        .optional(),
     })
     .optional(),
 });
@@ -130,10 +158,15 @@ const plannedTargetSchema = z.object({
   out: nonEmptyString,
   atlasGroup: z.union([nonEmptyString, z.null()]).optional(),
   styleKitId: nonEmptyString.optional(),
+  styleReferenceImages: z.array(nonEmptyString).optional(),
+  loraPath: nonEmptyString.optional(),
+  loraStrength: z.number().min(0).max(2).optional(),
   consistencyGroup: nonEmptyString.optional(),
   generationMode: generationModeSchema.optional(),
   evaluationProfileId: nonEmptyString.optional(),
   scoringProfile: nonEmptyString.optional(),
+  controlImage: nonEmptyString.optional(),
+  controlMode: z.enum(["canny", "depth", "openpose"]).optional(),
   scoreWeights: z
     .object({
       readability: z.number().optional(),
@@ -174,6 +207,7 @@ const plannedTargetSchema = z.object({
       colors: z.array(nonEmptyString).optional(),
       maxColors: z.number().int().min(2).max(256).optional(),
       dither: z.number().min(0).max(1).optional(),
+      strict: z.boolean().optional(),
     })
     .optional(),
   generationDisabled: z.boolean().optional(),

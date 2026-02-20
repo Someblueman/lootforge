@@ -91,6 +91,52 @@ describe("manifest normalization", () => {
     expect(artifacts.targets[0].runtimeSpec?.anchorY).toBe(0.75);
   });
 
+  it("normalizes directed-synthesis scaffold fields onto planned targets", () => {
+    const manifest: ManifestV2 = {
+      ...BASE_MANIFEST,
+      styleKits: [
+        {
+          ...BASE_MANIFEST.styleKits[0],
+          styleReferenceImages: ["style/default/style-ref-1.png", "style/default/style-ref-2.png"],
+          loraPath: "style/default/lora.safetensors",
+          loraStrength: 0.7,
+        },
+      ],
+      targets: [
+        {
+          ...BASE_MANIFEST.targets[0],
+          controlImage: "controls/hero-canny.png",
+          controlMode: "canny",
+          generationPolicy: {
+            ...BASE_MANIFEST.targets[0].generationPolicy,
+            highQuality: true,
+            hiresFix: {
+              enabled: true,
+              upscale: 2,
+              denoiseStrength: 0.25,
+            },
+          },
+        },
+      ],
+    };
+
+    const artifacts = createPlanArtifacts(manifest, "/tmp/manifest.json");
+    expect(artifacts.targets[0].styleReferenceImages).toEqual([
+      "style/default/style-ref-1.png",
+      "style/default/style-ref-2.png",
+    ]);
+    expect(artifacts.targets[0].loraPath).toBe("style/default/lora.safetensors");
+    expect(artifacts.targets[0].loraStrength).toBe(0.7);
+    expect(artifacts.targets[0].controlImage).toBe("controls/hero-canny.png");
+    expect(artifacts.targets[0].controlMode).toBe("canny");
+    expect(artifacts.targets[0].generationPolicy?.highQuality).toBe(true);
+    expect(artifacts.targets[0].generationPolicy?.hiresFix).toEqual({
+      enabled: true,
+      upscale: 2,
+      denoiseStrength: 0.25,
+    });
+  });
+
   it("defaults generationPolicy.vlmGate threshold to 4", () => {
     const manifest: ManifestV2 = {
       ...BASE_MANIFEST,
@@ -172,6 +218,30 @@ describe("manifest normalization", () => {
     });
   });
 
+  it("preserves strict exact palette policy during normalization", () => {
+    const manifest: ManifestV2 = {
+      ...BASE_MANIFEST,
+      targets: [
+        {
+          ...BASE_MANIFEST.targets[0],
+          palette: {
+            mode: "exact",
+            colors: ["112233", "#445566"],
+            strict: true,
+          },
+        },
+      ],
+    };
+
+    const artifacts = createPlanArtifacts(manifest, "/tmp/manifest.json");
+    expect(artifacts.targets[0].palette).toEqual({
+      mode: "exact",
+      colors: ["#112233", "#445566"],
+      dither: undefined,
+      strict: true,
+    });
+  });
+
   it("normalizes numeric postProcess resize with default lanczos3 algorithm", () => {
     const manifest: ManifestV2 = {
       ...BASE_MANIFEST,
@@ -190,6 +260,50 @@ describe("manifest normalization", () => {
       resizeTo: { width: 128, height: 128 },
       algorithm: "lanczos3",
       stripMetadata: true,
+    });
+  });
+
+  it("normalizes smart-crop, pixel-perfect, and variant-output post-process scaffolding", () => {
+    const manifest: ManifestV2 = {
+      ...BASE_MANIFEST,
+      targets: [
+        {
+          ...BASE_MANIFEST.targets[0],
+          postProcess: {
+            resizeTo: "64x64",
+            operations: {
+              smartCrop: {
+                mode: "center",
+                padding: 3,
+              },
+              pixelPerfect: {
+                scale: 2,
+              },
+              emitVariants: {
+                raw: true,
+                styleRef: true,
+                pixel: true,
+              },
+            },
+          },
+        },
+      ],
+    };
+
+    const artifacts = createPlanArtifacts(manifest, "/tmp/manifest.json");
+    expect(artifacts.targets[0].postProcess?.operations?.smartCrop).toEqual({
+      enabled: true,
+      mode: "center",
+      padding: 3,
+    });
+    expect(artifacts.targets[0].postProcess?.operations?.pixelPerfect).toEqual({
+      enabled: true,
+      scale: 2,
+    });
+    expect(artifacts.targets[0].postProcess?.operations?.emitVariants).toEqual({
+      raw: true,
+      styleRef: true,
+      pixel: true,
     });
   });
 
@@ -315,6 +429,37 @@ describe("manifest normalization", () => {
     expect(validation.report.errors).toBeGreaterThan(0);
     expect(
       validation.report.issues.some((issue) => issue.code === "invalid_postprocess_resize"),
+    ).toBe(true);
+  });
+
+  it("rejects strict palette mode for non-exact palettes", () => {
+    const manifest: ManifestV2 = {
+      ...BASE_MANIFEST,
+      targets: [
+        {
+          ...BASE_MANIFEST.targets[0],
+          palette: {
+            mode: "max-colors",
+            maxColors: 16,
+            strict: true,
+          },
+        },
+      ],
+    };
+
+    const validation = validateManifestSource({
+      manifestPath: "/tmp/manifest.json",
+      raw: JSON.stringify(manifest),
+      data: manifest,
+    });
+
+    expect(validation.report.errors).toBeGreaterThan(0);
+    expect(
+      validation.report.issues.some(
+        (issue) =>
+          issue.path === "targets[0].palette.strict" &&
+          issue.message === "Palette strict mode is only supported for exact palettes.",
+      ),
     ).toBe(true);
   });
 
@@ -482,6 +627,98 @@ describe("manifest normalization", () => {
     expect(validation.report.errors).toBeGreaterThan(0);
     expect(
       validation.report.issues.some((issue) => issue.code === "invalid_manifest_asset_path"),
+    ).toBe(true);
+  });
+
+  it("requires controlImage and controlMode to be specified together", () => {
+    const withoutMode: ManifestV2 = {
+      ...BASE_MANIFEST,
+      targets: [
+        {
+          ...BASE_MANIFEST.targets[0],
+          controlImage: "controls/hero-canny.png",
+        },
+      ],
+    };
+    const withoutImage: ManifestV2 = {
+      ...BASE_MANIFEST,
+      targets: [
+        {
+          ...BASE_MANIFEST.targets[0],
+          controlMode: "canny",
+        },
+      ],
+    };
+
+    const withoutModeValidation = validateManifestSource({
+      manifestPath: "/tmp/manifest.json",
+      raw: JSON.stringify(withoutMode),
+      data: withoutMode,
+    });
+    const withoutImageValidation = validateManifestSource({
+      manifestPath: "/tmp/manifest.json",
+      raw: JSON.stringify(withoutImage),
+      data: withoutImage,
+    });
+
+    expect(withoutModeValidation.report.errors).toBeGreaterThan(0);
+    expect(withoutImageValidation.report.errors).toBeGreaterThan(0);
+    expect(
+      withoutModeValidation.report.issues.some((issue) => issue.path === "targets[0].controlMode"),
+    ).toBe(true);
+    expect(
+      withoutImageValidation.report.issues.some((issue) => issue.path === "targets[0].controlImage"),
+    ).toBe(true);
+  });
+
+  it("rejects loraStrength without loraPath", () => {
+    const manifest: ManifestV2 = {
+      ...BASE_MANIFEST,
+      styleKits: [
+        {
+          ...BASE_MANIFEST.styleKits[0],
+          loraStrength: 0.7,
+        },
+      ],
+    };
+
+    const validation = validateManifestSource({
+      manifestPath: "/tmp/manifest.json",
+      raw: JSON.stringify(manifest),
+      data: manifest,
+    });
+
+    expect(validation.report.errors).toBeGreaterThan(0);
+    expect(
+      validation.report.issues.some((issue) => issue.path === "styleKits[0].loraPath"),
+    ).toBe(true);
+  });
+
+  it("reports unsafe control-image asset paths", () => {
+    const manifest: ManifestV2 = {
+      ...BASE_MANIFEST,
+      targets: [
+        {
+          ...BASE_MANIFEST.targets[0],
+          controlImage: "../escape/control.png",
+          controlMode: "canny",
+        },
+      ],
+    };
+
+    const validation = validateManifestSource({
+      manifestPath: "/tmp/manifest.json",
+      raw: JSON.stringify(manifest),
+      data: manifest,
+    });
+
+    expect(validation.report.errors).toBeGreaterThan(0);
+    expect(
+      validation.report.issues.some(
+        (issue) =>
+          issue.code === "invalid_manifest_asset_path" &&
+          issue.path === "targets[0].controlImage",
+      ),
     ).toBe(true);
   });
 

@@ -167,6 +167,9 @@ Focus: stable public contract and operational readiness.
 - Temporal Consistency via Video-to-Sprite Inference (Future Focus):
   - implement `video-to-sprite` target mode utilizing frame-interpolation over generated video,
   - deliver drift-free 60fps sprite animation exceeding pure image-diffusion bounds.
+- Native 3D Asset Generation (Future Focus):
+  - expand target kinds to support `.gltf`/`.glb` 3D mesh generation for engines like Three.js.
+  - apply QA validation gates for polygon budgets, clean topology, and PBR material consistency.
 
 ### Exit Criteria
 - Public users can adopt LootForge without internal tribal knowledge.
@@ -259,11 +262,11 @@ Completed 2026-02-20 in this release track:
   - added manifest schema + normalized planner support for `postProcess.operations.smartCrop`, `pixelPerfect`, and `emitVariants`,
   - implemented process-stage semantics for smart-crop behavior and pixel-perfect nearest-neighbor resize handling,
   - added explicit processed artifact emission for `__raw`, `__style_ref`, and `__pixel` variants.
+- Harden pixel-perfect quantization behavior:
+  - enforce deterministic nearest-color exact-palette mapping with alpha-safe handling (transparent RGB zeroing),
+  - add exact-palette strict mode (`palette.strict`) that enforces 100% visible-pixel compliance during process/acceptance/scoring.
 
 Remaining queued items:
-- Harden pixel-perfect quantization behavior:
-  - deterministic nearest-color exact-palette mapping with alpha-safe handling,
-  - strict palette-enforcement mode for low-color sprite/pixel-art outputs.
 - Add coarse-to-fine candidate promotion controls:
   - run lower-cost candidate generation/scoring first,
   - promote top-K candidates into high-fidelity refinement passes only when quality gates justify extra compute.

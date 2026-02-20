@@ -152,6 +152,7 @@ export const ManifestPalettePolicySchema = z
     colors: z.array(nonEmptyString).optional(),
     maxColors: z.number().int().min(2).max(256).optional(),
     dither: z.number().min(0).max(1).optional(),
+    strict: z.boolean().optional(),
   })
   .superRefine((palette, ctx) => {
     if (palette.mode === "exact" && (!palette.colors || palette.colors.length === 0)) {
@@ -167,6 +168,14 @@ export const ManifestPalettePolicySchema = z
         code: z.ZodIssueCode.custom,
         path: ["maxColors"],
         message: "max-colors mode requires maxColors.",
+      });
+    }
+
+    if (palette.mode !== "exact" && palette.strict !== undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["strict"],
+        message: "Palette strict mode is only supported for exact palettes.",
       });
     }
   });

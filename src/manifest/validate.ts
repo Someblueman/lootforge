@@ -1163,6 +1163,7 @@ function normalizePalettePolicy(target: ManifestTarget): PalettePolicy | undefin
       mode: "exact",
       colors: (palette.colors ?? []).map((color) => normalizeHexColor(color)),
       dither: palette.dither,
+      strict: palette.strict,
     };
   }
 
@@ -1232,6 +1233,7 @@ function resolveTargetPalettePolicy(
       mode: "exact",
       colors: [...(styleKitPaletteDefault.colors ?? [])],
       dither: styleKitPaletteDefault.dither,
+      strict: styleKitPaletteDefault.strict,
     };
   }
 

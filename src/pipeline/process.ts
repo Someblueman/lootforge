@@ -282,6 +282,45 @@ function nearestPaletteColor(
   return best;
 }
 
+function packRgb(color: { r: number; g: number; b: number }): number {
+  return ((color.r << 16) | (color.g << 8) | color.b) >>> 0;
+}
+
+function computeExactPaletteCompliance(params: {
+  raw: Buffer;
+  channels: number;
+  allowedColors: Set<number>;
+}): { compliance: number; counted: number; matches: number } {
+  if (params.allowedColors.size === 0) {
+    return { compliance: 0, counted: 0, matches: 0 };
+  }
+
+  let counted = 0;
+  let matches = 0;
+  for (let i = 0; i < params.raw.length; i += params.channels) {
+    const alpha = params.channels >= 4 ? params.raw[i + 3] : 255;
+    if (alpha === 0) {
+      continue;
+    }
+
+    counted += 1;
+    const packed = ((params.raw[i] << 16) | (params.raw[i + 1] << 8) | params.raw[i + 2]) >>> 0;
+    if (params.allowedColors.has(packed)) {
+      matches += 1;
+    }
+  }
+
+  if (counted === 0) {
+    return { compliance: 1, counted: 0, matches: 0 };
+  }
+
+  return {
+    compliance: matches / counted,
+    counted,
+    matches,
+  };
+}
+
 async function quantizeToExactPalette(
   imageBuffer: Buffer,
   paletteColors: string[],
@@ -303,6 +342,10 @@ async function quantizeToExactPalette(
   for (let i = 0; i < data.length; i += channels) {
     const alpha = channels >= 4 ? data[i + 3] : 255;
     if (alpha === 0) {
+      // Avoid transparent fringe colors by forcing fully transparent RGB to black.
+      data[i] = 0;
+      data[i + 1] = 0;
+      data[i + 2] = 0;
       continue;
     }
     const nearest = nearestPaletteColor(
@@ -465,6 +508,27 @@ async function processSingleTarget(params: {
     .toBuffer({ resolveWithObject: true });
   const mainRaw = decodedMain.data;
   const mainRawInfo = decodedMain.info;
+
+  if (params.target.palette?.mode === "exact" && params.target.palette.strict === true) {
+    const allowed = new Set(parsePaletteColors(params.target.palette.colors).map((color) => packRgb(color)));
+    if (allowed.size === 0) {
+      throw new Error(
+        `Strict exact palette enforcement for target "${params.target.id}" requires at least one valid palette color.`,
+      );
+    }
+
+    const compliance = computeExactPaletteCompliance({
+      raw: mainRaw,
+      channels: mainRawInfo.channels,
+      allowedColors: allowed,
+    });
+    if (compliance.compliance < 1) {
+      const nonCompliant = compliance.counted - compliance.matches;
+      throw new Error(
+        `Strict exact palette enforcement failed for target "${params.target.id}": ${nonCompliant}/${compliance.counted} visible pixels fall outside the configured palette.`,
+      );
+    }
+  }
 
   await mkdir(path.dirname(params.processedImagePath), { recursive: true });
   await writeFile(params.processedImagePath, encodedMain);

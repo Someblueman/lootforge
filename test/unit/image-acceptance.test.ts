@@ -173,6 +173,54 @@ describe("image acceptance", () => {
     expect(item.issues.some((issue) => issue.code === "alpha_channel_missing")).toBe(true);
   });
 
+  it("enforces 100% compliance in strict exact palette mode", async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "lootforge-acceptance-palette-strict-"));
+    await mkdir(tempDir, { recursive: true });
+
+    const width = 4;
+    const height = 1;
+    const channels = 4;
+    const raw = Buffer.alloc(width * height * channels, 0);
+    const setPixel = (x: number, rgba: [number, number, number, number]): void => {
+      const index = (x * channels) >>> 0;
+      raw[index] = rgba[0];
+      raw[index + 1] = rgba[1];
+      raw[index + 2] = rgba[2];
+      raw[index + 3] = rgba[3];
+    };
+
+    setPixel(0, [255, 0, 0, 255]);
+    setPixel(1, [0, 255, 0, 255]);
+    setPixel(2, [0, 0, 255, 255]); // outside strict palette
+    setPixel(3, [255, 255, 255, 0]); // ignored transparent pixel
+
+    await sharp(raw, { raw: { width, height, channels } })
+      .png()
+      .toFile(path.join(tempDir, "hero.png"));
+
+    const item = await evaluateImageAcceptance(
+      makeTarget({
+        acceptance: {
+          size: "4x1",
+          alpha: false,
+          maxFileSizeKB: 64,
+        },
+        runtimeSpec: {
+          alphaRequired: false,
+        },
+        palette: {
+          mode: "exact",
+          colors: ["#ff0000", "#00ff00"],
+          strict: true,
+        },
+      }),
+      tempDir,
+    );
+
+    expect(item.metrics?.paletteCompliance).toBeCloseTo(2 / 3, 5);
+    expect(item.issues.some((issue) => issue.code === "palette_strict_noncompliant")).toBe(true);
+  });
+
   it("reports wrap-grid seam violations when per-cell seams exceed threshold", async () => {
     const tempDir = await mkdtemp(path.join(os.tmpdir(), "lootforge-wrap-grid-seam-"));
     await mkdir(tempDir, { recursive: true });

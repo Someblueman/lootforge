@@ -55,7 +55,8 @@ Required on every target:
 
 Optional quality controls:
 
-- `palette`: `{ mode: exact|max-colors, colors?, maxColors?, dither? }`
+- `palette`: `{ mode: exact|max-colors, colors?, maxColors?, dither?, strict? }`
+  - `strict` is supported only in `mode: "exact"` and enforces 100% visible-pixel palette compliance.
 - `tileable`, `seamThreshold`, `seamStripPx`
 - `seamHeal?`: `{ enabled?, stripPx?, strength? }` (optional edge blending pass for tileable targets)
 - `wrapGrid?`: `{ columns, rows, seamThreshold?, seamStripPx? }` (per-cell wrap validation gates)

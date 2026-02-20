@@ -197,6 +197,7 @@ const plannedTargetSchema = z.object({
       colors: z.array(nonEmptyString).optional(),
       maxColors: z.number().int().min(2).max(256).optional(),
       dither: z.number().min(0).max(1).optional(),
+      strict: z.boolean().optional(),
     })
     .optional(),
   generationDisabled: z.boolean().optional(),

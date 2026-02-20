@@ -269,6 +269,10 @@ Completed 2026-02-20 in this release track:
   - added machine-checkable policy coverage index (`docs/MANIFEST_POLICY_COVERAGE.md`) for documented manifest policy fields,
   - added `check:manifest-policy` release gate that fails when documented fields are neither `implemented` nor `reserved`,
   - require test evidence for every implemented policy field and emit CI report artifacts at `coverage/manifest-policy-coverage.json`.
+- Introduce per-kind scoring presets and manifest-level scoring profile overrides:
+  - added deterministic built-in score presets by target kind (`sprite|tile|background|effect|spritesheet`),
+  - added optional `scoringProfiles[]` manifest contract with global and per-kind score-weight overrides,
+  - resolved target scoring weights via `targets[].scoringProfile` (or `evaluationProfileId` fallback) with explicit validation for unknown profiles.
 
 Remaining queued items:
 - Add coarse-to-fine candidate promotion controls:
@@ -277,7 +281,6 @@ Remaining queued items:
 - Add model capability introspection contract and endpoint for provider feature gating (pixel/high-res/references).
 - Add template-driven pack orchestration layer with dependency-aware style-reference chaining across generated assets.
 - Add consistency-group drift/outlier scoring using CLIP/LPIPS signals.
-- Introduce per-kind scoring presets and manifest-level scoring profile overrides.
 - Add aggregate group-level review/eval warnings and ranking influence controls.
 
 #### 2D Investigation Follow-ups (Visual QA + Policy)

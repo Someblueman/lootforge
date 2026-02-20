@@ -38,6 +38,10 @@ Manifest policy coverage gate:
   - `id`
   - `hardGates?`: `{ requireAlpha?, maxFileSizeKB?, seamThreshold?, seamStripPx?, paletteComplianceMin?, alphaHaloRiskMax?, alphaStrayNoiseMax?, alphaEdgeSharpnessMin?, packTextureBudgetMB?, spritesheetSilhouetteDriftMax?, spritesheetAnchorDriftMax? }`
   - `scoreWeights?`: `{ readability?, fileSize?, consistency?, clip?, lpips?, ssim? }`
+- `scoringProfiles[]` (optional)
+  - `id`
+  - `scoreWeights?`: global score-weight overrides for all target kinds
+  - `kindScoreWeights?`: optional per-kind overrides for `sprite|tile|background|effect|spritesheet`
 - `atlas?`: atlas defaults + optional per-group overrides
 - `targets[]` (required)
 
@@ -61,6 +65,7 @@ Optional quality controls:
 
 - `palette`: `{ mode: exact|max-colors, colors?, maxColors?, dither?, strict? }`
   - `strict` is supported only in `mode: "exact"` and enforces 100% visible-pixel palette compliance.
+- `scoringProfile?`: profile id from `scoringProfiles[]` (falls back to `evaluationProfileId` lookup)
 - `tileable`, `seamThreshold`, `seamStripPx`
 - `seamHeal?`: `{ enabled?, stripPx?, strength? }` (optional edge blending pass for tileable targets)
 - `wrapGrid?`: `{ columns, rows, seamThreshold?, seamStripPx? }` (per-cell wrap validation gates)
@@ -94,6 +99,10 @@ Generation + processing:
   - `alphaHaloRiskMax` (`0..1`, lower is stricter)
   - `alphaStrayNoiseMax` (`0..1`, lower is stricter)
   - `alphaEdgeSharpnessMin` (`0..1`, higher is stricter)
+- score weighting defaults and overrides:
+  - LootForge applies deterministic built-in score presets by target kind.
+  - If a matching `scoringProfiles[]` entry is found (by `targets[].scoringProfile` or `evaluationProfileId`), profile weights override the built-in kind preset.
+  - If no matching `scoringProfiles[]` entry exists, `evaluationProfiles[].scoreWeights` acts as a compatibility fallback override.
 - pack-level gates can be configured in `evaluationProfiles[].hardGates` and are normalized onto each planned target:
   - `packTextureBudgetMB` (`>0`, optional profile-level uncompressed texture budget)
   - `spritesheetSilhouetteDriftMax` (`0..1`, optional max adjacent-frame silhouette drift)

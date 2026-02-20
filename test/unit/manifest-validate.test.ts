@@ -87,8 +87,72 @@ describe("manifest normalization", () => {
     expect(artifacts.targets[0].promptSpec.constraints).toContain("Consistency group: hero-family");
     expect(artifacts.targets[0].promptSpec.constraints).toContain("Consistency notes:");
     expect(artifacts.targets[0].scoreWeights?.readability).toBe(1);
+    expect(artifacts.targets[0].scoreWeights?.fileSize).toBe(0.85);
     expect(artifacts.targets[0].runtimeSpec?.anchorX).toBe(0.25);
     expect(artifacts.targets[0].runtimeSpec?.anchorY).toBe(0.75);
+  });
+
+  it("applies manifest scoring profile overrides on top of per-kind defaults", () => {
+    const manifest: ManifestV2 = {
+      ...BASE_MANIFEST,
+      scoringProfiles: [
+        {
+          id: "sprite-focused",
+          scoreWeights: {
+            readability: 0.9,
+            clip: 1.4,
+          },
+          kindScoreWeights: {
+            sprite: {
+              consistency: 1.7,
+              ssim: 1.35,
+            },
+          },
+        },
+      ],
+      targets: [
+        {
+          ...BASE_MANIFEST.targets[0],
+          scoringProfile: "sprite-focused",
+        },
+      ],
+    };
+
+    const artifacts = createPlanArtifacts(manifest, "/tmp/manifest.json");
+    expect(artifacts.targets[0].scoringProfile).toBe("sprite-focused");
+    expect(artifacts.targets[0].scoreWeights).toEqual({
+      readability: 0.9,
+      fileSize: 0.85,
+      consistency: 1.7,
+      clip: 1.4,
+      lpips: 1.05,
+      ssim: 1.35,
+    });
+  });
+
+  it("uses scoring profile matching evaluation profile id when target scoringProfile is omitted", () => {
+    const manifest: ManifestV2 = {
+      ...BASE_MANIFEST,
+      scoringProfiles: [
+        {
+          id: "sprite-quality",
+          scoreWeights: {
+            fileSize: 1.6,
+          },
+        },
+      ],
+    };
+
+    const artifacts = createPlanArtifacts(manifest, "/tmp/manifest.json");
+    expect(artifacts.targets[0].scoringProfile).toBe("sprite-quality");
+    expect(artifacts.targets[0].scoreWeights).toEqual({
+      readability: 1.15,
+      fileSize: 1.6,
+      consistency: 1.2,
+      clip: 1.15,
+      lpips: 1.05,
+      ssim: 1.05,
+    });
   });
 
   it("normalizes directed-synthesis scaffold fields onto planned targets", () => {
@@ -544,6 +608,68 @@ describe("manifest normalization", () => {
     expect(validation.report.errors).toBeGreaterThan(0);
     expect(
       validation.report.issues.some((issue) => issue.code === "duplicate_target_out"),
+    ).toBe(true);
+  });
+
+  it("rejects targets that reference missing scoring profiles", () => {
+    const manifest: ManifestV2 = {
+      ...BASE_MANIFEST,
+      scoringProfiles: [
+        {
+          id: "available-profile",
+          scoreWeights: {
+            readability: 1.1,
+          },
+        },
+      ],
+      targets: [
+        {
+          ...BASE_MANIFEST.targets[0],
+          scoringProfile: "missing-profile",
+        },
+      ],
+    };
+
+    const validation = validateManifestSource({
+      manifestPath: "/tmp/manifest.json",
+      raw: JSON.stringify(manifest),
+      data: manifest,
+    });
+
+    expect(validation.report.errors).toBeGreaterThan(0);
+    expect(
+      validation.report.issues.some((issue) => issue.code === "missing_scoring_profile"),
+    ).toBe(true);
+  });
+
+  it("rejects duplicate scoring profile ids", () => {
+    const manifest: ManifestV2 = {
+      ...BASE_MANIFEST,
+      scoringProfiles: [
+        {
+          id: "duplicate-profile",
+          scoreWeights: {
+            readability: 1.1,
+          },
+        },
+        {
+          id: "duplicate-profile",
+          scoreWeights: {
+            fileSize: 0.8,
+          },
+        },
+      ],
+    };
+
+    const validation = validateManifestSource({
+      manifestPath: "/tmp/manifest.json",
+      raw: JSON.stringify(manifest),
+      data: manifest,
+    });
+
+    expect(validation.report.errors).toBeGreaterThan(0);
+    expect(
+      validation.report.issues.some((issue) => issue.code === "duplicate_scoring_profile_id"),
     ).toBe(true);
   });
 

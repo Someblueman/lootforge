@@ -48,3 +48,4 @@ Implement roadmap item: manifest policy coverage gate for `0.3.0`.
 - `npm run typecheck` ✅
 - `npm test` ✅
 - `npm run build` ✅
+- Opened PR: https://github.com/Someblueman/lootforge/pull/32

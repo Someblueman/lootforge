@@ -68,3 +68,11 @@ Implement roadmap item: model capability introspection contract and endpoint for
   - `docs/ROADMAP_ISSUES.md`
   - `progress.md`
 - Resolution decision: keep both completion records from `release/0.3` (scoring profiles) and this branch (provider capability introspection) so roadmap/progress history remains complete.
+
+## Merge sync refresh (2026-02-20)
+- Re-merged `origin/release/0.3` after base advanced (`9f82163 -> 07bfc6c`) and GitHub still marked PR #33 as dirty.
+- Reconciled new conflicts in:
+  - `CODEMAP.md`
+  - `CODEMAP.paths`
+  - `docs/ROADMAP.md`
+- Resolution decision: keep completed items in the `Completed 2026-02-20` section and remove duplicate completed items from the `Remaining queued items` list.

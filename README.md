@@ -60,6 +60,7 @@ Key outcomes:
 - Optional VLM candidate gating (`generationPolicy.vlmGate`) with per-candidate traceability
 - Post-process operators (`trim`, `pad/extrude`, `quantize`, `outline`, `resizeVariants`)
 - Pixel-level acceptance checks with JSON report output
+- Pack-level invariants in acceptance/eval (runtime-output uniqueness, spritesheet continuity, optional texture budgets)
 - Atlas stage with optional TexturePacker integration plus reproducibility artifacts
 - Pack assembly with runtime manifests and review artifacts
 
@@ -238,6 +239,7 @@ lootforge plan --manifest assets/imagegen/manifest.json --out assets/imagegen
 Outputs:
 - `<out>/checks/validation-report.json`
 - Optional: `<out>/checks/image-acceptance-report.json`
+  - acceptance report may include top-level `packInvariants` summary when pack-level checks emit issues/metrics
 
 Key flags:
 - `--strict true|false` (default: `true`)
@@ -295,6 +297,7 @@ Reads raw outputs, applies post-processing and acceptance checks, and writes:
 - Compatibility mirror: `<out>/assets/images/*`
 - `<out>/assets/imagegen/processed/catalog.json`
 - `<out>/checks/image-acceptance-report.json`
+  - includes optional `packInvariants` summary (`errors`, `warnings`, `issues`, `metrics`)
 
 Example:
 ```bash
@@ -345,6 +348,10 @@ Runs hard/soft quality scoring and writes:
   - `alphaHaloRisk`
   - `alphaStrayNoise`
   - `alphaEdgeSharpness`
+- `eval-report.json` may include a top-level `packInvariants` summary:
+  - `errors`, `warnings`, and issue list
+  - continuity metrics per animation (`maxSilhouetteDrift`, `maxAnchorDrift`)
+  - texture budget metrics by evaluation profile
 
 Optional CLIP/LPIPS/SSIM adapter execution:
 - Enable adapters with:
@@ -434,6 +441,10 @@ Per target:
   - `alphaHaloRiskMax` (`0..1`)
   - `alphaStrayNoiseMax` (`0..1`)
   - `alphaEdgeSharpnessMin` (`0..1`)
+- pack-level hard gates are configured via `evaluationProfiles[].hardGates`:
+  - `packTextureBudgetMB` (`>0`)
+  - `spritesheetSilhouetteDriftMax` (`0..1`)
+  - `spritesheetAnchorDriftMax` (`0..1`)
 - `kind: "spritesheet"` targets define `animations` and are expanded/assembled by the pipeline
 
 Minimal example:
@@ -478,7 +489,10 @@ Minimal example:
         "maxFileSizeKB": 512,
         "alphaHaloRiskMax": 0.08,
         "alphaStrayNoiseMax": 0.01,
-        "alphaEdgeSharpnessMin": 0.8
+        "alphaEdgeSharpnessMin": 0.8,
+        "packTextureBudgetMB": 48,
+        "spritesheetSilhouetteDriftMax": 0.2,
+        "spritesheetAnchorDriftMax": 0.15
       }
     }
   ],

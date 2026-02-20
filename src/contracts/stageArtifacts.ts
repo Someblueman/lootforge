@@ -140,6 +140,9 @@ const plannedTargetSchema = z.object({
   alphaHaloRiskMax: z.number().min(0).max(1).optional(),
   alphaStrayNoiseMax: z.number().min(0).max(1).optional(),
   alphaEdgeSharpnessMin: z.number().min(0).max(1).optional(),
+  packTextureBudgetMB: z.number().positive().optional(),
+  spritesheetSilhouetteDriftMax: z.number().min(0).max(1).optional(),
+  spritesheetAnchorDriftMax: z.number().min(0).max(1).optional(),
   seamHeal: z
     .object({
       enabled: z.boolean().optional(),
@@ -252,6 +255,43 @@ const candidateScoreSchema = z.object({
   selected: z.boolean().optional(),
 });
 
+const packInvariantIssueSchema = z.object({
+  level: z.enum(["error", "warning"]),
+  code: nonEmptyString,
+  message: nonEmptyString,
+  targetIds: z.array(nonEmptyString).min(1),
+  evaluationProfileId: nonEmptyString.optional(),
+  metrics: z.record(z.number()).optional(),
+});
+
+const packInvariantSummarySchema = z.object({
+  errors: z.number().int().min(0),
+  warnings: z.number().int().min(0),
+  issues: z.array(packInvariantIssueSchema),
+  metrics: z
+    .object({
+      textureBudgetMBByProfile: z
+        .record(
+          z.object({
+            estimatedMB: z.number(),
+            budgetMB: z.number().optional(),
+            targetCount: z.number().int().min(0),
+          }),
+        )
+        .optional(),
+      spritesheetContinuityByAnimation: z
+        .record(
+          z.object({
+            comparisons: z.number().int().min(0),
+            maxSilhouetteDrift: z.number(),
+            maxAnchorDrift: z.number(),
+          }),
+        )
+        .optional(),
+    })
+    .optional(),
+});
+
 const stageArtifactSchemas = {
   "targets-index": z.object({
     generatedAt: nonEmptyString.optional(),
@@ -311,6 +351,7 @@ const stageArtifactSchemas = {
     failed: z.number().int().min(0),
     errors: z.number().int().min(0),
     warnings: z.number().int().min(0),
+    packInvariants: packInvariantSummarySchema.optional(),
     items: z.array(
       z.object({
         targetId: nonEmptyString,
@@ -380,6 +421,7 @@ const stageArtifactSchemas = {
       ),
     }),
     adapterWarnings: z.array(nonEmptyString),
+    packInvariants: packInvariantSummarySchema.optional(),
     targets: z.array(
       z.object({
         targetId: nonEmptyString,

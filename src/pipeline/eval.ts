@@ -5,6 +5,7 @@ import {
   ImageAcceptanceItemReport,
   runImageAcceptanceChecks,
 } from "../checks/imageAcceptance.js";
+import type { PackInvariantSummary } from "../checks/packInvariants.js";
 import {
   getEnabledSoftAdapterStatuses,
   runEnabledSoftAdapters,
@@ -117,6 +118,7 @@ export interface EvalReport {
     }>;
   };
   adapterWarnings: string[];
+  packInvariants?: PackInvariantSummary;
   targets: EvalTargetResult[];
 }
 
@@ -330,6 +332,7 @@ export async function runEvalPipeline(options: EvalPipelineOptions): Promise<Eva
       adapters: adapterHealthEntries,
     },
     adapterWarnings: reportAdapterWarnings,
+    ...(acceptance.packInvariants ? { packInvariants: acceptance.packInvariants } : {}),
     targets: targetResults,
   };
 
@@ -354,7 +357,7 @@ async function loadTargets(targetsIndexPath: string): Promise<PlannedTarget[]> {
   if (!Array.isArray(parsed.targets)) {
     return [];
   }
-  return parsed.targets.filter((target) => !target.catalogDisabled);
+  return parsed.targets;
 }
 
 async function readProvenance(runPath: string): Promise<ProvenanceRun> {

@@ -706,6 +706,10 @@ function normalizeTargetForGeneration(params: {
     alphaHaloRiskMax: params.evalProfile.hardGates?.alphaHaloRiskMax,
     alphaStrayNoiseMax: params.evalProfile.hardGates?.alphaStrayNoiseMax,
     alphaEdgeSharpnessMin: params.evalProfile.hardGates?.alphaEdgeSharpnessMin,
+    packTextureBudgetMB: params.evalProfile.hardGates?.packTextureBudgetMB,
+    spritesheetSilhouetteDriftMax:
+      params.evalProfile.hardGates?.spritesheetSilhouetteDriftMax,
+    spritesheetAnchorDriftMax: params.evalProfile.hardGates?.spritesheetAnchorDriftMax,
     ...(seamHeal ? { seamHeal } : {}),
     ...(wrapGrid ? { wrapGrid } : {}),
     ...(palette ? { palette } : {}),

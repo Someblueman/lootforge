@@ -69,6 +69,9 @@ export interface ManifestEvaluationProfile {
     alphaHaloRiskMax?: number;
     alphaStrayNoiseMax?: number;
     alphaEdgeSharpnessMin?: number;
+    packTextureBudgetMB?: number;
+    spritesheetSilhouetteDriftMax?: number;
+    spritesheetAnchorDriftMax?: number;
   };
   scoreWeights?: {
     readability?: number;

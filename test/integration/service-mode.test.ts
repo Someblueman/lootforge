@@ -1,3 +1,4 @@
+import { createServer, type Server } from "node:http";
 import { mkdtemp } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -5,6 +6,66 @@ import path from "node:path";
 import { describe, expect, test } from "vitest";
 
 import { startLootForgeService } from "../../src/service/server.js";
+
+const TINY_PNG_BASE64 =
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO5WcXwAAAAASUVORK5CYII=";
+
+async function startFakeLocalDiffusionService(): Promise<{
+  baseUrl: string;
+  close: () => Promise<void>;
+}> {
+  const server = createServer(async (req, res) => {
+    if (req.method === "POST" && req.url === "/generate") {
+      for await (const _chunk of req) {
+        // drain request body
+      }
+      res.statusCode = 200;
+      res.setHeader("content-type", "application/json; charset=utf-8");
+      res.end(
+        `${JSON.stringify({
+          images: [{ b64_json: TINY_PNG_BASE64 }],
+        })}\n`,
+      );
+      return;
+    }
+
+    res.statusCode = 404;
+    res.end("not found");
+  });
+
+  await new Promise<void>((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", () => {
+      server.off("error", reject);
+      resolve();
+    });
+  });
+
+  const address = server.address();
+  if (typeof address !== "object" || address === null) {
+    throw new Error("Failed to resolve fake local diffusion service address.");
+  }
+
+  return {
+    baseUrl: `http://127.0.0.1:${address.port}`,
+    close: async () => {
+      await closeServer(server);
+    },
+  };
+}
+
+async function closeServer(server: Server): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    server.close((error) => {
+      if (error) {
+        reject(error);
+        return;
+      }
+      resolve();
+    });
+    server.closeAllConnections?.();
+  });
+}
 
 describe("service mode", () => {
   test("serves health/tools and executes tool endpoints", async () => {
@@ -15,6 +76,7 @@ describe("service mode", () => {
       port: 0,
       defaultOutDir: workspace,
     });
+    const fakeLocal = await startFakeLocalDiffusionService();
 
     try {
       const healthResponse = await fetch(`${service.baseUrl}/v1/health`);
@@ -33,6 +95,12 @@ describe("service mode", () => {
       const toolsPayload = (await toolsResponse.json()) as {
         ok: boolean;
         tools: Array<{ name: string; endpoint: string; alias: string }>;
+        contracts?: {
+          generationRequest?: {
+            version: string;
+            endpoint: string;
+          };
+        };
       };
 
       expect(toolsResponse.status).toBe(200);
@@ -41,6 +109,25 @@ describe("service mode", () => {
       expect(toolsPayload.tools.some((tool) => tool.endpoint === "/v1/tools/generate")).toBe(
         true,
       );
+      expect(toolsPayload.contracts?.generationRequest?.endpoint).toBe(
+        "/v1/generation/requests",
+      );
+
+      const contractResponse = await fetch(
+        `${service.baseUrl}/v1/contracts/generation-request`,
+      );
+      const contractPayload = (await contractResponse.json()) as {
+        ok: boolean;
+        contract: {
+          version: string;
+          endpoint: string;
+          fields: Record<string, string>;
+        };
+      };
+      expect(contractResponse.status).toBe(200);
+      expect(contractPayload.ok).toBe(true);
+      expect(contractPayload.contract.endpoint).toBe("/v1/generation/requests");
+      expect(typeof contractPayload.contract.fields.manifestPath).toBe("string");
 
       const initResponse = await fetch(`${service.baseUrl}/v1/tools/init`, {
         method: "POST",
@@ -114,8 +201,114 @@ describe("service mode", () => {
       expect(badRequestResponse.status).toBe(400);
       expect(badRequestPayload.ok).toBe(false);
       expect(badRequestPayload.error?.code).toBe("unknown_parameter");
+
+      const canonicalResponse = await fetch(`${service.baseUrl}/v1/generation/requests`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          requestId: "req-canonical-1",
+          request: {
+            outDir: workspace,
+            provider: "auto",
+            manifest: {
+              version: "next",
+              pack: {
+                id: "svc-pack",
+                version: "0.1.0",
+              },
+              providers: {
+                default: "local",
+                local: {
+                  model: "sdxl-controlnet",
+                  baseUrl: fakeLocal.baseUrl,
+                },
+              },
+              styleKits: [
+                {
+                  id: "default-kit",
+                  rulesPath: "style/default/style.md",
+                  referenceImages: [],
+                  lightingModel: "flat",
+                },
+              ],
+              consistencyGroups: [
+                {
+                  id: "default-group",
+                  styleKitId: "default-kit",
+                  referenceImages: [],
+                },
+              ],
+              evaluationProfiles: [{ id: "quality" }],
+              targets: [
+                {
+                  id: "svc-hero",
+                  kind: "sprite",
+                  out: "svc-hero.png",
+                  styleKitId: "default-kit",
+                  consistencyGroup: "default-group",
+                  evaluationProfileId: "quality",
+                  prompt: "hero",
+                  generationPolicy: {
+                    outputFormat: "png",
+                    background: "transparent",
+                  },
+                },
+              ],
+            },
+          },
+        }),
+      });
+      const canonicalPayload = (await canonicalResponse.json()) as {
+        ok: boolean;
+        operation: string;
+        result: {
+          requestId?: string;
+          mappingVersion: string;
+          normalizedRequest: {
+            manifestSource: string;
+          };
+          plan: {
+            targets: number;
+          };
+          generate: {
+            jobs: number;
+            runId: string;
+          };
+        };
+      };
+
+      expect(canonicalResponse.status).toBe(200);
+      expect(canonicalPayload.ok).toBe(true);
+      expect(canonicalPayload.operation).toBe("generation_request");
+      expect(canonicalPayload.result.requestId).toBe("req-canonical-1");
+      expect(canonicalPayload.result.mappingVersion).toBe("v1");
+      expect(canonicalPayload.result.normalizedRequest.manifestSource).toBe("inline");
+      expect(canonicalPayload.result.plan.targets).toBe(1);
+      expect(canonicalPayload.result.generate.jobs).toBe(1);
+      expect(typeof canonicalPayload.result.generate.runId).toBe("string");
+
+      const canonicalBadResponse = await fetch(`${service.baseUrl}/v1/generation/requests`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          request: {
+            outDir: workspace,
+          },
+        }),
+      });
+      const canonicalBadPayload = (await canonicalBadResponse.json()) as {
+        ok: boolean;
+        error?: { code: string };
+      };
+      expect(canonicalBadResponse.status).toBe(400);
+      expect(canonicalBadPayload.ok).toBe(false);
+      expect(canonicalBadPayload.error?.code).toBe("invalid_canonical_generation_request");
     } finally {
-      await service.close();
+      await Promise.all([service.close(), fakeLocal.close()]);
     }
   });
 });

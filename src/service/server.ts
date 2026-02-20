@@ -11,6 +11,11 @@ import { runRegenerateCommand } from "../cli/commands/regenerate.js";
 import { runReviewCommand } from "../cli/commands/review.js";
 import { runSelectCommand } from "../cli/commands/select.js";
 import { runValidateCommand } from "../cli/commands/validate.js";
+import {
+  CanonicalGenerationRequestError,
+  getCanonicalGenerationRequestContract,
+  runCanonicalGenerationRequest,
+} from "./generationRequest.js";
 import { CliError, getErrorExitCode, getErrorMessage } from "../shared/errors.js";
 
 export const SERVICE_API_VERSION = "v1";
@@ -302,6 +307,8 @@ async function handleRequest(
         tools: `${API_PREFIX}/tools`,
         execute: `${API_PREFIX}/tools/:name`,
         aliases: `${API_PREFIX}/:name`,
+        generationRequest: `${API_PREFIX}/generation/requests`,
+        generationContract: `${API_PREFIX}/contracts/generation-request`,
       },
       noAuth: true,
     });
@@ -324,7 +331,60 @@ async function handleRequest(
       ok: true,
       apiVersion: SERVICE_API_VERSION,
       tools: getServiceToolDescriptors(),
+      contracts: {
+        generationRequest: getCanonicalGenerationRequestContract(),
+      },
     });
+    return;
+  }
+
+  if (method === "GET" && pathname === `${API_PREFIX}/contracts/generation-request`) {
+    writeJson(res, 200, {
+      ok: true,
+      apiVersion: SERVICE_API_VERSION,
+      contract: getCanonicalGenerationRequestContract(),
+    });
+    return;
+  }
+
+  if (method === "POST" && pathname === `${API_PREFIX}/generation/requests`) {
+    try {
+      const body = await readJsonBody(req);
+      const result = await runCanonicalGenerationRequest(body, {
+        defaultOutDir: options.defaultOutDir,
+      });
+      writeJson(res, 200, {
+        ok: true,
+        apiVersion: SERVICE_API_VERSION,
+        operation: "generation_request",
+        result,
+      });
+    } catch (error) {
+      if (error instanceof CanonicalGenerationRequestError) {
+        writeJson(res, error.status, {
+          ok: false,
+          apiVersion: SERVICE_API_VERSION,
+          operation: "generation_request",
+          error: {
+            code: error.code,
+            message: error.message,
+          },
+        });
+        return;
+      }
+
+      const status = error instanceof Error ? 422 : 500;
+      writeJson(res, status, {
+        ok: false,
+        apiVersion: SERVICE_API_VERSION,
+        operation: "generation_request",
+        error: {
+          code: resolveErrorCode(error),
+          message: getErrorMessage(error),
+          exitCode: getErrorExitCode(error, 1),
+        },
+      });
+    }
     return;
   }
 
@@ -659,6 +719,7 @@ async function closeServer(server: Server): Promise<void> {
       }
       resolve();
     });
+    server.closeAllConnections?.();
   });
 }
 

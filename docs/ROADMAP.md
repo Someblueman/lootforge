@@ -213,7 +213,10 @@ Completed 2026-02-19 in this release track:
   - kept core service mode intentionally unauthenticated (no auth/credit layer in core).
 
 Remaining queued items:
-- Define a canonical generation request contract and mapping layer between service requests and manifest/pipeline targets.
+- Define a canonical generation request contract and mapping layer between service requests and manifest/pipeline targets:
+  - added `POST /v1/generation/requests` contract endpoint that maps canonical service requests into `plan -> generate`,
+  - added `GET /v1/contracts/generation-request` schema/field descriptor for wrapper discovery,
+  - support inline manifest materialization and normalized request metadata in service response payloads.
 - Implement Nano/Gemini edit-first parity (where supported) with tests.
 - Add manifest schema scaffolding for directed synthesis controls:
   - `targets[].controlImage`, `targets[].controlMode` (`canny|depth|openpose`),

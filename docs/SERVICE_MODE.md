@@ -18,8 +18,10 @@ Optional defaults:
 
 - `GET /v1/health`
 - `GET /v1/tools`
+- `GET /v1/contracts/generation-request`
 - `POST /v1/tools/:name`
 - `POST /v1/:name` (alias for tools endpoint)
+- `POST /v1/generation/requests` (canonical generation request contract)
 
 Root helper endpoint:
 - `GET /`
@@ -47,6 +49,25 @@ Tool execution accepts one of:
 ```
 
 `ids` and `runtimes` support string arrays in `params` and are converted to CSV flags.
+
+Canonical generation request contract:
+```json
+{
+  "requestId": "req-gen-001",
+  "request": {
+    "manifestPath": "/abs/path/to/manifest.json",
+    "outDir": "/abs/path/to/out",
+    "provider": "auto",
+    "targetIds": ["hero", "enemy_01"],
+    "skipLocked": true,
+    "selectionLockPath": "/abs/path/to/locks/selection-lock.json"
+  }
+}
+```
+
+Notes:
+- `request.manifest` can be provided inline instead of `manifestPath`; service mode will materialize it before planning.
+- Canonical request execution maps to `plan -> generate` and returns both plan metadata and generation run metadata.
 
 ## Response Shape
 
@@ -79,4 +100,5 @@ Failure:
 
 - `GET /v1/tools` exposes stable tool metadata and parameter keys.
 - `POST /v1/tools/:name` gives deterministic JSON envelopes for tool-call wrappers.
+- `POST /v1/generation/requests` provides a canonical mapping layer from service request payloads to manifest planning + generation targets.
 - CORS headers are permissive (`*`) for local tool hosts.

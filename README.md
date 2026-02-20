@@ -346,8 +346,10 @@ Key flags:
 Core endpoints:
 - `GET /v1/health`
 - `GET /v1/tools`
+- `GET /v1/contracts/generation-request`
 - `POST /v1/tools/:name`
 - `POST /v1/:name` (alias)
+- `POST /v1/generation/requests` (canonical request -> `plan` + `generate` mapping)
 
 Example:
 ```bash

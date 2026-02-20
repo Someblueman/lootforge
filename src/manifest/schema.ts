@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { TARGET_KINDS } from "../providers/types.js";
+
 const nonEmptyString = z.string().trim().min(1);
 
 export const ProviderNameSchema = z.enum(["openai", "nano", "local"]);
@@ -21,6 +23,7 @@ export const PromptSpecSchema = z.object({
 
 export const ManifestGenerationModeSchema = z.enum(["text", "edit-first"]);
 export const ManifestControlModeSchema = z.enum(["canny", "depth", "openpose"]);
+export const ManifestTargetKindSchema = z.enum(TARGET_KINDS);
 
 export const ManifestVlmGateSchema = z.object({
   threshold: z.number().min(0).max(5).optional(),
@@ -337,6 +340,15 @@ export const ManifestConsistencyGroupSchema = z.object({
   referenceImages: z.array(nonEmptyString).default([]),
 });
 
+export const ManifestScoreWeightsSchema = z.object({
+  readability: z.number().optional(),
+  fileSize: z.number().optional(),
+  consistency: z.number().optional(),
+  clip: z.number().optional(),
+  lpips: z.number().optional(),
+  ssim: z.number().optional(),
+});
+
 export const ManifestEvaluationProfileSchema = z.object({
   id: nonEmptyString,
   hardGates: z
@@ -354,16 +366,21 @@ export const ManifestEvaluationProfileSchema = z.object({
       spritesheetAnchorDriftMax: z.number().min(0).max(1).optional(),
     })
     .optional(),
-  scoreWeights: z
-    .object({
-      readability: z.number().optional(),
-      fileSize: z.number().optional(),
-      consistency: z.number().optional(),
-      clip: z.number().optional(),
-      lpips: z.number().optional(),
-      ssim: z.number().optional(),
-    })
-    .optional(),
+  scoreWeights: ManifestScoreWeightsSchema.optional(),
+});
+
+export const ManifestKindScoreWeightsSchema = z.object({
+  sprite: ManifestScoreWeightsSchema.optional(),
+  tile: ManifestScoreWeightsSchema.optional(),
+  background: ManifestScoreWeightsSchema.optional(),
+  effect: ManifestScoreWeightsSchema.optional(),
+  spritesheet: ManifestScoreWeightsSchema.optional(),
+});
+
+export const ManifestScoringProfileSchema = z.object({
+  id: nonEmptyString,
+  scoreWeights: ManifestScoreWeightsSchema.optional(),
+  kindScoreWeights: ManifestKindScoreWeightsSchema.optional(),
 });
 
 export const ManifestAtlasGroupSchema = z.object({
@@ -386,6 +403,7 @@ export const ManifestV2Schema = z.object({
   styleKits: z.array(ManifestStyleKitSchema).min(1),
   consistencyGroups: z.array(ManifestConsistencyGroupSchema).optional(),
   evaluationProfiles: z.array(ManifestEvaluationProfileSchema).min(1),
+  scoringProfiles: z.array(ManifestScoringProfileSchema).optional(),
   atlas: ManifestAtlasSchema.optional(),
   targets: z.array(ManifestTargetSchema).min(1),
 });

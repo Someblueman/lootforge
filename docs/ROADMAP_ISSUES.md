@@ -4,6 +4,12 @@ Last updated: 2026-02-18
 
 This list translates `docs/ROADMAP.md` into issue-ready work items with explicit acceptance criteria.
 
+Recent completion (2026-02-20):
+- Implemented per-kind scoring presets and manifest-level scoring profile overrides:
+  - added deterministic default score-weight presets by target kind,
+  - added optional manifest `scoringProfiles[]` contract with per-kind overrides,
+  - validated `targets[].scoringProfile` references and normalized scoring resolution into planned targets.
+
 ## P0 (Immediate: `0.3.0`)
 
 ### 1) Stage Artifact Contract Schemas and Compatibility Tests

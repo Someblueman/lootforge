@@ -19,6 +19,8 @@ import type {
   NormalizedGenerationPolicy,
   PalettePolicy,
   ResizeVariant,
+  TargetKind,
+  TargetScoreWeights,
 } from "../providers/types.js";
 import { normalizeManifestAssetPath, normalizeTargetOutPath } from "../shared/paths.js";
 import { safeParseManifestV2 } from "./schema.js";
@@ -26,6 +28,7 @@ import type {
   ManifestConsistencyGroup,
   ManifestEvaluationProfile,
   ManifestPostProcess,
+  ManifestScoringProfile,
   ManifestSource,
   ManifestStyleKit,
   ManifestTarget,
@@ -40,6 +43,56 @@ const SIZE_PATTERN = /^(\d+)x(\d+)$/i;
 const HEX_COLOR_PATTERN = /^#?[0-9a-fA-F]{6}$/;
 const SUPPORTED_POST_PROCESS_ALGORITHMS = new Set(POST_PROCESS_ALGORITHMS);
 const DEFAULT_STYLE_USE_CASE = "game-asset";
+const SCORE_WEIGHT_KEYS: Array<keyof TargetScoreWeights> = [
+  "readability",
+  "fileSize",
+  "consistency",
+  "clip",
+  "lpips",
+  "ssim",
+];
+const DEFAULT_KIND_SCORE_WEIGHT_PRESETS: Record<TargetKind, TargetScoreWeights> = {
+  sprite: {
+    readability: 1.15,
+    fileSize: 0.85,
+    consistency: 1.2,
+    clip: 1.15,
+    lpips: 1.05,
+    ssim: 1.05,
+  },
+  tile: {
+    readability: 0.95,
+    fileSize: 0.95,
+    consistency: 1.35,
+    clip: 1.05,
+    lpips: 1.2,
+    ssim: 1.2,
+  },
+  background: {
+    readability: 1.2,
+    fileSize: 0.8,
+    consistency: 0.9,
+    clip: 1.1,
+    lpips: 0.95,
+    ssim: 0.95,
+  },
+  effect: {
+    readability: 1.25,
+    fileSize: 0.85,
+    consistency: 0.85,
+    clip: 1.1,
+    lpips: 0.9,
+    ssim: 0.9,
+  },
+  spritesheet: {
+    readability: 1.1,
+    fileSize: 0.9,
+    consistency: 1.35,
+    clip: 1.1,
+    lpips: 1.2,
+    ssim: 1.2,
+  },
+};
 
 export interface ValidateManifestOptions {
   now?: () => Date;
@@ -98,6 +151,9 @@ export function normalizeManifestTargets(
   const evaluationById = new Map(
     manifest.evaluationProfiles.map((profile) => [profile.id, profile]),
   );
+  const scoringProfileById = new Map(
+    (manifest.scoringProfiles ?? []).map((profile) => [profile.id, profile]),
+  );
 
   const targets: PlannedTarget[] = [];
 
@@ -136,6 +192,12 @@ export function normalizeManifestTargets(
       );
     }
 
+    if (target.scoringProfile && !scoringProfileById.has(target.scoringProfile)) {
+      throw new Error(
+        `Target "${target.id}" references missing scoringProfile "${target.scoringProfile}".`,
+      );
+    }
+
     if (target.kind === "spritesheet") {
       const expanded = expandSpritesheetTarget({
         manifest,
@@ -145,6 +207,7 @@ export function normalizeManifestTargets(
         styleKitPaletteDefault,
         consistencyGroup,
         evalProfile,
+        scoringProfileById,
       });
       targets.push(...expanded);
       continue;
@@ -159,6 +222,7 @@ export function normalizeManifestTargets(
         styleKitPaletteDefault,
         consistencyGroup,
         evalProfile,
+        scoringProfileById,
       }),
     );
   }
@@ -337,6 +401,20 @@ function collectSemanticIssues(
       evaluationProfileIds.add(profile.id);
     }
   });
+  const scoringProfiles = manifest.scoringProfiles ?? [];
+  const scoringProfileIds = new Set<string>();
+  scoringProfiles.forEach((profile, index) => {
+    if (scoringProfileIds.has(profile.id)) {
+      issues.push({
+        level: "error",
+        code: "duplicate_scoring_profile_id",
+        path: `scoringProfiles[${index}].id`,
+        message: `Duplicate scoring profile id "${profile.id}".`,
+      });
+    } else {
+      scoringProfileIds.add(profile.id);
+    }
+  });
 
   const defaultProvider = manifest.providers?.default ?? "openai";
 
@@ -394,6 +472,15 @@ function collectSemanticIssues(
         code: "missing_evaluation_profile",
         path: `targets[${index}].evaluationProfileId`,
         message: `Unknown evaluation profile "${target.evaluationProfileId}".`,
+      });
+    }
+
+    if (target.scoringProfile && !scoringProfileIds.has(target.scoringProfile)) {
+      issues.push({
+        level: "error",
+        code: "missing_scoring_profile",
+        path: `targets[${index}].scoringProfile`,
+        message: `Unknown scoring profile "${target.scoringProfile}".`,
       });
     }
 
@@ -685,6 +772,71 @@ function normalizeManifestAssetPathList(values: string[], label: string): string
   return normalized;
 }
 
+function normalizeTargetKindForScoring(kind: string): TargetKind | undefined {
+  const normalizedKind = kind.trim().toLowerCase();
+  if (
+    normalizedKind === "sprite" ||
+    normalizedKind === "tile" ||
+    normalizedKind === "background" ||
+    normalizedKind === "effect" ||
+    normalizedKind === "spritesheet"
+  ) {
+    return normalizedKind;
+  }
+  return undefined;
+}
+
+function mergeScoreWeights(
+  scoreWeights: TargetScoreWeights,
+  overrides: TargetScoreWeights | undefined,
+): void {
+  if (!overrides) {
+    return;
+  }
+
+  for (const key of SCORE_WEIGHT_KEYS) {
+    const value = overrides[key];
+    if (typeof value === "number" && Number.isFinite(value)) {
+      scoreWeights[key] = value;
+    }
+  }
+}
+
+function resolveTargetScoring(params: {
+  target: ManifestTarget;
+  evalProfile: ManifestEvaluationProfile;
+  scoringProfileById: Map<string, ManifestScoringProfile>;
+}): {
+  profileId?: string;
+  scoreWeights?: TargetScoreWeights;
+} {
+  const kind = normalizeTargetKindForScoring(params.target.kind);
+  const profileId = params.target.scoringProfile ?? params.target.evaluationProfileId;
+  const profile = profileId ? params.scoringProfileById.get(profileId) : undefined;
+  const scoreWeights: TargetScoreWeights = {};
+
+  if (kind) {
+    mergeScoreWeights(scoreWeights, DEFAULT_KIND_SCORE_WEIGHT_PRESETS[kind]);
+  }
+
+  if (profile?.scoreWeights) {
+    mergeScoreWeights(scoreWeights, profile.scoreWeights);
+  }
+
+  if (kind && profile?.kindScoreWeights?.[kind]) {
+    mergeScoreWeights(scoreWeights, profile.kindScoreWeights[kind]);
+  }
+
+  if (!profile && params.evalProfile.scoreWeights) {
+    mergeScoreWeights(scoreWeights, params.evalProfile.scoreWeights);
+  }
+
+  return {
+    ...(profileId ? { profileId } : {}),
+    ...(Object.keys(scoreWeights).length > 0 ? { scoreWeights } : {}),
+  };
+}
+
 function normalizeTargetForGeneration(params: {
   manifest: ManifestV2;
   target: ManifestTarget;
@@ -693,6 +845,7 @@ function normalizeTargetForGeneration(params: {
   styleKitPaletteDefault?: PalettePolicy;
   consistencyGroup?: ManifestConsistencyGroup;
   evalProfile: ManifestEvaluationProfile;
+  scoringProfileById: Map<string, ManifestScoringProfile>;
   promptOverride?: PromptSpec;
   idOverride?: string;
   outOverride?: string;
@@ -760,6 +913,11 @@ function normalizeTargetForGeneration(params: {
     params.target.controlImage,
     `target "${id}" controlImage`,
   );
+  const scoring = resolveTargetScoring({
+    target: params.target,
+    evalProfile: params.evalProfile,
+    scoringProfileById: params.scoringProfileById,
+  });
 
   const normalized: PlannedTarget = {
     id,
@@ -775,10 +933,10 @@ function normalizeTargetForGeneration(params: {
     consistencyGroup: params.target.consistencyGroup,
     generationMode: params.target.generationMode ?? "text",
     evaluationProfileId: params.target.evaluationProfileId,
-    scoringProfile: params.target.scoringProfile ?? params.target.evaluationProfileId,
+    ...(scoring.profileId ? { scoringProfile: scoring.profileId } : {}),
     ...(controlImage ? { controlImage } : {}),
     ...(params.target.controlMode ? { controlMode: params.target.controlMode } : {}),
-    ...(params.evalProfile.scoreWeights ? { scoreWeights: params.evalProfile.scoreWeights } : {}),
+    ...(scoring.scoreWeights ? { scoreWeights: scoring.scoreWeights } : {}),
     tileable: params.target.tileable,
     seamThreshold:
       params.target.seamThreshold ?? params.evalProfile.hardGates?.seamThreshold,
@@ -837,6 +995,7 @@ function expandSpritesheetTarget(params: {
   styleKitPaletteDefault?: PalettePolicy;
   consistencyGroup?: ManifestConsistencyGroup;
   evalProfile: ManifestEvaluationProfile;
+  scoringProfileById: Map<string, ManifestScoringProfile>;
 }): PlannedTarget[] {
   const normalizedSheetOut = normalizeTargetOutPath(params.target.out);
   const outExt = path.extname(normalizedSheetOut) || ".png";
@@ -897,6 +1056,7 @@ function expandSpritesheetTarget(params: {
           styleKitPaletteDefault: params.styleKitPaletteDefault,
           consistencyGroup: params.consistencyGroup,
           evalProfile: params.evalProfile,
+          scoringProfileById: params.scoringProfileById,
           promptOverride: framePrompt,
           idOverride: frameId,
           outOverride: frameOut,
@@ -923,6 +1083,7 @@ function expandSpritesheetTarget(params: {
     styleKitPaletteDefault: params.styleKitPaletteDefault,
     consistencyGroup: params.consistencyGroup,
     evalProfile: params.evalProfile,
+    scoringProfileById: params.scoringProfileById,
     promptOverride: defaultSheetPrompt,
     generationDisabled: true,
     spritesheet: {

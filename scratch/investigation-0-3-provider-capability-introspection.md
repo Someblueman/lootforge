@@ -57,3 +57,4 @@ Implement roadmap item: model capability introspection contract and endpoint for
 - `npm run typecheck` ✅
 - `npm test -- test/unit/provider-capability-contract.test.ts test/integration/service-mode.test.ts` ✅
 - `npm run typecheck && npm test && npm run build` ✅
+- Opened PR: https://github.com/Someblueman/lootforge/pull/33

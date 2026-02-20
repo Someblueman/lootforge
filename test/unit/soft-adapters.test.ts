@@ -133,4 +133,65 @@ describe("soft adapters", () => {
     const overlapEnd = Math.min(clipWindow.end, lpipsWindow.end);
     expect(overlapEnd - overlapStart).toBeGreaterThan(0);
   });
+
+  it("supports quoted command arguments without using a shell", async () => {
+    const tempRoot = await mkdtemp(path.join(os.tmpdir(), "lootforge-soft-adapters-quoted-"));
+    const imagePath = path.join(tempRoot, "candidate.png");
+    const adapterScriptPath = path.join(tempRoot, "adapter with space.js");
+    const quotedLogPath = path.join(tempRoot, "quoted run log.json");
+
+    await sharp({
+      create: {
+        width: 8,
+        height: 8,
+        channels: 4,
+        background: { r: 20, g: 30, b: 40, alpha: 255 },
+      },
+    })
+      .png()
+      .toFile(imagePath);
+
+    await writeFile(
+      adapterScriptPath,
+      [
+        'const fs = require("node:fs");',
+        'const payload = JSON.parse(fs.readFileSync(0, "utf8"));',
+        'const logPath = process.argv[2] || "missing-path";',
+        "fs.writeFileSync(logPath, JSON.stringify({ adapter: payload.adapter }));",
+        'process.stdout.write(JSON.stringify({ metrics: { score: 3 }, score: 3 }));',
+      ].join("\n"),
+      "utf8",
+    );
+
+    process.env.LOOTFORGE_ENABLE_CLIP_ADAPTER = "1";
+    process.env.LOOTFORGE_ENABLE_LPIPS_ADAPTER = "0";
+    process.env.LOOTFORGE_ENABLE_SSIM_ADAPTER = "0";
+    process.env.LOOTFORGE_CLIP_ADAPTER_CMD = toCommand(
+      process.execPath,
+      adapterScriptPath,
+      quotedLogPath,
+    );
+
+    const target: PlannedTarget = {
+      id: "quoted-args",
+      kind: "sprite",
+      out: "candidate.png",
+      promptSpec: { primary: "candidate sprite" },
+      generationPolicy: {
+        outputFormat: "png",
+        background: "opaque",
+      },
+    };
+
+    const result = await runEnabledSoftAdapters({
+      target,
+      imagePath,
+      outDir: tempRoot,
+    });
+
+    expect(result.adapterNames).toEqual(["clip"]);
+    expect(result.succeededAdapters).toEqual(["clip"]);
+    const log = await readFile(quotedLogPath, "utf8");
+    expect(log.includes("clip")).toBe(true);
+  });
 });

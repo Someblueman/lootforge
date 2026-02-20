@@ -455,6 +455,57 @@ describe("generate pipeline safety", () => {
     expect(copiedBytes.equals(lockedSourceBytes)).toBe(true);
   });
 
+  test("fails fast when lock file is malformed JSON", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "lootforge-generate-lock-invalid-json-"));
+    const outDir = path.join(root, "out");
+    const indexPath = path.join(outDir, "jobs", "targets-index.json");
+    const lockPath = path.join(outDir, "locks", "selection-lock.json");
+    await mkdir(path.dirname(indexPath), { recursive: true });
+    await mkdir(path.dirname(lockPath), { recursive: true });
+    await writeFile(
+      indexPath,
+      `${JSON.stringify(
+        {
+          targets: [
+            {
+              id: "hero",
+              out: "hero.png",
+              promptSpec: { primary: "hero" },
+              generationPolicy: {
+                outputFormat: "png",
+                background: "transparent",
+              },
+            },
+          ],
+        },
+        null,
+        2,
+      )}\n`,
+      "utf8",
+    );
+    await writeFile(lockPath, "{ not valid json", "utf8");
+
+    const provider = createStubProvider({
+      runJob: async () => {
+        throw new Error("provider should not be used when lock parse fails");
+      },
+    });
+
+    await expect(
+      runGeneratePipeline({
+        outDir,
+        provider: "openai",
+        skipLocked: false,
+        selectionLockPath: lockPath,
+        registry: {
+          openai: provider,
+          nano: provider,
+          local: provider,
+        },
+      }),
+    ).rejects.toThrow(/selection lock/i);
+  });
+
   test("replaces primary output with best candidate selection when a non-primary candidate wins", async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "lootforge-generate-candidate-replace-"));
     const outDir = path.join(root, "out");

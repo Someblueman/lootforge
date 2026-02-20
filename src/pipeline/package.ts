@@ -56,6 +56,7 @@ export interface PackagePipelineOptions {
   targetsIndexPath?: string;
   strict?: boolean;
   runtimeTargets?: RuntimeManifestTarget[];
+  assetBaseUrl?: string;
 }
 
 export interface PackagePipelineResult {
@@ -119,6 +120,7 @@ export async function runPackagePipeline(
   const manifestRaw = await readFile(manifestPath, "utf8");
   const manifest = parseJson<ManifestV2>(manifestRaw, manifestPath);
   const packId = sanitizePackId(manifest.pack?.id ?? "asset-pack");
+  const assetBaseUrl = options.assetBaseUrl ?? "/assets";
 
   const processedImagesDir = layout.processedImagesDir;
   if (!(await exists(processedImagesDir))) {
@@ -147,13 +149,14 @@ export async function runPackagePipeline(
     outDir: layout.outDir,
     targetsIndexPath,
     manifestPath,
+    assetBaseUrl,
   });
 
   await copyDirIfExists(processedImagesDir, packImagesDir);
   await copyDirIfExists(atlasResult.atlasDir, packAtlasesDir);
 
   const targets = await loadTargets(targetsIndexPath);
-  const catalog = await buildCatalog(targets, processedImagesDir);
+  const catalog = await buildCatalog(targets, processedImagesDir, assetBaseUrl);
   await writeFile(
     path.join(packReviewDir, "catalog.json"),
     `${JSON.stringify(catalog, null, 2)}\n`,

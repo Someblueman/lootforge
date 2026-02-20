@@ -2,8 +2,10 @@ import { spawn } from "node:child_process";
 
 import { buildStructuredPrompt } from "../providers/types.js";
 import type { PlannedTarget } from "../providers/types.js";
+import { parseTimeoutMs } from "../providers/runtime.js";
 import { parseCommandLine } from "./commandParser.js";
 import { resolvePathWithinRoot } from "../shared/paths.js";
+import { isRecord } from "../shared/typeGuards.js";
 
 const DEFAULT_ADAPTER_TIMEOUT_MS = 30_000;
 const GENERIC_ADAPTER_TIMEOUT_ENV = "LOOTFORGE_ADAPTER_TIMEOUT_MS";
@@ -90,7 +92,9 @@ export async function runEnabledSoftAdapters(
   }
 
   const payload = buildSoftAdapterPayload(input);
-  const adapterMetrics: Partial<Record<SoftAdapterName, Record<string, number>>> = {};
+  const adapterMetrics: Partial<
+    Record<SoftAdapterName, Record<string, number>>
+  > = {};
   const adapterScores: Partial<Record<SoftAdapterName, number>> = {};
   const succeededAdapters: SoftAdapterName[] = [];
   const failedAdapters: SoftAdapterName[] = [];
@@ -131,7 +135,9 @@ export async function runEnabledSoftAdapters(
     }
 
     const message =
-      result.error instanceof Error ? result.error.message : String(result.error);
+      result.error instanceof Error
+        ? result.error.message
+        : String(result.error);
     warnings.push(`${result.config.name}: ${message}`);
     failedAdapters.push(result.config.name);
   }
@@ -164,7 +170,9 @@ function getEnabledSoftAdapterConfigs(): SoftAdapterConfig[] {
       configs.push({
         name,
         timeoutMs:
-          parseTimeoutMs(process.env[`LOOTFORGE_${upper}_ADAPTER_TIMEOUT_MS`]) ??
+          parseTimeoutMs(
+            process.env[`LOOTFORGE_${upper}_ADAPTER_TIMEOUT_MS`],
+          ) ??
           parseTimeoutMs(process.env[GENERIC_ADAPTER_TIMEOUT_ENV]) ??
           DEFAULT_ADAPTER_TIMEOUT_MS,
       });
@@ -185,7 +193,9 @@ function getEnabledSoftAdapterConfigs(): SoftAdapterConfig[] {
   return configs;
 }
 
-function buildSoftAdapterPayload(input: SoftAdapterRunInput): SoftAdapterPayload {
+function buildSoftAdapterPayload(
+  input: SoftAdapterRunInput,
+): SoftAdapterPayload {
   return {
     adapter: "clip",
     imagePath: input.imagePath,
@@ -266,7 +276,7 @@ async function runAdapterCommand(
     child.stdin.end();
   });
 
-    return parseSoftAdapterResponse(config.name, stdout);
+  return parseSoftAdapterResponse(config.name, stdout);
 }
 
 async function runAdapterHttp(
@@ -309,7 +319,9 @@ async function runAdapterHttp(
     return parseSoftAdapterResponse(config.name, await response.text());
   } catch (error) {
     if (error instanceof Error && error.name === "AbortError") {
-      throw new Error(`HTTP adapter request timed out after ${config.timeoutMs}ms.`);
+      throw new Error(
+        `HTTP adapter request timed out after ${config.timeoutMs}ms.`,
+      );
     }
     throw error;
   } finally {
@@ -351,7 +363,11 @@ function parseSoftAdapterResponse(
 
   for (const [key, value] of Object.entries(metricsSource)) {
     if (key === "score") {
-      if (score === undefined && typeof value === "number" && Number.isFinite(value)) {
+      if (
+        score === undefined &&
+        typeof value === "number" &&
+        Number.isFinite(value)
+      ) {
         score = value;
       }
       continue;
@@ -371,7 +387,10 @@ function parseSoftAdapterResponse(
   };
 }
 
-function resolveReferenceImages(target: PlannedTarget, outDir: string): string[] {
+function resolveReferenceImages(
+  target: PlannedTarget,
+  outDir: string,
+): string[] {
   const inputs = target.edit?.inputs ?? [];
   const resolved = new Set<string>();
 
@@ -399,21 +418,4 @@ function parseBooleanEnv(name: string): boolean {
 
   const normalized = raw.trim().toLowerCase();
   return ["1", "true", "yes", "y"].includes(normalized);
-}
-
-function parseTimeoutMs(value: string | undefined): number | undefined {
-  if (!value) {
-    return undefined;
-  }
-
-  const parsed = Number.parseInt(value.trim(), 10);
-  if (!Number.isFinite(parsed) || parsed <= 0) {
-    return undefined;
-  }
-
-  return parsed;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

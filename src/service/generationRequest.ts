@@ -7,6 +7,7 @@ import { runPlanCommand } from "../cli/commands/plan.js";
 import { parseGenerateProviderFlag } from "../pipeline/generate.js";
 import { runGeneratePipeline } from "../pipeline/generate.js";
 import type { ProviderSelection } from "../providers/types.js";
+import { isRecord } from "../shared/typeGuards.js";
 
 export const CANONICAL_GENERATION_REQUEST_VERSION = "v1";
 
@@ -102,14 +103,17 @@ export function getCanonicalGenerationRequestContract(): {
     summary:
       "Canonical generation request contract that maps service payloads to manifest planning + generation pipeline targets.",
     fields: {
-      manifestPath: "String path to manifest JSON (required unless manifest is provided).",
+      manifestPath:
+        "String path to manifest JSON (required unless manifest is provided).",
       manifest:
         "Inline manifest object; when present it is materialized to a service request manifest file before planning.",
       outDir:
         "Output directory root for plan/generate artifacts. Falls back to service default out dir, then manifest parent directory.",
-      provider: "Provider selection (openai|nano|local|auto). Defaults to auto.",
+      provider:
+        "Provider selection (openai|nano|local|auto). Defaults to auto.",
       targetIds: "Optional target-id subset for generation.",
-      skipLocked: "When true (default), lock-approved targets can be skipped during generation.",
+      skipLocked:
+        "When true (default), lock-approved targets can be skipped during generation.",
       selectionLockPath: "Optional selection lock path override.",
     },
   };
@@ -125,7 +129,17 @@ export async function runCanonicalGenerationRequest(
   const requestedManifestPath = request.manifestPath
     ? path.resolve(request.manifestPath)
     : undefined;
-  const outDir = resolveOutDir(request.outDir, context.defaultOutDir, requestedManifestPath);
+
+  assertNoNullBytes(requestedManifestPath, "manifestPath");
+
+  const outDir = resolveOutDir(
+    request.outDir,
+    context.defaultOutDir,
+    requestedManifestPath,
+  );
+
+  assertNoNullBytes(outDir, "outDir");
+
   const manifestResolution = await resolveManifestPathForRequest({
     request,
     outDir,
@@ -138,6 +152,8 @@ export async function runCanonicalGenerationRequest(
   const selectionLockPath = request.selectionLockPath
     ? path.resolve(request.selectionLockPath)
     : undefined;
+
+  assertNoNullBytes(selectionLockPath, "selectionLockPath");
 
   const requestManifestPath = manifestResolution.manifestPath;
   const shouldCleanupManifest = manifestResolution.source === "inline";
@@ -160,7 +176,9 @@ export async function runCanonicalGenerationRequest(
     });
 
     return {
-      ...(envelope.requestId !== undefined ? { requestId: envelope.requestId } : {}),
+      ...(envelope.requestId !== undefined
+        ? { requestId: envelope.requestId }
+        : {}),
       mappingVersion: CANONICAL_GENERATION_REQUEST_VERSION,
       normalizedRequest: {
         outDir,
@@ -191,12 +209,17 @@ export async function runCanonicalGenerationRequest(
   }
 }
 
-function parseCanonicalGenerationEnvelope(value: unknown): CanonicalGenerationRequestEnvelope {
+function parseCanonicalGenerationEnvelope(
+  value: unknown,
+): CanonicalGenerationRequestEnvelope {
   if (!isRecord(value)) {
-    throw new CanonicalGenerationRequestError("Canonical generation request must be a JSON object.", {
-      code: "invalid_canonical_generation_request",
-      status: 400,
-    });
+    throw new CanonicalGenerationRequestError(
+      "Canonical generation request must be a JSON object.",
+      {
+        code: "invalid_canonical_generation_request",
+        status: 400,
+      },
+    );
   }
 
   const envelopeLike = canonicalGenerationEnvelopeSchema.safeParse(value);
@@ -213,7 +236,9 @@ function parseCanonicalGenerationEnvelope(value: unknown): CanonicalGenerationRe
 
   const issue = envelopeLike.error.issues[0] ?? requestOnly.error.issues[0];
   throw new CanonicalGenerationRequestError(
-    issue ? `${issue.path.join(".") || "request"}: ${issue.message}` : "Invalid request shape.",
+    issue
+      ? `${issue.path.join(".") || "request"}: ${issue.message}`
+      : "Invalid request shape.",
     {
       code: "invalid_canonical_generation_request",
       status: 400,
@@ -295,9 +320,7 @@ function normalizeTargetIds(value: string[] | undefined): string[] {
     return [];
   }
   return Array.from(
-    new Set(
-      value.map((id) => id.trim()).filter((id) => id.length > 0),
-    ),
+    new Set(value.map((id) => id.trim()).filter((id) => id.length > 0)),
   );
 }
 
@@ -307,6 +330,11 @@ function createSafeRequestId(value: string | number | undefined): string {
   return sanitized.length > 0 ? sanitized : "service-request";
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
+function assertNoNullBytes(value: string | undefined, label: string): void {
+  if (typeof value === "string" && value.includes("\0")) {
+    throw new CanonicalGenerationRequestError(
+      `${label} contains a null byte.`,
+      { code: "canonical_generation_unsafe_path", status: 400 },
+    );
+  }
 }

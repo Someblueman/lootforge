@@ -9,6 +9,9 @@
     "noImplicitAny": true,
     "forceConsistentCasingInFileNames": true,
     "skipLibCheck": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
     "declaration": true,
     "sourceMap": true,
     "types": ["node"]

@@ -5,10 +5,13 @@ import { resolvePathWithinRoot } from "../shared/paths.js";
 import {
   DEFAULT_PROVIDER_REQUEST_TIMEOUT_MS,
   fetchWithTimeout,
+  MAX_DECODED_IMAGE_BYTES,
   normalizeNonNegativeInteger,
   normalizePositiveInteger,
   ProviderRequestTimeoutError,
   toOptionalNonNegativeInteger,
+  validateImageUrl,
+  withCandidateSuffix,
 } from "./runtime.js";
 import {
   createProviderJob,
@@ -59,7 +62,10 @@ export class OpenAIProvider implements GenerationProvider {
         options.defaultConcurrency,
         defaults.defaultConcurrency,
       ),
-      minDelayMs: normalizeNonNegativeInteger(options.minDelayMs, defaults.minDelayMs),
+      minDelayMs: normalizeNonNegativeInteger(
+        options.minDelayMs,
+        defaults.minDelayMs,
+      ),
     };
     this.model = options.model ?? DEFAULT_OPENAI_MODEL;
     this.endpoint = options.endpoint ?? OPENAI_IMAGES_ENDPOINT;
@@ -71,7 +77,10 @@ export class OpenAIProvider implements GenerationProvider {
     this.maxRetries = toOptionalNonNegativeInteger(options.maxRetries);
   }
 
-  prepareJobs(targets: PlannedTarget[], ctx: ProviderPrepareContext): ProviderJob[] {
+  prepareJobs(
+    targets: PlannedTarget[],
+    ctx: ProviderPrepareContext,
+  ): ProviderJob[] {
     return targets.map((target) =>
       createProviderJob({
         provider: this.name,
@@ -120,7 +129,10 @@ export class OpenAIProvider implements GenerationProvider {
     });
   }
 
-  async runJob(job: ProviderJob, ctx: ProviderRunContext): Promise<ProviderRunResult> {
+  async runJob(
+    job: ProviderJob,
+    ctx: ProviderRunContext,
+  ): Promise<ProviderRunResult> {
     const startedAt = nowIso(ctx.now);
     const fetchImpl = ctx.fetchImpl ?? globalThis.fetch;
     const apiKey = process.env.OPENAI_API_KEY?.trim();
@@ -139,7 +151,8 @@ export class OpenAIProvider implements GenerationProvider {
         provider: this.name,
         code: "missing_fetch",
         message: "Global fetch is unavailable for OpenAI provider.",
-        actionable: "Use Node.js 18+ or pass a fetch implementation in the run context.",
+        actionable:
+          "Use Node.js 18+ or pass a fetch implementation in the run context.",
       });
     }
 
@@ -197,7 +210,10 @@ export class OpenAIProvider implements GenerationProvider {
       for (let index = 0; index < count; index += 1) {
         const image = images[index] ?? images[0];
         const imageBytes = await this.resolveImageBytes(image, fetchImpl);
-        const outputPath = index === 0 ? job.outPath : withCandidateSuffix(job.outPath, index + 1);
+        const outputPath =
+          index === 0
+            ? job.outPath
+            : withCandidateSuffix(job.outPath, index + 1);
         await mkdir(path.dirname(outputPath), { recursive: true });
         await writeFile(outputPath, imageBytes);
         candidateOutputs.push({
@@ -238,7 +254,9 @@ export class OpenAIProvider implements GenerationProvider {
     apiKey: string,
   ): Promise<Response> {
     const editInputs = job.target.edit?.inputs ?? [];
-    const baseAndReferenceInputs = editInputs.filter((input) => input.role !== "mask");
+    const baseAndReferenceInputs = editInputs.filter(
+      (input) => input.role !== "mask",
+    );
     const maskInputs = editInputs.filter((input) => input.role === "mask");
 
     if (baseAndReferenceInputs.length === 0) {
@@ -261,8 +279,15 @@ export class OpenAIProvider implements GenerationProvider {
     form.set("n", String(Math.max(1, job.candidateCount)));
 
     for (const input of baseAndReferenceInputs) {
-      const resolvedPath = this.resolveEditInputPath(input.path, ctx.outDir, job.targetId);
-      const imageBytes = await this.readEditInputBytes(resolvedPath, job.targetId);
+      const resolvedPath = this.resolveEditInputPath(
+        input.path,
+        ctx.outDir,
+        job.targetId,
+      );
+      const imageBytes = await this.readEditInputBytes(
+        resolvedPath,
+        job.targetId,
+      );
       const imageData = new Uint8Array(imageBytes);
 
       if (baseAndReferenceInputs.length === 1) {
@@ -281,7 +306,11 @@ export class OpenAIProvider implements GenerationProvider {
     }
 
     if (maskInputs.length > 0) {
-      const maskPath = this.resolveEditInputPath(maskInputs[0].path, ctx.outDir, job.targetId);
+      const maskPath = this.resolveEditInputPath(
+        maskInputs[0].path,
+        ctx.outDir,
+        job.targetId,
+      );
       const maskBytes = await this.readEditInputBytes(maskPath, job.targetId);
       const maskData = new Uint8Array(maskBytes);
       form.append(
@@ -374,12 +403,28 @@ export class OpenAIProvider implements GenerationProvider {
     imageData: { b64_json?: string; url?: string },
     fetchImpl: typeof fetch,
   ): Promise<Buffer> {
-    if (typeof imageData.b64_json === "string" && imageData.b64_json.length > 0) {
-      return Buffer.from(imageData.b64_json, "base64");
+    if (
+      typeof imageData.b64_json === "string" &&
+      imageData.b64_json.length > 0
+    ) {
+      const buffer = Buffer.from(imageData.b64_json, "base64");
+      if (buffer.byteLength > MAX_DECODED_IMAGE_BYTES) {
+        throw new ProviderError({
+          provider: this.name,
+          code: "openai_image_too_large",
+          message: `Decoded image exceeds ${MAX_DECODED_IMAGE_BYTES} byte safety limit.`,
+          actionable: "Request smaller images or reduce candidate count.",
+        });
+      }
+      return buffer;
     }
 
     if (typeof imageData.url === "string" && imageData.url.length > 0) {
-      const imageResponse = await this.requestWithTimeout(fetchImpl, imageData.url);
+      validateImageUrl(imageData.url, "OpenAI image download");
+      const imageResponse = await this.requestWithTimeout(
+        fetchImpl,
+        imageData.url,
+      );
       if (!imageResponse.ok) {
         throw new ProviderError({
           provider: this.name,
@@ -397,7 +442,17 @@ export class OpenAIProvider implements GenerationProvider {
           provider: this.name,
           code: "openai_empty_image",
           message: "OpenAI returned an empty image payload.",
-          actionable: "Retry generation and verify the requested model can output images.",
+          actionable:
+            "Retry generation and verify the requested model can output images.",
+        });
+      }
+
+      if (buffer.byteLength > MAX_DECODED_IMAGE_BYTES) {
+        throw new ProviderError({
+          provider: this.name,
+          code: "openai_image_too_large",
+          message: `Decoded image exceeds ${MAX_DECODED_IMAGE_BYTES} byte safety limit.`,
+          actionable: "Request smaller images or reduce candidate count.",
         });
       }
 
@@ -434,12 +489,6 @@ export class OpenAIProvider implements GenerationProvider {
       throw error;
     }
   }
-}
-
-function withCandidateSuffix(filePath: string, candidateNumber: number): string {
-  const ext = path.extname(filePath);
-  const base = filePath.slice(0, filePath.length - ext.length);
-  return `${base}.candidate-${candidateNumber}${ext}`;
 }
 
 export function createOpenAIProvider(

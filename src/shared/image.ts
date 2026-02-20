@@ -8,7 +8,7 @@ import {
   PlannedTarget,
 } from "../providers/types.js";
 
-const SIZE_PATTERN = /^(\d+)x(\d+)$/i;
+export const SIZE_PATTERN = /^(\d+)x(\d+)$/i;
 
 export interface ImageInspection {
   width: number;
@@ -37,14 +37,18 @@ export async function postProcessGeneratedImage(
   let pipeline = sharp(imagePath, { failOn: "none" });
   if (postProcess.resizeTo) {
     const alphaRequired = requiresAlpha(target);
-    pipeline = pipeline.resize(postProcess.resizeTo.width, postProcess.resizeTo.height, {
-      fit: "contain",
-      background: alphaRequired
-        ? { r: 0, g: 0, b: 0, alpha: 0 }
-        : { r: 0, g: 0, b: 0, alpha: 1 },
-      kernel: toSharpKernel(postProcess.algorithm),
-      withoutEnlargement: true,
-    });
+    pipeline = pipeline.resize(
+      postProcess.resizeTo.width,
+      postProcess.resizeTo.height,
+      {
+        fit: "contain",
+        background: alphaRequired
+          ? { r: 0, g: 0, b: 0, alpha: 0 }
+          : { r: 0, g: 0, b: 0, alpha: 1 },
+        kernel: toSharpKernel(postProcess.algorithm),
+        withoutEnlargement: true,
+      },
+    );
   }
 
   const encodedBuffer = await encodeOutputBuffer(
@@ -57,7 +61,9 @@ export async function postProcessGeneratedImage(
   return inspectImage(imagePath);
 }
 
-export async function inspectImage(imagePath: string): Promise<ImageInspection> {
+export async function inspectImage(
+  imagePath: string,
+): Promise<ImageInspection> {
   const image = sharp(imagePath, { failOn: "none" });
   const metadata = await image.metadata();
   if (
@@ -94,7 +100,8 @@ export function assertTargetAcceptance(
   const acceptanceSize = parseSize(target.acceptance?.size);
   if (
     acceptanceSize &&
-    (inspection.width > acceptanceSize.width || inspection.height > acceptanceSize.height)
+    (inspection.width > acceptanceSize.width ||
+      inspection.height > acceptanceSize.height)
   ) {
     throw new Error(
       [
@@ -106,10 +113,14 @@ export function assertTargetAcceptance(
 
   if (target.acceptance?.alpha === true) {
     if (!inspection.hasAlphaChannel) {
-      throw new Error(`Target "${target.id}" requires alpha but image has no alpha channel.`);
+      throw new Error(
+        `Target "${target.id}" requires alpha but image has no alpha channel.`,
+      );
     }
     if (!inspection.hasTransparentPixels) {
-      throw new Error(`Target "${target.id}" requires transparency but image is fully opaque.`);
+      throw new Error(
+        `Target "${target.id}" requires transparency but image is fully opaque.`,
+      );
     }
   }
 
@@ -127,7 +138,9 @@ export function assertTargetAcceptance(
   }
 }
 
-function parseSize(size: string | undefined): { width: number; height: number } | undefined {
+export function parseSize(
+  size: string | undefined,
+): { width: number; height: number } | undefined {
   if (!size) {
     return undefined;
   }
@@ -139,7 +152,12 @@ function parseSize(size: string | undefined): { width: number; height: number } 
 
   const width = Number.parseInt(match[1], 10);
   const height = Number.parseInt(match[2], 10);
-  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+  if (
+    !Number.isFinite(width) ||
+    !Number.isFinite(height) ||
+    width <= 0 ||
+    height <= 0
+  ) {
     return undefined;
   }
 

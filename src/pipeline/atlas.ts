@@ -4,7 +4,10 @@ import { spawnSync } from "node:child_process";
 
 import sharp from "sharp";
 
-import type { ManifestAtlasGroupOptions, ManifestV2 } from "../manifest/types.js";
+import type {
+  ManifestAtlasGroupOptions,
+  ManifestV2,
+} from "../manifest/types.js";
 import {
   normalizeTargetOutPath,
   resolvePathWithinDir,
@@ -69,19 +72,27 @@ export interface AtlasPipelineResult {
   manifest: AtlasManifest;
 }
 
-function parseSize(size: string | undefined): { width: number; height: number } {
+function parseSize(size: string | undefined): {
+  width: number;
+  height: number;
+} {
   const fallback = { width: 96, height: 96 };
   if (!size) return fallback;
   const match = /^(\d+)x(\d+)$/i.exec(size);
   if (!match) return fallback;
+  const width = Number.parseInt(match[1], 10);
+  const height = Number.parseInt(match[2], 10);
   return {
-    width: Number.parseInt(match[1], 10) || fallback.width,
-    height: Number.parseInt(match[2], 10) || fallback.height,
+    width: Number.isFinite(width) && width > 0 ? width : fallback.width,
+    height: Number.isFinite(height) && height > 0 ? height : fallback.height,
   };
 }
 
 function sanitizeBundleId(targetId: string): string {
-  return `atlas-${targetId.trim().toLowerCase().replace(/[^a-z0-9_-]+/g, "-")}`;
+  return `atlas-${targetId
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, "-")}`;
 }
 
 function hasCommand(command: string): boolean {
@@ -156,7 +167,9 @@ function parsePlannedIndex(raw: string, filePath: string): PlannedIndex {
   }
 }
 
-async function readManifestAtlasOptions(manifestPath: string): Promise<ManifestV2["atlas"]> {
+async function readManifestAtlasOptions(
+  manifestPath: string,
+): Promise<ManifestV2["atlas"]> {
   try {
     const raw = await readFile(manifestPath, "utf8");
     const parsed = JSON.parse(raw) as ManifestV2;
@@ -183,7 +196,9 @@ function resolveAtlasGroupOptions(
   };
 }
 
-async function detectImageSize(filePath: string): Promise<{ width: number; height: number }> {
+async function detectImageSize(
+  filePath: string,
+): Promise<{ width: number; height: number }> {
   const metadata = await sharp(filePath).metadata();
   if (
     typeof metadata.width === "number" &&
@@ -200,7 +215,6 @@ export async function runAtlasPipeline(
   options: AtlasPipelineOptions,
 ): Promise<AtlasPipelineResult> {
   const layout = resolveStagePathLayout(options.outDir);
-  const outDir = layout.outDir;
   const targetsIndexPath = path.resolve(
     options.targetsIndexPath ?? path.join(layout.jobsDir, "targets-index.json"),
   );
@@ -245,7 +259,8 @@ export async function runAtlasPipeline(
         url: `${processedImagesBaseUrl}/${target.out}`,
         atlasGroup: target.atlasGroup ?? null,
         alphaRequired:
-          target.runtimeSpec?.alphaRequired ?? target.acceptance?.alpha === true,
+          target.runtimeSpec?.alphaRequired ??
+          target.acceptance?.alpha === true,
         previewWidth: target.runtimeSpec?.previewWidth ?? expectedSize.width,
         previewHeight: target.runtimeSpec?.previewHeight ?? expectedSize.height,
       };
@@ -325,7 +340,10 @@ export async function runAtlasPipeline(
 
       args.push(...inputPaths);
 
-      const configArtifactPath = path.join(atlasDir, `${groupId}.texturepacker-config.json`);
+      const configArtifactPath = path.join(
+        atlasDir,
+        `${groupId}.texturepacker-config.json`,
+      );
       await writeFile(
         configArtifactPath,
         `${JSON.stringify(
@@ -373,7 +391,10 @@ export async function runAtlasPipeline(
           animationMetadataPathForOut(target.out),
           `atlas metadata for target "${target.id}"`,
         );
-        if (target.kind === "spritesheet" && (await fileExists(sheetMetaPath))) {
+        if (
+          target.kind === "spritesheet" &&
+          (await fileExists(sheetMetaPath))
+        ) {
           const raw = await readFile(sheetMetaPath, "utf8");
           const parsed = JSON.parse(raw) as {
             frames?: Record<string, unknown>;
@@ -394,7 +415,11 @@ export async function runAtlasPipeline(
           );
         }
 
-        await writeFile(atlasJsonPath, `${JSON.stringify(atlasData, null, 2)}\n`, "utf8");
+        await writeFile(
+          atlasJsonPath,
+          `${JSON.stringify(atlasData, null, 2)}\n`,
+          "utf8",
+        );
 
         bundles.push({
           id: bundleId,
@@ -414,7 +439,11 @@ export async function runAtlasPipeline(
   };
 
   const manifestPathOut = path.join(atlasDir, "manifest.json");
-  await writeFile(manifestPathOut, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+  await writeFile(
+    manifestPathOut,
+    `${JSON.stringify(manifest, null, 2)}\n`,
+    "utf8",
+  );
 
   return {
     atlasDir,
@@ -429,9 +458,12 @@ function resolveAssetBaseUrl(rawAssetBaseUrl: string | undefined): string {
     return "/assets";
   }
   const normalized = trimmed.replace(/\\/g, "/");
-  const withLeadingSlash = normalized.startsWith("/") ? normalized : `/${normalized}`;
+  const withLeadingSlash = normalized.startsWith("/")
+    ? normalized
+    : `/${normalized}`;
   const collapsed = withLeadingSlash.replace(/\/{2,}/g, "/");
-  const withoutTrailingSlash =
-    collapsed.endsWith("/") ? collapsed.slice(0, -1) : collapsed;
+  const withoutTrailingSlash = collapsed.endsWith("/")
+    ? collapsed.slice(0, -1)
+    : collapsed;
   return withoutTrailingSlash || "/assets";
 }

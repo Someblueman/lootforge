@@ -4,6 +4,7 @@ import {
   buildStructuredPrompt,
   createProviderJob,
   createDeterministicJobId,
+  getTargetGenerationPolicy,
   getTargetPostProcessPolicy,
   normalizeGenerationPolicyForProvider,
   parseProviderSelection,
@@ -156,6 +157,27 @@ describe("providers helpers", () => {
 
     expect(policy.algorithm).toBe("lanczos3");
     expect(policy.stripMetadata).toBe(true);
+  });
+
+  it("preserves high-quality and hires-fix generation scaffolding", () => {
+    const policy = getTargetGenerationPolicy({
+      ...baseTarget,
+      generationPolicy: {
+        highQuality: true,
+        hiresFix: {
+          enabled: true,
+          upscale: 2,
+          denoiseStrength: 0.35,
+        },
+      },
+    });
+
+    expect(policy.highQuality).toBe(true);
+    expect(policy.hiresFix).toEqual({
+      enabled: true,
+      upscale: 2,
+      denoiseStrength: 0.35,
+    });
   });
 
   it("normalizeGenerationPolicyForProvider canonicalizes jpg alias and transparent jpeg", () => {

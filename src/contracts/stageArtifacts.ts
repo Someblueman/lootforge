@@ -27,6 +27,14 @@ const generationPolicySchema = z.object({
   quality: nonEmptyString,
   background: nonEmptyString,
   outputFormat: z.enum(["png", "jpeg", "webp"]),
+  highQuality: z.boolean().optional(),
+  hiresFix: z
+    .object({
+      enabled: z.boolean().optional(),
+      upscale: z.number().min(1.01).max(4).optional(),
+      denoiseStrength: z.number().min(0).max(1).optional(),
+    })
+    .optional(),
   candidates: z.number().int().min(1),
   maxRetries: z.number().int().min(0),
   fallbackProviders: z.array(providerNameSchema),
@@ -140,10 +148,15 @@ const plannedTargetSchema = z.object({
   out: nonEmptyString,
   atlasGroup: z.union([nonEmptyString, z.null()]).optional(),
   styleKitId: nonEmptyString.optional(),
+  styleReferenceImages: z.array(nonEmptyString).optional(),
+  loraPath: nonEmptyString.optional(),
+  loraStrength: z.number().min(0).max(2).optional(),
   consistencyGroup: nonEmptyString.optional(),
   generationMode: generationModeSchema.optional(),
   evaluationProfileId: nonEmptyString.optional(),
   scoringProfile: nonEmptyString.optional(),
+  controlImage: nonEmptyString.optional(),
+  controlMode: z.enum(["canny", "depth", "openpose"]).optional(),
   scoreWeights: z
     .object({
       readability: z.number().optional(),

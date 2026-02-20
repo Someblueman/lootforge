@@ -1,5 +1,6 @@
 import type {
   AuxiliaryMapPolicy,
+  ControlMode,
   GenerationMode,
   GenerationPolicy,
   PalettePolicy,
@@ -47,8 +48,11 @@ export interface ManifestStyleKit {
   rulesPath: string;
   palettePath?: string;
   referenceImages: string[];
+  styleReferenceImages?: string[];
   lightingModel: string;
   negativeRulesPath?: string;
+  loraPath?: string;
+  loraStrength?: number;
 }
 
 export interface ManifestConsistencyGroup {
@@ -199,6 +203,8 @@ export interface ManifestTarget {
   runtimeSpec?: ManifestRuntimeSpec;
   provider?: ProviderName;
   model?: string;
+  controlImage?: string;
+  controlMode?: ControlMode;
   edit?: TargetEditSpec;
   auxiliaryMaps?: AuxiliaryMapPolicy;
   animations?: Record<string, ManifestSpriteAnimation>;

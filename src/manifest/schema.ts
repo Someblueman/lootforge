@@ -20,6 +20,7 @@ export const PromptSpecSchema = z.object({
 });
 
 export const ManifestGenerationModeSchema = z.enum(["text", "edit-first"]);
+export const ManifestControlModeSchema = z.enum(["canny", "depth", "openpose"]);
 
 export const ManifestVlmGateSchema = z.object({
   threshold: z.number().min(0).max(5).optional(),
@@ -31,6 +32,14 @@ export const ManifestGenerationPolicySchema = z.object({
   background: nonEmptyString.optional(),
   outputFormat: nonEmptyString.optional(),
   quality: nonEmptyString.optional(),
+  highQuality: z.boolean().optional(),
+  hiresFix: z
+    .object({
+      enabled: z.boolean().optional(),
+      upscale: z.number().min(1.01).max(4).optional(),
+      denoiseStrength: z.number().min(0).max(1).optional(),
+    })
+    .optional(),
   draftQuality: nonEmptyString.optional(),
   finalQuality: nonEmptyString.optional(),
   candidates: z.number().int().min(1).optional(),
@@ -213,6 +222,8 @@ export const ManifestTargetSchema = z
     runtimeSpec: ManifestRuntimeSpecSchema.optional(),
     provider: ProviderNameSchema.optional(),
     model: nonEmptyString.optional(),
+    controlImage: nonEmptyString.optional(),
+    controlMode: ManifestControlModeSchema.optional(),
     edit: ManifestEditSchema.optional(),
     auxiliaryMaps: ManifestAuxiliaryMapsSchema.optional(),
     animations: z.record(ManifestSpriteAnimationSchema).optional(),
@@ -234,6 +245,21 @@ export const ManifestTargetSchema = z
         code: z.ZodIssueCode.custom,
         path: ["prompt"],
         message: "Each non-spritesheet target requires `prompt` or `promptSpec`.",
+      });
+    }
+
+    if (target.controlImage && !target.controlMode) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["controlMode"],
+        message: "controlMode is required when controlImage is set.",
+      });
+    }
+    if (target.controlMode && !target.controlImage) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["controlImage"],
+        message: "controlImage is required when controlMode is set.",
       });
     }
   });
@@ -265,14 +291,27 @@ export const ManifestProvidersSchema = z.object({
     .optional(),
 });
 
-export const ManifestStyleKitSchema = z.object({
-  id: nonEmptyString,
-  rulesPath: nonEmptyString,
-  palettePath: nonEmptyString.optional(),
-  referenceImages: z.array(nonEmptyString).default([]),
-  lightingModel: nonEmptyString,
-  negativeRulesPath: nonEmptyString.optional(),
-});
+export const ManifestStyleKitSchema = z
+  .object({
+    id: nonEmptyString,
+    rulesPath: nonEmptyString,
+    palettePath: nonEmptyString.optional(),
+    referenceImages: z.array(nonEmptyString).default([]),
+    styleReferenceImages: z.array(nonEmptyString).default([]),
+    lightingModel: nonEmptyString,
+    negativeRulesPath: nonEmptyString.optional(),
+    loraPath: nonEmptyString.optional(),
+    loraStrength: z.number().min(0).max(2).optional(),
+  })
+  .superRefine((styleKit, ctx) => {
+    if (typeof styleKit.loraStrength === "number" && !styleKit.loraPath) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["loraPath"],
+        message: "loraPath is required when loraStrength is provided.",
+      });
+    }
+  });
 
 export const ManifestConsistencyGroupSchema = z.object({
   id: nonEmptyString,

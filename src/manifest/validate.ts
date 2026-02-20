@@ -264,6 +264,26 @@ function collectSemanticIssues(
         label: `styleKits[${index}] referenceImages[${referenceIndex}]`,
       });
     }
+
+    for (const [referenceIndex, referencePath] of (kit.styleReferenceImages ?? []).entries()) {
+      checkManifestAssetPath({
+        issues,
+        manifestDir,
+        value: referencePath,
+        issuePath: `styleKits[${index}].styleReferenceImages[${referenceIndex}]`,
+        label: `styleKits[${index}] styleReferenceImages[${referenceIndex}]`,
+      });
+    }
+
+    if (kit.loraPath) {
+      checkManifestAssetPath({
+        issues,
+        manifestDir,
+        value: kit.loraPath,
+        issuePath: `styleKits[${index}].loraPath`,
+        label: `styleKits[${index}] loraPath`,
+      });
+    }
   });
 
   const consistencyGroups = manifest.consistencyGroups ?? [];
@@ -545,6 +565,16 @@ function collectSemanticIssues(
       });
     }
 
+    if (target.controlImage) {
+      checkManifestAssetPath({
+        issues,
+        manifestDir,
+        value: target.controlImage,
+        issuePath: `targets[${index}].controlImage`,
+        label: `targets[${index}] controlImage`,
+      });
+    }
+
     const provider = target.provider ?? defaultProvider;
     const normalized = normalizeGenerationPolicyForProvider(
       provider,
@@ -624,6 +654,37 @@ function checkManifestAssetPath(params: {
   return normalized;
 }
 
+function normalizeOptionalManifestAssetPath(
+  value: string | undefined,
+  label: string,
+): string | undefined {
+  if (!value) {
+    return undefined;
+  }
+
+  try {
+    return normalizeManifestAssetPath(value);
+  } catch (error) {
+    throw new Error(
+      `${label} has invalid asset path "${value}": ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+  }
+}
+
+function normalizeManifestAssetPathList(values: string[], label: string): string[] {
+  const normalized: string[] = [];
+  for (const [index, value] of values.entries()) {
+    const itemLabel = `${label}[${index}]`;
+    const entry = normalizeOptionalManifestAssetPath(value, itemLabel);
+    if (entry) {
+      normalized.push(entry);
+    }
+  }
+  return normalized;
+}
+
 function normalizeTargetForGeneration(params: {
   manifest: ManifestV2;
   target: ManifestTarget;
@@ -687,6 +748,18 @@ function normalizeTargetForGeneration(params: {
   const palette = resolveTargetPalettePolicy(params.target, params.styleKitPaletteDefault);
   const seamHeal = normalizeSeamHealPolicy(params.target, params.evalProfile);
   const wrapGrid = normalizeWrapGridPolicy(params.target, params.evalProfile);
+  const styleReferenceImages = normalizeManifestAssetPathList(
+    params.styleKit.styleReferenceImages ?? [],
+    `styleKit "${params.styleKit.id}" styleReferenceImages`,
+  );
+  const loraPath = normalizeOptionalManifestAssetPath(
+    params.styleKit.loraPath,
+    `styleKit "${params.styleKit.id}" loraPath`,
+  );
+  const controlImage = normalizeOptionalManifestAssetPath(
+    params.target.controlImage,
+    `target "${id}" controlImage`,
+  );
 
   const normalized: PlannedTarget = {
     id,
@@ -694,10 +767,17 @@ function normalizeTargetForGeneration(params: {
     out,
     atlasGroup,
     styleKitId: params.target.styleKitId,
+    ...(styleReferenceImages.length > 0 ? { styleReferenceImages } : {}),
+    ...(loraPath ? { loraPath } : {}),
+    ...(typeof params.styleKit.loraStrength === "number"
+      ? { loraStrength: params.styleKit.loraStrength }
+      : {}),
     consistencyGroup: params.target.consistencyGroup,
     generationMode: params.target.generationMode ?? "text",
     evaluationProfileId: params.target.evaluationProfileId,
     scoringProfile: params.target.scoringProfile ?? params.target.evaluationProfileId,
+    ...(controlImage ? { controlImage } : {}),
+    ...(params.target.controlMode ? { controlMode: params.target.controlMode } : {}),
     ...(params.evalProfile.scoreWeights ? { scoreWeights: params.evalProfile.scoreWeights } : {}),
     tileable: params.target.tileable,
     seamThreshold:
@@ -938,6 +1018,7 @@ function mergeStyleKitPrompt(params: {
 
 function toNormalizedGenerationPolicy(target: ManifestTarget): NormalizedGenerationPolicy {
   const outputFormat = normalizeOutputFormatAlias(target.generationPolicy?.outputFormat);
+  const normalizedHiresFix = normalizeHiresFixPolicy(target.generationPolicy?.hiresFix);
   const candidates =
     typeof target.generationPolicy?.candidates === "number"
       ? Math.max(1, Math.round(target.generationPolicy.candidates))
@@ -952,6 +1033,10 @@ function toNormalizedGenerationPolicy(target: ManifestTarget): NormalizedGenerat
     quality: target.generationPolicy?.quality?.trim() || "high",
     background: target.generationPolicy?.background?.trim() || "opaque",
     outputFormat,
+    ...(typeof target.generationPolicy?.highQuality === "boolean"
+      ? { highQuality: target.generationPolicy.highQuality }
+      : {}),
+    ...(normalizedHiresFix ? { hiresFix: normalizedHiresFix } : {}),
     candidates,
     ...(typeof maxRetries === "number" ? { maxRetries } : {}),
     fallbackProviders: target.generationPolicy?.fallbackProviders ?? [],
@@ -959,6 +1044,31 @@ function toNormalizedGenerationPolicy(target: ManifestTarget): NormalizedGenerat
     rateLimitPerMinute: target.generationPolicy?.rateLimitPerMinute,
     vlmGate: normalizeVlmGatePolicy(target.generationPolicy?.vlmGate),
   };
+}
+
+function normalizeHiresFixPolicy(
+  policy: NonNullable<ManifestTarget["generationPolicy"]>["hiresFix"] | undefined,
+): NonNullable<NormalizedGenerationPolicy["hiresFix"]> | undefined {
+  if (!policy) {
+    return undefined;
+  }
+
+  const normalized: NonNullable<NormalizedGenerationPolicy["hiresFix"]> = {};
+
+  if (typeof policy.enabled === "boolean") {
+    normalized.enabled = policy.enabled;
+  }
+  if (typeof policy.upscale === "number" && Number.isFinite(policy.upscale)) {
+    normalized.upscale = Math.max(1.01, Math.min(4, policy.upscale));
+  }
+  if (
+    typeof policy.denoiseStrength === "number" &&
+    Number.isFinite(policy.denoiseStrength)
+  ) {
+    normalized.denoiseStrength = Math.max(0, Math.min(1, policy.denoiseStrength));
+  }
+
+  return Object.keys(normalized).length > 0 ? normalized : undefined;
 }
 
 function normalizeVlmGatePolicy(

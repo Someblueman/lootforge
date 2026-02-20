@@ -91,6 +91,52 @@ describe("manifest normalization", () => {
     expect(artifacts.targets[0].runtimeSpec?.anchorY).toBe(0.75);
   });
 
+  it("normalizes directed-synthesis scaffold fields onto planned targets", () => {
+    const manifest: ManifestV2 = {
+      ...BASE_MANIFEST,
+      styleKits: [
+        {
+          ...BASE_MANIFEST.styleKits[0],
+          styleReferenceImages: ["style/default/style-ref-1.png", "style/default/style-ref-2.png"],
+          loraPath: "style/default/lora.safetensors",
+          loraStrength: 0.7,
+        },
+      ],
+      targets: [
+        {
+          ...BASE_MANIFEST.targets[0],
+          controlImage: "controls/hero-canny.png",
+          controlMode: "canny",
+          generationPolicy: {
+            ...BASE_MANIFEST.targets[0].generationPolicy,
+            highQuality: true,
+            hiresFix: {
+              enabled: true,
+              upscale: 2,
+              denoiseStrength: 0.25,
+            },
+          },
+        },
+      ],
+    };
+
+    const artifacts = createPlanArtifacts(manifest, "/tmp/manifest.json");
+    expect(artifacts.targets[0].styleReferenceImages).toEqual([
+      "style/default/style-ref-1.png",
+      "style/default/style-ref-2.png",
+    ]);
+    expect(artifacts.targets[0].loraPath).toBe("style/default/lora.safetensors");
+    expect(artifacts.targets[0].loraStrength).toBe(0.7);
+    expect(artifacts.targets[0].controlImage).toBe("controls/hero-canny.png");
+    expect(artifacts.targets[0].controlMode).toBe("canny");
+    expect(artifacts.targets[0].generationPolicy?.highQuality).toBe(true);
+    expect(artifacts.targets[0].generationPolicy?.hiresFix).toEqual({
+      enabled: true,
+      upscale: 2,
+      denoiseStrength: 0.25,
+    });
+  });
+
   it("defaults generationPolicy.vlmGate threshold to 4", () => {
     const manifest: ManifestV2 = {
       ...BASE_MANIFEST,
@@ -495,6 +541,98 @@ describe("manifest normalization", () => {
     expect(validation.report.errors).toBeGreaterThan(0);
     expect(
       validation.report.issues.some((issue) => issue.code === "invalid_manifest_asset_path"),
+    ).toBe(true);
+  });
+
+  it("requires controlImage and controlMode to be specified together", () => {
+    const withoutMode: ManifestV2 = {
+      ...BASE_MANIFEST,
+      targets: [
+        {
+          ...BASE_MANIFEST.targets[0],
+          controlImage: "controls/hero-canny.png",
+        },
+      ],
+    };
+    const withoutImage: ManifestV2 = {
+      ...BASE_MANIFEST,
+      targets: [
+        {
+          ...BASE_MANIFEST.targets[0],
+          controlMode: "canny",
+        },
+      ],
+    };
+
+    const withoutModeValidation = validateManifestSource({
+      manifestPath: "/tmp/manifest.json",
+      raw: JSON.stringify(withoutMode),
+      data: withoutMode,
+    });
+    const withoutImageValidation = validateManifestSource({
+      manifestPath: "/tmp/manifest.json",
+      raw: JSON.stringify(withoutImage),
+      data: withoutImage,
+    });
+
+    expect(withoutModeValidation.report.errors).toBeGreaterThan(0);
+    expect(withoutImageValidation.report.errors).toBeGreaterThan(0);
+    expect(
+      withoutModeValidation.report.issues.some((issue) => issue.path === "targets[0].controlMode"),
+    ).toBe(true);
+    expect(
+      withoutImageValidation.report.issues.some((issue) => issue.path === "targets[0].controlImage"),
+    ).toBe(true);
+  });
+
+  it("rejects loraStrength without loraPath", () => {
+    const manifest: ManifestV2 = {
+      ...BASE_MANIFEST,
+      styleKits: [
+        {
+          ...BASE_MANIFEST.styleKits[0],
+          loraStrength: 0.7,
+        },
+      ],
+    };
+
+    const validation = validateManifestSource({
+      manifestPath: "/tmp/manifest.json",
+      raw: JSON.stringify(manifest),
+      data: manifest,
+    });
+
+    expect(validation.report.errors).toBeGreaterThan(0);
+    expect(
+      validation.report.issues.some((issue) => issue.path === "styleKits[0].loraPath"),
+    ).toBe(true);
+  });
+
+  it("reports unsafe control-image asset paths", () => {
+    const manifest: ManifestV2 = {
+      ...BASE_MANIFEST,
+      targets: [
+        {
+          ...BASE_MANIFEST.targets[0],
+          controlImage: "../escape/control.png",
+          controlMode: "canny",
+        },
+      ],
+    };
+
+    const validation = validateManifestSource({
+      manifestPath: "/tmp/manifest.json",
+      raw: JSON.stringify(manifest),
+      data: manifest,
+    });
+
+    expect(validation.report.errors).toBeGreaterThan(0);
+    expect(
+      validation.report.issues.some(
+        (issue) =>
+          issue.code === "invalid_manifest_asset_path" &&
+          issue.path === "targets[0].controlImage",
+      ),
     ).toBe(true);
   });
 

@@ -73,13 +73,19 @@ Focus: improve artistic consistency and ranking quality beyond heuristics.
 - Content-aware ranking expansion:
   - run adapter scoring during candidate generation and eval with shared contract (already partially landed),
   - calibrate score weighting presets by target kind (sprite/tile/background/effect).
-- Consistency-group coherence:
+- Consistency-group coherence and Identity Stability:
   - add group-level outlier scoring from LPIPS/CLIP metrics across sibling targets,
+  - implement cross-frame DINO feature similarity to automatically flag character/geometry drift in animations,
   - surface drift warnings at group level in eval + review.
+- Advanced Tiling Contracts and Palette QA:
+  - formalize a deterministic Tiling Score (TS) for strict Wang-tile topology validation,
+  - add Palette Consistency Score (PCS) to enforce indexed palette constraints on pixel art outputs.
 - Cloud provider edit path parity:
   - implement Nano/Gemini edit-first flow equivalent to OpenAI path where supported.
 - Scoring profile support:
   - allow manifest scoring profiles to override default per-kind weight presets.
+- Auto-Correction via LLM/VLM "Agentic Retry":
+  - if a candidate fails the VLM or Edge-Aware QA gates, automatically feed the critique into an edit-first regeneration loop.
 
 ### Exit Criteria
 - Candidate selection reflects both deterministic gates and content-aware signals.
@@ -93,12 +99,18 @@ Focus: deliver high-control local workflows for repeatable professional packs.
 - Local diffusion production architecture:
   - explicit ControlNet input contract (pose/edge/depth/segmentation roles),
   - workflow templates for local service endpoints.
+- 3D-to-2D Projection & Automating ControlNets:
+  - integrate headless 3D rendering (e.g., three.js) to ingest primitive meshes,
+  - auto-capture isometric Depth/Normal maps to drive ControlNet, guaranteeing 8-way directional consistency.
 - LoRA-ready pack support:
   - manifest metadata for LoRA/model variants per style kit,
   - provenance capture of model/control stack used per output.
 - Throughput and queueing:
   - separate GPU generation queue from CPU post-process workers,
   - hard concurrency/rate controls with predictable scheduling.
+- Multi-Layer Compositions & Alpha Matting:
+  - implement diffusion matting exporters for fringeless alpha extraction,
+  - support native multi-layer outputs (e.g., z-index layers or PSD equivalents) for UI and characters.
 
 ### Exit Criteria
 - Local path can produce repeatable packs with structural controls enabled.
@@ -117,6 +129,20 @@ Focus: team operations, CI confidence, and runtime integration maturity.
 - Runtime export expansion:
   - improve metadata exports (anchors/pivots/nine-slice metadata),
   - add Unity/Godot-oriented output presets.
+- Native Vector Generation:
+  - use LLM/Diffusion-guided SVG synthesis to generate structured, layer-separated true vector assets,
+  - implement style-preserving vector distillation (e.g., IconDM) to expand icon seed sets into massive cohesive packs.
+- First-Class Audio Generation Pipeline:
+  - add LLM-driven audio manifest generation from text prompts,
+  - integrate time-varying control for parameterized SFX (e.g., UI clicks, hits),
+  - support timing-directed prompts and loop-aware inference for seamless ambience/music,
+  - support multi-track stem generation and enforce ITU-R/EBU loudness compliance QA.
+- Generative Dependency DAG ("Asset Lineage"):
+  - treat generation targets as a Directed Acyclic Graph,
+  - automatically inject approved parent assets as IP-Adapter/Style references into child targets for total pack coherence.
+- Native Engine Editor Plugins:
+  - build native Unity/Godot Editor plugins communicating via `serve` mode,
+  - enable direct text-to-asset hot-swapping directly on GameObjects in-editor.
 
 ### Exit Criteria
 - CI can reject quality regressions automatically and explain why.
@@ -135,6 +161,12 @@ Focus: stable public contract and operational readiness.
 - Security/compliance hygiene:
   - document model/provider licensing considerations,
   - define safe defaults for secrets and external adapter execution.
+- The Multimodal Style Bible:
+  - expand `styleKits` scheme to encompass both visual constraints and audio constraints (reverb, loudness, sonic palette),
+  - enforce the single style bible definitively across the entire generative pack pipeline.
+- Temporal Consistency via Video-to-Sprite Inference (Future Focus):
+  - implement `video-to-sprite` target mode utilizing frame-interpolation over generated video,
+  - deliver drift-free 60fps sprite animation exceeding pure image-diffusion bounds.
 
 ### Exit Criteria
 - Public users can adopt LootForge without internal tribal knowledge.

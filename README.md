@@ -70,6 +70,7 @@ Key outcomes:
 - [Quickstart (end-to-end)](#quickstart-end-to-end)
 - [CLI Commands](#cli-commands)
 - [Manifest Schema](#manifest-version-next)
+- [Service Mode](#lootforge-serve)
 - [Environment Variables](#environment-variables)
 - [Status / Roadmap](#status--roadmap)
 
@@ -207,6 +208,7 @@ For full option coverage, run `lootforge <command> --help`.
 | `review` | Render review artifact from eval outputs | `review/review.html` |
 | `select` | Materialize approved selections into lockfile | `locks/selection-lock.json` |
 | `package` | Assemble runtime-ready distributable packs | `dist/packs/*` + final zip |
+| `serve` | Start local HTTP service mode for tool/command execution | `v1` JSON endpoints |
 
 ### `lootforge init`
 
@@ -332,6 +334,30 @@ Example:
 lootforge package --out assets/imagegen --runtimes pixi,unity
 ```
 
+### `lootforge serve`
+
+Starts a local HTTP service wrapper for command execution (no auth/credit layer in core).
+
+Key flags:
+- `--host <host>` optional (default `127.0.0.1`)
+- `--port <port>` optional (default `8744`)
+- `--out <dir>` optional default output root used when request payload omits `out`
+
+Core endpoints:
+- `GET /v1/health`
+- `GET /v1/tools`
+- `GET /v1/contracts/generation-request`
+- `POST /v1/tools/:name`
+- `POST /v1/:name` (alias)
+- `POST /v1/generation/requests` (canonical request -> `plan` + `generate` mapping)
+
+Example:
+```bash
+lootforge serve --host 127.0.0.1 --port 8744 --out assets/imagegen
+```
+
+Service request/response contract details: `docs/SERVICE_MODE.md`
+
 ### `lootforge eval`
 
 Runs hard/soft quality scoring and writes:
@@ -427,7 +453,7 @@ Top-level fields:
 Per target:
 - `id`, `kind`, `out`, `atlasGroup?`, `styleKitId`, `consistencyGroup`, `evaluationProfileId`
 - `generationMode`: `text|edit-first`
-- `edit-first` mode requires a provider with `image-edits` support (`openai`/`local` today; `nano` edit parity is roadmap work)
+- `edit-first` mode requires a provider with `image-edits` support (`openai`, `local`, and `nano` when using an image-edit-capable Gemini model)
 - `edit.inputs[].path`: when used, must resolve inside the active `--out` root at runtime (`generate`, `eval`, and `regenerate`)
 - `generationPolicy.background: "transparent"` requires a provider that supports transparent outputs (unsupported providers now fail validation)
 - `generationPolicy.vlmGate?`: optional candidate gate (`threshold` defaults to `4` on a `0..5` scale, optional `rubric`)
@@ -600,6 +626,11 @@ VLM gate transport:
 - `LOOTFORGE_VLM_GATE_CMD`: command transport for VLM candidate gate scoring
 - `LOOTFORGE_VLM_GATE_URL`: HTTP transport for VLM candidate gate scoring
 - `LOOTFORGE_VLM_GATE_TIMEOUT_MS`: timeout override for VLM gate requests (ms)
+
+Service mode:
+- `LOOTFORGE_SERVICE_HOST`: default host for `lootforge serve`
+- `LOOTFORGE_SERVICE_PORT`: default port for `lootforge serve`
+- `LOOTFORGE_SERVICE_OUT`: default output root injected when service payload omits `out`
 
 No network keys are required for `init`, `plan`, `validate`, `atlas`, or `package`.
 

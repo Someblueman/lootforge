@@ -1,6 +1,6 @@
 # LootForge Public Release Roadmap
 
-Last updated: 2026-02-19
+Last updated: 2026-02-20
 
 ## Goal
 Move LootForge from a strong early foundation (`0.1.x`) to a dependable, public-facing release with:
@@ -177,7 +177,7 @@ Completed 2026-02-18 in this release track:
 - Added baseline CI/security workflows for PRs and pushes.
 
 ### `0.3.0` Upcoming (Control and Consistency / `Tempered Steel`)
-Completed 2026-02-19 in this release track:
+Completed 2026-02-20 in this release track:
 - Release-gate coverage hardening:
   - added integration coverage for generate fallback chains, approved lock skip/copy behavior, and candidate replacement selection,
   - added direct unit coverage for generate CLI arg parsing and boolean flag handling,
@@ -207,11 +207,20 @@ Completed 2026-02-19 in this release track:
   - enforce runtime/output uniqueness across non-catalog targets and spritesheet atlas-family integrity checks,
   - add spritesheet continuity checks (adjacent-frame silhouette/anchor drift metrics + optional hard-gate thresholds),
   - add optional profile texture-memory budget gates and propagate pack-level summary into acceptance/eval/review artifacts.
+- Add optional service mode with stable HTTP generation endpoints and MCP wrapper compatibility:
+  - added `lootforge serve` command with stable JSON endpoints (`/v1/health`, `/v1/tools`, `/v1/tools/:name`, `/v1/:name`),
+  - added command/tool metadata discovery and deterministic request/response envelopes for wrapper integration,
+  - kept core service mode intentionally unauthenticated (no auth/credit layer in core).
+- Define a canonical generation request contract and mapping layer between service requests and manifest/pipeline targets:
+  - added `POST /v1/generation/requests` contract endpoint that maps canonical service requests into `plan -> generate`,
+  - added `GET /v1/contracts/generation-request` schema/field descriptor for wrapper discovery,
+  - added inline manifest materialization and normalized request metadata in service response payloads.
+- Implement Nano/Gemini edit-first parity (where supported) with tests:
+  - added Gemini/Nano edit-first request mapping with role-aware input handling for `base`, `mask`, and `reference` inputs,
+  - enforce safe in-root edit input path resolution and explicit Nano edit error codes for unsupported models / unreadable inputs,
+  - added deterministic unit coverage for Nano text-mode and edit-first request execution paths.
 
 Remaining queued items:
-- Add optional service mode with stable HTTP generation endpoints and MCP wrapper compatibility (no auth/credit layer in core).
-- Define a canonical generation request contract and mapping layer between service requests and manifest/pipeline targets.
-- Implement Nano/Gemini edit-first parity (where supported) with tests.
 - Add manifest schema scaffolding for directed synthesis controls:
   - `targets[].controlImage`, `targets[].controlMode` (`canny|depth|openpose`),
   - `styleKits[].styleReferenceImages`, `styleKits[].loraPath`, `styleKits[].loraStrength`,

@@ -1,5 +1,6 @@
 import { cp, mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { cpus } from "node:os";
 
 import sharp from "sharp";
 
@@ -839,57 +840,61 @@ export async function runProcessPipeline(
     await mkdir(layout.legacyImagesDir, { recursive: true });
   }
 
-  let variantCount = 0;
-  const processJobs = generationTargets.map(async (target) => {
-    const rawImagePath = resolvePathWithinDir(
-      layout.rawDir,
-      target.out,
-      `raw image for target "${target.id}"`,
-    );
-    const processedImagePath = resolvePathWithinDir(
-      layout.processedImagesDir,
-      target.out,
-      `processed image for target "${target.id}"`,
-    );
-    const legacyImagePath = resolvePathWithinDir(
-      layout.legacyImagesDir,
-      target.out,
-      `legacy image for target "${target.id}"`,
-    );
-
-    return processSingleTarget({
-      target,
-      rawImagePath,
-      processedImagePath,
-      mirrorLegacy,
-      legacyImagePath,
-    });
-  });
-  const processedResults = await Promise.all(processJobs);
-  variantCount = processedResults.reduce((sum, result) => sum + result.variantCount, 0);
+  const processJobs = await runPipelineWorkers(
+    generationTargets,
+    Math.max(1, Math.min(cpus().length, 8)),
+    async (target) => {
+      const rawImagePath = resolvePathWithinDir(
+        layout.rawDir,
+        target.out,
+        `raw image for target "${target.id}"`,
+      );
+      const processedImagePath = resolvePathWithinDir(
+        layout.processedImagesDir,
+        target.out,
+        `processed image for target "${target.id}"`,
+      );
+      const legacyImagePath = resolvePathWithinDir(
+        layout.legacyImagesDir,
+        target.out,
+        `legacy image for target "${target.id}"`,
+      );
+      return processSingleTarget({
+        target,
+        rawImagePath,
+        processedImagePath,
+        mirrorLegacy,
+        legacyImagePath,
+      });
+    },
+  );
 
   const frameTargetsBySheetId = new Map<string, PlannedTarget[]>();
   for (const target of generationTargets) {
     const sheetTargetId = target.spritesheet?.sheetTargetId;
-    if (!sheetTargetId) {
+    if (!sheetTargetId || target.spritesheet?.isSheet === true) {
       continue;
     }
-
     const list = frameTargetsBySheetId.get(sheetTargetId) ?? [];
     list.push(target);
     frameTargetsBySheetId.set(sheetTargetId, list);
   }
 
-  const sheetJobs = spritesheetSheetTargets.map((sheetTarget) =>
-    assembleSpritesheetTarget({
-      sheetTarget,
-      frameTargets: frameTargetsBySheetId.get(sheetTarget.id) ?? [],
-      processedImagesDir: layout.processedImagesDir,
-      legacyImagesDir: layout.legacyImagesDir,
-      mirrorLegacy,
-    }),
+  await runPipelineWorkers(
+    spritesheetSheetTargets,
+    Math.max(1, Math.min(cpus().length, 4)),
+    (sheetTarget) =>
+      assembleSpritesheetTarget({
+        sheetTarget,
+        frameTargets: frameTargetsBySheetId.get(sheetTarget.id) ?? [],
+        processedImagesDir: layout.processedImagesDir,
+        legacyImagesDir: layout.legacyImagesDir,
+        mirrorLegacy,
+      }),
   );
-  await Promise.all(sheetJobs);
+
+  const processedResults = processJobs;
+  const variantCount = processedResults.reduce((sum, result) => sum + result.variantCount, 0);
 
   const acceptanceReport = await runImageAcceptanceChecks({
     targets,
@@ -914,4 +919,34 @@ export async function runProcessPipeline(
     processedCount: targets.filter((target) => !target.catalogDisabled).length,
     variantCount,
   };
+}
+
+async function runPipelineWorkers<TInput, TOutput>(
+  items: TInput[],
+  concurrency: number,
+  worker: (item: TInput) => Promise<TOutput>,
+): Promise<TOutput[]> {
+  if (items.length === 0) {
+    return [];
+  }
+
+  const maxWorkers = Math.max(1, Math.floor(concurrency));
+  const results: TOutput[] = new Array(items.length);
+  let nextIndex = 0;
+
+  const workers: Promise<void>[] = [];
+  for (let workerIndex = 0; workerIndex < maxWorkers; workerIndex += 1) {
+    workers.push(
+      (async () => {
+        while (nextIndex < items.length) {
+          const currentIndex = nextIndex;
+          nextIndex += 1;
+          results[currentIndex] = await worker(items[currentIndex]!);
+        }
+      })(),
+    );
+  }
+
+  await Promise.all(workers);
+  return results;
 }

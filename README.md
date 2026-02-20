@@ -453,7 +453,7 @@ Top-level fields:
 Per target:
 - `id`, `kind`, `out`, `atlasGroup?`, `styleKitId`, `consistencyGroup`, `evaluationProfileId`
 - `generationMode`: `text|edit-first`
-- `edit-first` mode requires a provider with `image-edits` support (`openai`/`local` today; `nano` edit parity is roadmap work)
+- `edit-first` mode requires a provider with `image-edits` support (`openai`, `local`, and `nano` when using an image-edit-capable Gemini model)
 - `edit.inputs[].path`: when used, must resolve inside the active `--out` root at runtime (`generate`, `eval`, and `regenerate`)
 - `generationPolicy.background: "transparent"` requires a provider that supports transparent outputs (unsupported providers now fail validation)
 - `generationPolicy.vlmGate?`: optional candidate gate (`threshold` defaults to `4` on a `0..5` scale, optional `rubric`)

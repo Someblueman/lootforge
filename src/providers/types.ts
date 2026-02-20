@@ -66,7 +66,7 @@ export const PROVIDER_CAPABILITIES: Record<ProviderName, ProviderCapabilities> =
     defaultOutputFormat: "png",
     supportedOutputFormats: SUPPORTED_FORMATS,
     supportsTransparentBackground: false,
-    supportsEdits: false,
+    supportsEdits: true,
     supportsControlNet: false,
     maxCandidates: 4,
     defaultConcurrency: 2,

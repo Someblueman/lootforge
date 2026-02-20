@@ -196,6 +196,17 @@ describe("providers helpers", () => {
 
   it("keeps nano capability claims aligned with runtime feature support", () => {
     const registry = createProviderRegistry();
+    expect(registry.nano.capabilities.supportsEdits).toBe(true);
+    expect(registry.nano.supports("image-edits")).toBe(true);
+  });
+
+  it("disables nano edit support when configured model does not advertise image edits", () => {
+    const registry = createProviderRegistry({
+      nano: {
+        model: "gemini-2.5-flash",
+      },
+    });
+
     expect(registry.nano.capabilities.supportsEdits).toBe(false);
     expect(registry.nano.supports("image-edits")).toBe(false);
   });

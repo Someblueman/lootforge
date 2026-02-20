@@ -67,7 +67,7 @@ Generation + processing:
 - `acceptance`
 - `runtimeSpec`
 - `provider`, `model`, `edit`, `auxiliaryMaps`
-- `generationMode: "edit-first"` requires an edit-capable provider (`openai` or `local`)
+- `generationMode: "edit-first"` requires an edit-capable provider (`openai`, `local`, or `nano` with an image-edit-capable Gemini model)
 - `edit.inputs[].path` must resolve inside the active `--out` root at runtime
 - `generationPolicy.background: "transparent"` requires a provider that supports transparent outputs (unsupported providers now fail validation)
 - `generationPolicy.vlmGate` requires runtime evaluator transport via `LOOTFORGE_VLM_GATE_CMD` or `LOOTFORGE_VLM_GATE_URL`

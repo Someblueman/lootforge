@@ -100,6 +100,10 @@ describe("service mode", () => {
             version: string;
             endpoint: string;
           };
+          providerCapabilities?: {
+            version: string;
+            endpoint: string;
+          };
         };
       };
 
@@ -111,6 +115,9 @@ describe("service mode", () => {
       );
       expect(toolsPayload.contracts?.generationRequest?.endpoint).toBe(
         "/v1/generation/requests",
+      );
+      expect(toolsPayload.contracts?.providerCapabilities?.endpoint).toBe(
+        "/v1/providers/capabilities",
       );
 
       const contractResponse = await fetch(
@@ -128,6 +135,84 @@ describe("service mode", () => {
       expect(contractPayload.ok).toBe(true);
       expect(contractPayload.contract.endpoint).toBe("/v1/generation/requests");
       expect(typeof contractPayload.contract.fields.manifestPath).toBe("string");
+
+      const providerContractResponse = await fetch(
+        `${service.baseUrl}/v1/contracts/provider-capabilities`,
+      );
+      const providerContractPayload = (await providerContractResponse.json()) as {
+        ok: boolean;
+        contract: {
+          version: string;
+          endpoint: string;
+          query: Record<string, string>;
+        };
+      };
+      expect(providerContractResponse.status).toBe(200);
+      expect(providerContractPayload.ok).toBe(true);
+      expect(providerContractPayload.contract.endpoint).toBe("/v1/providers/capabilities");
+      expect(typeof providerContractPayload.contract.query.provider).toBe("string");
+
+      const providerCapabilitiesResponse = await fetch(
+        `${service.baseUrl}/v1/providers/capabilities`,
+      );
+      const providerCapabilitiesPayload = (await providerCapabilitiesResponse.json()) as {
+        ok: boolean;
+        endpoint: string;
+        capabilities: Array<{
+          provider: string;
+          model: string;
+          directives: {
+            pixel: { supported: boolean; mode: string };
+            highRes: { supported: boolean; mode: string };
+            references: { supported: boolean; mode: string };
+          };
+        }>;
+      };
+      expect(providerCapabilitiesResponse.status).toBe(200);
+      expect(providerCapabilitiesPayload.ok).toBe(true);
+      expect(providerCapabilitiesPayload.endpoint).toBe("/v1/providers/capabilities");
+      expect(providerCapabilitiesPayload.capabilities.length).toBe(3);
+      expect(
+        providerCapabilitiesPayload.capabilities.every(
+          (entry) => entry.directives.pixel.mode === "post-process",
+        ),
+      ).toBe(true);
+      expect(
+        providerCapabilitiesPayload.capabilities.every(
+          (entry) => entry.directives.highRes.mode === "scaffold-only",
+        ),
+      ).toBe(true);
+
+      const providerQueryResponse = await fetch(
+        `${service.baseUrl}/v1/providers/capabilities?provider=nano&model=gemini-2.5-flash`,
+      );
+      const providerQueryPayload = (await providerQueryResponse.json()) as {
+        ok: boolean;
+        capabilities: Array<{
+          provider: string;
+          model: string;
+          directives: {
+            references: { supported: boolean };
+          };
+        }>;
+      };
+      expect(providerQueryResponse.status).toBe(200);
+      expect(providerQueryPayload.ok).toBe(true);
+      expect(providerQueryPayload.capabilities).toHaveLength(1);
+      expect(providerQueryPayload.capabilities[0].provider).toBe("nano");
+      expect(providerQueryPayload.capabilities[0].model).toBe("gemini-2.5-flash");
+      expect(providerQueryPayload.capabilities[0].directives.references.supported).toBe(false);
+
+      const providerInvalidQueryResponse = await fetch(
+        `${service.baseUrl}/v1/providers/capabilities?model=gemini-2.5-flash`,
+      );
+      const providerInvalidQueryPayload = (await providerInvalidQueryResponse.json()) as {
+        ok: boolean;
+        error?: { code: string };
+      };
+      expect(providerInvalidQueryResponse.status).toBe(400);
+      expect(providerInvalidQueryPayload.ok).toBe(false);
+      expect(providerInvalidQueryPayload.error?.code).toBe("invalid_query_parameter");
 
       const initResponse = await fetch(`${service.baseUrl}/v1/tools/init`, {
         method: "POST",

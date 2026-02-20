@@ -27,7 +27,7 @@ import {
   TargetEditInput,
 } from "./types.js";
 
-const DEFAULT_LOCAL_MODEL = "sdxl-controlnet";
+export const DEFAULT_LOCAL_MODEL = "sdxl-controlnet";
 const DEFAULT_LOCAL_BASE_URL = "http://127.0.0.1:8188";
 
 export interface LocalDiffusionProviderOptions {

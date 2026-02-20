@@ -23,3 +23,4 @@ Current scope: rewrite LootForge for the strongest asset-generation pipeline out
 - 2026-02-20: Added directed-synthesis manifest scaffolding for `controlImage/controlMode`, style-kit `styleReferenceImages` + `loraPath/loraStrength`, and `generationPolicy.highQuality/hiresFix` propagation into planned targets/contracts.
 - 2026-02-20: Implemented manifest policy coverage gate with machine-checkable policy index docs, CI-enforced implemented/reserved coverage checks, and generated coverage report artifact output.
 - 2026-02-20: Implemented deterministic per-kind scoring presets plus manifest `scoringProfiles[]` overrides (including target-level profile reference validation and normalization into planned target score weights).
+- 2026-02-20: Added provider capability introspection contract + endpoint (`/v1/contracts/provider-capabilities`, `/v1/providers/capabilities`) with explicit `pixel`/`highRes`/`references` feature-gating signals for wrappers.

@@ -13,6 +13,10 @@ Recent completion (2026-02-20):
   - added deterministic default score-weight presets by target kind,
   - added optional manifest `scoringProfiles[]` contract with per-kind overrides,
   - validated `targets[].scoringProfile` references and normalized scoring resolution into planned targets.
+- Implemented model capability introspection contract and endpoint for provider feature gating:
+  - added service discovery contract endpoint (`GET /v1/contracts/provider-capabilities`),
+  - added runtime introspection endpoint (`GET /v1/providers/capabilities`) with provider/model query support,
+  - exposed explicit provider-gating signals for `pixel`, `highRes`, and `references`.
 
 ## P0 (Immediate: `0.3.0`)
 

@@ -59,14 +59,25 @@ export async function createZipArchive(
     const zipFile = new ZipFile();
     const zipOutput = createWriteStream(resolvedZipPath);
 
+    function cleanup(error: Error): void {
+      zipFile.outputStream.unpipe(zipOutput);
+      zipOutput.destroy();
+      reject(error);
+    }
+
     zipOutput.on("close", () => resolve());
-    zipOutput.on("error", (error) => reject(error));
-    zipFile.outputStream.on("error", (error) => reject(error));
+    zipOutput.on("error", (error) => cleanup(error));
+    zipFile.outputStream.on("error", (error) => cleanup(error));
 
     zipFile.outputStream.pipe(zipOutput);
 
-    for (const filePath of files) {
-      zipFile.addFile(filePath, toZipEntryName(resolvedSourceDir, filePath));
+    try {
+      for (const filePath of files) {
+        zipFile.addFile(filePath, toZipEntryName(resolvedSourceDir, filePath));
+      }
+    } catch (error) {
+      cleanup(error instanceof Error ? error : new Error(String(error)));
+      return;
     }
 
     zipFile.end();

@@ -5,10 +5,12 @@ import { resolvePathWithinRoot } from "../shared/paths.js";
 import {
   DEFAULT_PROVIDER_REQUEST_TIMEOUT_MS,
   fetchWithTimeout,
+  MAX_DECODED_IMAGE_BYTES,
   normalizeNonNegativeInteger,
   normalizePositiveInteger,
   ProviderRequestTimeoutError,
   toOptionalNonNegativeInteger,
+  withCandidateSuffix,
 } from "./runtime.js";
 import {
   createProviderJob,
@@ -27,7 +29,8 @@ import {
   TargetEditInput,
 } from "./types.js";
 
-const GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
+const GEMINI_API_BASE =
+  "https://generativelanguage.googleapis.com/v1beta/models";
 export const DEFAULT_NANO_MODEL = "gemini-2.5-flash-image";
 const DEFAULT_EDIT_IMAGE_MIME_TYPE = "image/png";
 
@@ -69,7 +72,10 @@ export class NanoProvider implements GenerationProvider {
         options.defaultConcurrency,
         defaults.defaultConcurrency,
       ),
-      minDelayMs: normalizeNonNegativeInteger(options.minDelayMs, defaults.minDelayMs),
+      minDelayMs: normalizeNonNegativeInteger(
+        options.minDelayMs,
+        defaults.minDelayMs,
+      ),
     };
     this.model = model;
     this.apiBase = options.apiBase ?? GEMINI_API_BASE;
@@ -80,7 +86,10 @@ export class NanoProvider implements GenerationProvider {
     this.maxRetries = toOptionalNonNegativeInteger(options.maxRetries);
   }
 
-  prepareJobs(targets: PlannedTarget[], ctx: ProviderPrepareContext): ProviderJob[] {
+  prepareJobs(
+    targets: PlannedTarget[],
+    ctx: ProviderPrepareContext,
+  ): ProviderJob[] {
     return targets.map((target) =>
       createProviderJob({
         provider: this.name,
@@ -129,7 +138,10 @@ export class NanoProvider implements GenerationProvider {
     });
   }
 
-  async runJob(job: ProviderJob, ctx: ProviderRunContext): Promise<ProviderRunResult> {
+  async runJob(
+    job: ProviderJob,
+    ctx: ProviderRunContext,
+  ): Promise<ProviderRunResult> {
     const startedAt = nowIso(ctx.now);
     const fetchImpl = ctx.fetchImpl ?? globalThis.fetch;
     const apiKey = process.env.GEMINI_API_KEY?.trim();
@@ -149,7 +161,8 @@ export class NanoProvider implements GenerationProvider {
         provider: this.name,
         code: "missing_fetch",
         message: "Global fetch is unavailable for Nano provider.",
-        actionable: "Use Node.js 18+ or pass a fetch implementation in the run context.",
+        actionable:
+          "Use Node.js 18+ or pass a fetch implementation in the run context.",
       });
     }
 
@@ -228,10 +241,25 @@ export class NanoProvider implements GenerationProvider {
           });
         }
 
-        const outputPath = index === 0 ? job.outPath : withCandidateSuffix(job.outPath, index + 1);
+        if (imageBytes.byteLength > MAX_DECODED_IMAGE_BYTES) {
+          throw new ProviderError({
+            provider: this.name,
+            code: "nano_image_too_large",
+            message: `Decoded image exceeds ${MAX_DECODED_IMAGE_BYTES} byte safety limit.`,
+            actionable: "Request smaller images or adjust model settings.",
+          });
+        }
+
+        const outputPath =
+          index === 0
+            ? job.outPath
+            : withCandidateSuffix(job.outPath, index + 1);
         await mkdir(path.dirname(outputPath), { recursive: true });
         await writeFile(outputPath, imageBytes);
-        candidateOutputs.push({ outputPath, bytesWritten: imageBytes.byteLength });
+        candidateOutputs.push({
+          outputPath,
+          bytesWritten: imageBytes.byteLength,
+        });
       }
 
       return {
@@ -294,14 +322,15 @@ export class NanoProvider implements GenerationProvider {
     contents: Array<{
       role: "user";
       parts: Array<
-        | { text: string }
-        | { inlineData: { mimeType: string; data: string } }
+        { text: string } | { inlineData: { mimeType: string; data: string } }
       >;
     }>;
     generationConfig: { responseModalities: ["TEXT", "IMAGE"] };
   }> {
     const editInputs = job.target.edit?.inputs ?? [];
-    const baseAndReferenceInputs = editInputs.filter((input) => input.role !== "mask");
+    const baseAndReferenceInputs = editInputs.filter(
+      (input) => input.role !== "mask",
+    );
 
     if (baseAndReferenceInputs.length === 0) {
       throw new ProviderError({
@@ -314,13 +343,19 @@ export class NanoProvider implements GenerationProvider {
     }
 
     const parts: Array<
-      | { text: string }
-      | { inlineData: { mimeType: string; data: string } }
+      { text: string } | { inlineData: { mimeType: string; data: string } }
     > = [{ text: this.buildEditPrompt(job, editInputs) }];
 
     for (const [index, input] of editInputs.entries()) {
-      const resolvedPath = this.resolveEditInputPath(input.path, ctx.outDir, job.targetId);
-      const imageBytes = await this.readEditInputBytes(resolvedPath, job.targetId);
+      const resolvedPath = this.resolveEditInputPath(
+        input.path,
+        ctx.outDir,
+        job.targetId,
+      );
+      const imageBytes = await this.readEditInputBytes(
+        resolvedPath,
+        job.targetId,
+      );
       parts.push({
         text: this.describeEditInput(index + 1, input),
       });
@@ -479,13 +514,9 @@ export class NanoProvider implements GenerationProvider {
   }
 }
 
-function withCandidateSuffix(filePath: string, candidateNumber: number): string {
-  const ext = path.extname(filePath);
-  const base = filePath.slice(0, filePath.length - ext.length);
-  return `${base}.candidate-${candidateNumber}${ext}`;
-}
-
-export function createNanoProvider(options: NanoProviderOptions = {}): NanoProvider {
+export function createNanoProvider(
+  options: NanoProviderOptions = {},
+): NanoProvider {
   return new NanoProvider(options);
 }
 

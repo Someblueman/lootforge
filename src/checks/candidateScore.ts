@@ -5,9 +5,11 @@ import sharp from "sharp";
 import { computeBoundaryQualityMetrics } from "./boundaryMetrics.js";
 import { runEnabledSoftAdapters } from "./softAdapters.js";
 import { runCandidateVlmGate, targetHasVlmGate } from "./vlmGate.js";
-import type { CandidateScoreRecord, PlannedTarget } from "../providers/types.js";
-
-const SIZE_PATTERN = /^(\d+)x(\d+)$/i;
+import type {
+  CandidateScoreRecord,
+  PlannedTarget,
+} from "../providers/types.js";
+import { parseSize } from "../shared/image.js";
 const DEFAULT_EXACT_PALETTE_COMPLIANCE = 0.98;
 
 interface CandidateInspection {
@@ -41,26 +43,11 @@ export interface ScoreCandidateImagesOptions {
   outDir?: string;
 }
 
-function parseSize(size: string | undefined): { width: number; height: number } | undefined {
-  if (!size) {
-    return undefined;
-  }
-  const match = SIZE_PATTERN.exec(size.trim());
-  if (!match) {
-    return undefined;
-  }
-
-  const width = Number.parseInt(match[1], 10);
-  const height = Number.parseInt(match[2], 10);
-  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
-    return undefined;
-  }
-
-  return { width, height };
-}
-
-function targetNeedsAlpha(target: PlannedTarget): boolean {
-  return target.runtimeSpec?.alphaRequired === true || target.acceptance?.alpha === true;
+function targetRequiresAlpha(target: PlannedTarget): boolean {
+  return (
+    target.runtimeSpec?.alphaRequired === true ||
+    target.acceptance?.alpha === true
+  );
 }
 
 function requiredExactPaletteCompliance(target: PlannedTarget): number {
@@ -70,8 +57,17 @@ function requiredExactPaletteCompliance(target: PlannedTarget): number {
   return DEFAULT_EXACT_PALETTE_COMPLIANCE;
 }
 
-function computeSeamScore(raw: Buffer, width: number, height: number, channels: number, strip: number): number {
-  const stripPx = Math.max(1, Math.min(strip, Math.floor(Math.min(width, height) / 2)));
+function computeSeamScore(
+  raw: Buffer,
+  width: number,
+  height: number,
+  channels: number,
+  strip: number,
+): number {
+  const stripPx = Math.max(
+    1,
+    Math.min(strip, Math.floor(Math.min(width, height) / 2)),
+  );
   let total = 0;
   let count = 0;
 
@@ -163,7 +159,10 @@ function analyzeRawCandidate(
     }
 
     const luma = Math.round(0.2126 * r + 0.7152 * g + 0.0722 * b);
-    const bin = Math.max(0, Math.min(bins - 1, Math.floor((luma / 256) * bins)));
+    const bin = Math.max(
+      0,
+      Math.min(bins - 1, Math.floor((luma / 256) * bins)),
+    );
     histogram[bin] += 1;
     visiblePixelCount += 1;
   }
@@ -204,10 +203,10 @@ function analyzeRawCandidate(
 }
 
 function histogramDistance(a: number[], b: number[]): number {
-  const len = Math.min(a.length, b.length);
+  const len = Math.max(a.length, b.length);
   let sum = 0;
   for (let i = 0; i < len; i += 1) {
-    sum += Math.abs(a[i] - b[i]);
+    sum += Math.abs((a[i] ?? 0) - (b[i] ?? 0));
   }
   return sum;
 }
@@ -229,7 +228,10 @@ function centroidHistogram(histograms: number[][]): number[] {
   return centroid.map((value) => value / histograms.length);
 }
 
-async function inspectCandidate(target: PlannedTarget, outputPath: string): Promise<CandidateInspection> {
+async function inspectCandidate(
+  target: PlannedTarget,
+  outputPath: string,
+): Promise<CandidateInspection> {
   const imageBytes = await readFile(outputPath);
   const image = sharp(imageBytes, { failOn: "none" });
   const metadata = await image.metadata();
@@ -243,7 +245,10 @@ async function inspectCandidate(target: PlannedTarget, outputPath: string): Prom
     throw new Error(`Unable to read candidate dimensions for ${outputPath}`);
   }
 
-  const rawResult = await image.ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+  const rawResult = await image
+    .ensureAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
   const raw = rawResult.data;
   const channels = rawResult.info.channels;
 
@@ -261,7 +266,13 @@ async function inspectCandidate(target: PlannedTarget, outputPath: string): Prom
 
   const seamScore =
     target.tileable || typeof target.seamThreshold === "number"
-      ? computeSeamScore(raw, metadata.width, metadata.height, channels, target.seamStripPx ?? 4)
+      ? computeSeamScore(
+          raw,
+          metadata.width,
+          metadata.height,
+          channels,
+          target.seamStripPx ?? 4,
+        )
       : undefined;
   return {
     outputPath,
@@ -288,18 +299,24 @@ export async function scoreCandidateImages(
   options: ScoreCandidateImagesOptions = {},
 ): Promise<{ bestPath: string; scores: CandidateScoreRecord[] }> {
   if (outputPaths.length === 0) {
-    throw new Error(`No candidate outputs available for target "${target.id}".`);
+    throw new Error(
+      `No candidate outputs available for target "${target.id}".`,
+    );
   }
 
-  const inspections = await Promise.all(outputPaths.map((outputPath) => inspectCandidate(target, outputPath)));
+  const inspections = await Promise.all(
+    outputPaths.map((outputPath) => inspectCandidate(target, outputPath)),
+  );
   const expectedSize = parseSize(target.acceptance?.size);
-  const alphaRequired = targetNeedsAlpha(target);
+  const alphaRequired = targetRequiresAlpha(target);
   const maxBytes =
     typeof target.acceptance?.maxFileSizeKB === "number"
       ? Math.round(target.acceptance.maxFileSizeKB * 1024)
       : undefined;
 
-  const center = centroidHistogram(inspections.map((inspection) => inspection.histogram));
+  const center = centroidHistogram(
+    inspections.map((inspection) => inspection.histogram),
+  );
   const scoreWeights = resolveScoreWeights(target);
   const outDir = options.outDir;
   const softAdapterByOutputPath = new Map<
@@ -391,7 +408,8 @@ export async function scoreCandidateImages(
     if (typeof maxBytes === "number") {
       if (inspection.sizeBytes > maxBytes) {
         passedAcceptance = false;
-        const penaltyBase = 600 + Math.round((inspection.sizeBytes - maxBytes) / 2048);
+        const penaltyBase =
+          600 + Math.round((inspection.sizeBytes - maxBytes) / 2048);
         const penalty = Math.round(penaltyBase * scoreWeights.fileSize);
         components.fileSizePenalty = -penalty;
         score -= penalty;
@@ -404,7 +422,9 @@ export async function scoreCandidateImages(
       }
     }
 
-    const readabilityReward = Math.round(inspection.edgeStdev * 2 * scoreWeights.readability);
+    const readabilityReward = Math.round(
+      inspection.edgeStdev * 2 * scoreWeights.readability,
+    );
     components.readabilityReward = readabilityReward;
     score += readabilityReward;
     metrics.edgeStdev = inspection.edgeStdev;
@@ -414,7 +434,8 @@ export async function scoreCandidateImages(
       const threshold = target.seamThreshold ?? 12;
       if (inspection.seamScore > threshold) {
         passedAcceptance = false;
-        const penalty = Math.round((inspection.seamScore - threshold) * 20) + 500;
+        const penalty =
+          Math.round((inspection.seamScore - threshold) * 20) + 500;
         components.seamPenalty = -penalty;
         score -= penalty;
         reasons.push("tile_seam_exceeded");
@@ -437,7 +458,11 @@ export async function scoreCandidateImages(
         inspection.alphaHaloRisk > target.alphaHaloRiskMax
       ) {
         passedAcceptance = false;
-        const penalty = 450 + Math.round((inspection.alphaHaloRisk - target.alphaHaloRiskMax) * 1000);
+        const penalty =
+          450 +
+          Math.round(
+            (inspection.alphaHaloRisk - target.alphaHaloRiskMax) * 1000,
+          );
         components.alphaHaloRiskPenalty = -penalty;
         score -= penalty;
         reasons.push("alpha_halo_risk_exceeded");
@@ -450,7 +475,11 @@ export async function scoreCandidateImages(
         inspection.alphaStrayNoise > target.alphaStrayNoiseMax
       ) {
         passedAcceptance = false;
-        const penalty = 350 + Math.round((inspection.alphaStrayNoise - target.alphaStrayNoiseMax) * 1500);
+        const penalty =
+          350 +
+          Math.round(
+            (inspection.alphaStrayNoise - target.alphaStrayNoiseMax) * 1500,
+          );
         components.alphaStrayNoisePenalty = -penalty;
         score -= penalty;
         reasons.push("alpha_stray_noise_exceeded");
@@ -463,14 +492,22 @@ export async function scoreCandidateImages(
         inspection.alphaEdgeSharpness < target.alphaEdgeSharpnessMin
       ) {
         passedAcceptance = false;
-        const penalty = 450 + Math.round((target.alphaEdgeSharpnessMin - inspection.alphaEdgeSharpness) * 1200);
+        const penalty =
+          450 +
+          Math.round(
+            (target.alphaEdgeSharpnessMin - inspection.alphaEdgeSharpness) *
+              1200,
+          );
         components.alphaEdgeSharpnessPenalty = -penalty;
         score -= penalty;
         reasons.push("alpha_edge_sharpness_too_low");
       }
     }
 
-    if (target.palette?.mode === "max-colors" && typeof inspection.distinctColors === "number") {
+    if (
+      target.palette?.mode === "max-colors" &&
+      typeof inspection.distinctColors === "number"
+    ) {
       metrics.distinctColors = inspection.distinctColors;
       const maxColors = target.palette.maxColors ?? 256;
       if (inspection.distinctColors > maxColors) {
@@ -486,16 +523,23 @@ export async function scoreCandidateImages(
       }
     }
 
-    if (target.palette?.mode === "exact" && typeof inspection.paletteCompliance === "number") {
+    if (
+      target.palette?.mode === "exact" &&
+      typeof inspection.paletteCompliance === "number"
+    ) {
       metrics.paletteCompliance = inspection.paletteCompliance;
       const requiredCompliance = requiredExactPaletteCompliance(target);
       if (inspection.paletteCompliance < requiredCompliance) {
         passedAcceptance = false;
-        const penalty = Math.round((requiredCompliance - inspection.paletteCompliance) * 2000);
+        const penalty = Math.round(
+          (requiredCompliance - inspection.paletteCompliance) * 2000,
+        );
         components.paletteCompliancePenalty = -penalty;
         score -= penalty;
         reasons.push(
-          target.palette.strict === true ? "palette_strict_noncompliant" : "palette_compliance_too_low",
+          target.palette.strict === true
+            ? "palette_strict_noncompliant"
+            : "palette_compliance_too_low",
         );
       } else {
         const reward = Math.round(inspection.paletteCompliance * 100);
@@ -527,18 +571,25 @@ export async function scoreCandidateImages(
       }
     }
 
-    const softAdapterResult = softAdapterByOutputPath.get(inspection.outputPath);
+    const softAdapterResult = softAdapterByOutputPath.get(
+      inspection.outputPath,
+    );
     if (softAdapterResult) {
       for (const adapterName of softAdapterResult.adapterNames) {
         const adapterMetrics = softAdapterResult.adapterMetrics[adapterName];
         if (adapterMetrics) {
-          for (const [metricName, metricValue] of Object.entries(adapterMetrics)) {
+          for (const [metricName, metricValue] of Object.entries(
+            adapterMetrics,
+          )) {
             metrics[`${adapterName}.${metricName}`] = metricValue;
           }
         }
 
         const rawAdapterScore = softAdapterResult.adapterScores[adapterName];
-        if (typeof rawAdapterScore === "number" && Number.isFinite(rawAdapterScore)) {
+        if (
+          typeof rawAdapterScore === "number" &&
+          Number.isFinite(rawAdapterScore)
+        ) {
           const weightedAdapterScore = Math.round(
             rawAdapterScore * resolveAdapterWeight(scoreWeights, adapterName),
           );

@@ -4,6 +4,9 @@
   "version": "0.2.0",
   "type": "module",
   "description": "LootForge CLI for manifest-driven game asset packs",
+  "engines": {
+    "node": ">=22.0.0"
+  },
   "bin": {
     "lootforge": "./bin/lootforge.js"
   },

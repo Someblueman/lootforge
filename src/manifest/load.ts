@@ -2,10 +2,13 @@ import path from "node:path";
 
 import { CliError, getErrorMessage } from "../shared/errors.js";
 import { readTextFile } from "../shared/fs.js";
+import { formatIssuePath } from "../shared/zod.js";
 import { safeParseManifestV2 } from "./schema.js";
 import type { LoadedManifest, ManifestSource, ManifestV2 } from "./types.js";
 
-export async function loadManifestSource(manifestPath: string): Promise<ManifestSource> {
+export async function loadManifestSource(
+  manifestPath: string,
+): Promise<ManifestSource> {
   const resolvedPath = path.resolve(manifestPath);
 
   let raw: string;
@@ -35,7 +38,9 @@ export async function loadManifestSource(manifestPath: string): Promise<Manifest
   };
 }
 
-export async function loadManifest(manifestPath: string): Promise<LoadedManifest> {
+export async function loadManifest(
+  manifestPath: string,
+): Promise<LoadedManifest> {
   const source = await loadManifestSource(manifestPath);
   const parsed = safeParseManifestV2(source.data);
 
@@ -57,19 +62,4 @@ export async function loadManifest(manifestPath: string): Promise<LoadedManifest
     ...source,
     manifest: parsed.data as ManifestV2,
   };
-}
-
-function formatIssuePath(pathItems: Array<string | number>): string {
-  if (pathItems.length === 0) {
-    return "$";
-  }
-
-  return pathItems
-    .map((item, index) => {
-      if (typeof item === "number") {
-        return `[${item}]`;
-      }
-      return index === 0 ? item : `.${item}`;
-    })
-    .join("");
 }

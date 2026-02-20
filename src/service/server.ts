@@ -1,4 +1,9 @@
-import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
+import {
+  createServer,
+  type IncomingMessage,
+  type Server,
+  type ServerResponse,
+} from "node:http";
 
 import { runAtlasCommand } from "../cli/commands/atlas.js";
 import { runEvalCommand } from "../cli/commands/eval.js";
@@ -21,7 +26,12 @@ import {
   resolveProviderCapabilityDescriptors,
 } from "./providerCapabilities.js";
 import { isProviderName, type ProviderName } from "../providers/types.js";
-import { CliError, getErrorExitCode, getErrorMessage } from "../shared/errors.js";
+import {
+  CliError,
+  getErrorExitCode,
+  getErrorMessage,
+} from "../shared/errors.js";
+import { isRecord } from "../shared/typeGuards.js";
 
 export const SERVICE_API_VERSION = "v1";
 const API_PREFIX = `/${SERVICE_API_VERSION}`;
@@ -123,17 +133,26 @@ const SERVICE_TOOLS: ServiceToolDefinition[] = [
   },
   {
     name: "validate",
-    description: "Validate manifest and optionally run image acceptance checks.",
+    description:
+      "Validate manifest and optionally run image acceptance checks.",
     params: [
       stringParam("manifest", "manifest", "Manifest path."),
       stringParam("out", "out", "Output directory."),
-      booleanParam("strict", "strict", "Strict mode for validation failure behavior."),
+      booleanParam(
+        "strict",
+        "strict",
+        "Strict mode for validation failure behavior.",
+      ),
       booleanParam(
         "checkImages",
         "check-images",
         "Run image acceptance checks in addition to manifest validation.",
       ),
-      stringParam("imagesDir", "images-dir", "Optional processed-images directory override."),
+      stringParam(
+        "imagesDir",
+        "images-dir",
+        "Optional processed-images directory override.",
+      ),
     ],
     run: runValidateCommand,
   },
@@ -144,24 +163,41 @@ const SERVICE_TOOLS: ServiceToolDefinition[] = [
       stringParam("manifest", "manifest", "Optional manifest path."),
       stringParam("out", "out", "Output directory."),
       stringParam("index", "index", "Optional targets-index path override."),
-      stringParam("provider", "provider", "Provider selection (openai|nano|local|auto)."),
+      stringParam(
+        "provider",
+        "provider",
+        "Provider selection (openai|nano|local|auto).",
+      ),
       stringListParam("ids", "ids", "Optional target ID filter."),
       stringParam("lock", "lock", "Selection lock path."),
-      booleanParam("skipLocked", "skip-locked", "Skip lock-approved targets when true."),
+      booleanParam(
+        "skipLocked",
+        "skip-locked",
+        "Skip lock-approved targets when true.",
+      ),
     ],
     run: runGenerateCommand,
   },
   {
     name: "regenerate",
-    description: "Regenerate lock-approved targets through the edit-capable flow.",
+    description:
+      "Regenerate lock-approved targets through the edit-capable flow.",
     params: [
       stringParam("out", "out", "Output directory."),
       stringParam("index", "index", "Optional targets-index path override."),
-      stringParam("provider", "provider", "Provider selection (openai|nano|local|auto)."),
+      stringParam(
+        "provider",
+        "provider",
+        "Provider selection (openai|nano|local|auto).",
+      ),
       stringParam("lock", "lock", "Selection lock path."),
       stringListParam("ids", "ids", "Optional target ID filter."),
       booleanParam("edit", "edit", "Enable edit-first regenerate behavior."),
-      stringParam("instruction", "instruction", "Optional edit instruction override."),
+      stringParam(
+        "instruction",
+        "instruction",
+        "Optional edit instruction override.",
+      ),
       booleanParam(
         "preserveComposition",
         "preserve-composition",
@@ -176,7 +212,11 @@ const SERVICE_TOOLS: ServiceToolDefinition[] = [
     params: [
       stringParam("out", "out", "Output directory."),
       stringParam("index", "index", "Optional targets-index path override."),
-      booleanParam("strict", "strict", "Strict mode for process acceptance failures."),
+      booleanParam(
+        "strict",
+        "strict",
+        "Strict mode for process acceptance failures.",
+      ),
     ],
     run: runProcessCommand,
   },
@@ -196,9 +236,17 @@ const SERVICE_TOOLS: ServiceToolDefinition[] = [
     params: [
       stringParam("out", "out", "Output directory."),
       stringParam("index", "index", "Optional targets-index path override."),
-      stringParam("imagesDir", "images-dir", "Optional processed-images directory override."),
+      stringParam(
+        "imagesDir",
+        "images-dir",
+        "Optional processed-images directory override.",
+      ),
       stringParam("report", "report", "Eval report output path override."),
-      booleanParam("strict", "strict", "Strict mode for eval hard-gate failures."),
+      booleanParam(
+        "strict",
+        "strict",
+        "Strict mode for eval hard-gate failures.",
+      ),
     ],
     run: runEvalCommand,
   },
@@ -231,7 +279,11 @@ const SERVICE_TOOLS: ServiceToolDefinition[] = [
       stringParam("manifest", "manifest", "Manifest path override."),
       stringParam("index", "index", "Optional targets-index path override."),
       booleanParam("strict", "strict", "Strict mode for package-time checks."),
-      stringListParam("runtimes", "runtimes", "Runtime targets (phaser,pixi,unity)."),
+      stringListParam(
+        "runtimes",
+        "runtimes",
+        "Runtime targets (phaser,pixi,unity).",
+      ),
     ],
     run: runPackageCommand,
   },
@@ -272,7 +324,9 @@ export async function startLootForgeService(
 
   const address = server.address();
   const boundPort =
-    typeof address === "object" && address !== null ? address.port : options.port;
+    typeof address === "object" && address !== null
+      ? address.port
+      : options.port;
   const baseUrlHost = options.host === "0.0.0.0" ? "127.0.0.1" : options.host;
   const service: LootForgeService = {
     host: options.host,
@@ -293,11 +347,15 @@ async function handleRequest(
   options: StartLootForgeServiceOptions,
 ): Promise<void> {
   const method = req.method ?? "GET";
-  const requestUrl = new URL(req.url ?? "/", `http://${req.headers.host ?? "127.0.0.1"}`);
+  const requestUrl = new URL(
+    req.url ?? "/",
+    `http://${req.headers.host ?? "127.0.0.1"}`,
+  );
   const pathname = normalizePathname(requestUrl.pathname);
 
   if (method === "OPTIONS") {
     writeCorsHeaders(res);
+    writeSecurityHeaders(res);
     res.statusCode = 204;
     res.end();
     return;
@@ -346,7 +404,10 @@ async function handleRequest(
     return;
   }
 
-  if (method === "GET" && pathname === `${API_PREFIX}/contracts/generation-request`) {
+  if (
+    method === "GET" &&
+    pathname === `${API_PREFIX}/contracts/generation-request`
+  ) {
     writeJson(res, 200, {
       ok: true,
       apiVersion: SERVICE_API_VERSION,
@@ -355,7 +416,10 @@ async function handleRequest(
     return;
   }
 
-  if (method === "GET" && pathname === `${API_PREFIX}/contracts/provider-capabilities`) {
+  if (
+    method === "GET" &&
+    pathname === `${API_PREFIX}/contracts/provider-capabilities`
+  ) {
     writeJson(res, 200, {
       ok: true,
       apiVersion: SERVICE_API_VERSION,
@@ -394,7 +458,7 @@ async function handleRequest(
         apiVersion: SERVICE_API_VERSION,
         error: {
           code: "invalid_query_parameter",
-          message: "Query parameter \"model\" requires \"provider\".",
+          message: 'Query parameter "model" requires "provider".',
         },
       });
       return;
@@ -441,13 +505,14 @@ async function handleRequest(
       }
 
       const status = error instanceof Error ? 422 : 500;
+      console.error(getErrorMessage(error));
       writeJson(res, status, {
         ok: false,
         apiVersion: SERVICE_API_VERSION,
         operation: "generation_request",
         error: {
           code: resolveErrorCode(error),
-          message: getErrorMessage(error),
+          message: sanitizeErrorMessage(getErrorMessage(error)),
           exitCode: getErrorExitCode(error, 1),
         },
       });
@@ -503,7 +568,9 @@ async function handleRequest(
       ok: true,
       apiVersion: SERVICE_API_VERSION,
       tool: tool.name,
-      ...(payload.requestId !== undefined ? { requestId: payload.requestId } : {}),
+      ...(payload.requestId !== undefined
+        ? { requestId: payload.requestId }
+        : {}),
       result,
     });
   } catch (error) {
@@ -521,13 +588,14 @@ async function handleRequest(
     }
 
     const status = error instanceof Error ? 422 : 500;
+    console.error(getErrorMessage(error));
     writeJson(res, status, {
       ok: false,
       apiVersion: SERVICE_API_VERSION,
       tool: tool.name,
       error: {
         code: resolveErrorCode(error),
-        message: getErrorMessage(error),
+        message: sanitizeErrorMessage(getErrorMessage(error)),
         exitCode: getErrorExitCode(error, 1),
       },
     });
@@ -568,7 +636,9 @@ async function readJsonBody(req: IncomingMessage): Promise<unknown> {
   }
 }
 
-function decodeToolExecutionPayload(value: unknown): ServiceToolExecutionPayload {
+function decodeToolExecutionPayload(
+  value: unknown,
+): ServiceToolExecutionPayload {
   if (value === undefined || value === null) {
     throw new ServiceRequestError("Tool request body is required.", {
       status: 400,
@@ -592,23 +662,32 @@ function decodeToolExecutionPayload(value: unknown): ServiceToolExecutionPayload
   const hasParams = Object.prototype.hasOwnProperty.call(value, "params");
 
   if (hasArgs && hasParams) {
-    throw new ServiceRequestError("Provide either \"params\" or \"args\", not both.", {
-      status: 400,
-      code: "invalid_request_body",
-    });
+    throw new ServiceRequestError(
+      'Provide either "params" or "args", not both.',
+      {
+        status: 400,
+        code: "invalid_request_body",
+      },
+    );
   }
 
   const argvValue = value.args;
   if (hasArgs) {
-    if (!Array.isArray(argvValue) || argvValue.some((item) => typeof item !== "string")) {
-      throw new ServiceRequestError("Field \"args\" must be an array of strings.", {
-        status: 400,
-        code: "invalid_args_override",
-      });
+    if (
+      !Array.isArray(argvValue) ||
+      argvValue.some((item) => typeof item !== "string")
+    ) {
+      throw new ServiceRequestError(
+        'Field "args" must be an array of strings.',
+        {
+          status: 400,
+          code: "invalid_args_override",
+        },
+      );
     }
     if (argvValue.length === 0) {
       throw new ServiceRequestError(
-        "Field \"args\" must include at least one CLI argument.",
+        'Field "args" must include at least one CLI argument.',
         {
           status: 400,
           code: "invalid_args_override",
@@ -622,21 +701,23 @@ function decodeToolExecutionPayload(value: unknown): ServiceToolExecutionPayload
     };
   }
 
-  const paramsValue = hasParams ? value.params : stripMetaFields(value, new Set(["requestId"]));
+  const paramsValue = hasParams
+    ? value.params
+    : stripMetaFields(value, new Set(["requestId"]));
   if (paramsValue === undefined || paramsValue === null) {
     throw new ServiceRequestError(
-      "Tool request body must include \"params\" or \"args\".",
+      'Tool request body must include "params" or "args".',
       { status: 400, code: "invalid_request_body" },
     );
   }
   if (isRecord(paramsValue) && Object.keys(paramsValue).length === 0) {
     throw new ServiceRequestError(
-      "Tool request body must include \"params\" with at least one field.",
+      'Tool request body must include "params" with at least one field.',
       { status: 400, code: "invalid_request_body" },
     );
   }
   if (!isRecord(paramsValue)) {
-    throw new ServiceRequestError("Field \"params\" must be an object.", {
+    throw new ServiceRequestError('Field "params" must be an object.', {
       status: 400,
       code: "invalid_params",
     });
@@ -782,14 +863,34 @@ function isServiceToolName(value: string): value is ServiceToolName {
   return SERVICE_TOOL_BY_NAME.has(value as ServiceToolName);
 }
 
-function writeJson(res: ServerResponse, status: number, payload: unknown): void {
+function writeSecurityHeaders(res: ServerResponse): void {
+  res.setHeader("x-content-type-options", "nosniff");
+  res.setHeader("x-frame-options", "DENY");
+  res.setHeader("content-security-policy", "default-src 'none'");
+  res.setHeader("cache-control", "no-store");
+}
+
+function sanitizeErrorMessage(message: string): string {
+  return message.replace(
+    /(?:\/(?:Users|home|var|tmp|opt|etc|usr|private)\/|[A-Z]:\\\\)[^\s"']+/g,
+    "[path]",
+  );
+}
+
+function writeJson(
+  res: ServerResponse,
+  status: number,
+  payload: unknown,
+): void {
   writeCorsHeaders(res);
+  writeSecurityHeaders(res);
   res.statusCode = status;
   res.setHeader("content-type", "application/json; charset=utf-8");
   res.end(`${JSON.stringify(payload, null, 2)}\n`);
 }
 
 function writeCorsHeaders(res: ServerResponse): void {
+  // Wildcard origin is intentional: this is a local dev tool with no auth.
   res.setHeader("access-control-allow-origin", "*");
   res.setHeader("access-control-allow-methods", "GET,POST,OPTIONS");
   res.setHeader("access-control-allow-headers", "content-type");
@@ -799,7 +900,10 @@ function resolveErrorCode(error: unknown): string {
   if (error instanceof CliError) {
     return error.code;
   }
-  if (error instanceof Error && typeof (error as { code?: unknown }).code === "string") {
+  if (
+    error instanceof Error &&
+    typeof (error as { code?: unknown }).code === "string"
+  ) {
     return String((error as { code?: string }).code);
   }
   return "tool_execution_failed";
@@ -818,10 +922,6 @@ async function closeServer(server: Server): Promise<void> {
   });
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
 function stripMetaFields(
   value: Record<string, unknown>,
   keys: ReadonlySet<string>,
@@ -836,7 +936,11 @@ function stripMetaFields(
   return stripped;
 }
 
-function stringParam(key: string, flag: string, description: string): ServiceToolParamSpec {
+function stringParam(
+  key: string,
+  flag: string,
+  description: string,
+): ServiceToolParamSpec {
   return {
     key,
     flag,
@@ -845,7 +949,11 @@ function stringParam(key: string, flag: string, description: string): ServiceToo
   };
 }
 
-function booleanParam(key: string, flag: string, description: string): ServiceToolParamSpec {
+function booleanParam(
+  key: string,
+  flag: string,
+  description: string,
+): ServiceToolParamSpec {
   return {
     key,
     flag,

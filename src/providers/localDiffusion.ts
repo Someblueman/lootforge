@@ -5,10 +5,13 @@ import { resolvePathWithinRoot } from "../shared/paths.js";
 import {
   DEFAULT_PROVIDER_REQUEST_TIMEOUT_MS,
   fetchWithTimeout,
+  MAX_DECODED_IMAGE_BYTES,
   normalizeNonNegativeInteger,
   normalizePositiveInteger,
   ProviderRequestTimeoutError,
   toOptionalNonNegativeInteger,
+  validateImageUrl,
+  withCandidateSuffix,
 } from "./runtime.js";
 import {
   createProviderJob,
@@ -63,10 +66,16 @@ export class LocalDiffusionProvider implements GenerationProvider {
         options.defaultConcurrency,
         defaults.defaultConcurrency,
       ),
-      minDelayMs: normalizeNonNegativeInteger(options.minDelayMs, defaults.minDelayMs),
+      minDelayMs: normalizeNonNegativeInteger(
+        options.minDelayMs,
+        defaults.minDelayMs,
+      ),
     };
     this.model = options.model ?? DEFAULT_LOCAL_MODEL;
-    this.baseUrl = options.baseUrl ?? process.env.LOCAL_DIFFUSION_BASE_URL ?? DEFAULT_LOCAL_BASE_URL;
+    this.baseUrl =
+      options.baseUrl ??
+      process.env.LOCAL_DIFFUSION_BASE_URL ??
+      DEFAULT_LOCAL_BASE_URL;
     this.timeoutMs = normalizePositiveInteger(
       options.timeoutMs,
       DEFAULT_PROVIDER_REQUEST_TIMEOUT_MS,
@@ -74,7 +83,10 @@ export class LocalDiffusionProvider implements GenerationProvider {
     this.maxRetries = toOptionalNonNegativeInteger(options.maxRetries);
   }
 
-  prepareJobs(targets: PlannedTarget[], ctx: ProviderPrepareContext): ProviderJob[] {
+  prepareJobs(
+    targets: PlannedTarget[],
+    ctx: ProviderPrepareContext,
+  ): ProviderJob[] {
     return targets.map((target) =>
       createProviderJob({
         provider: this.name,
@@ -118,11 +130,15 @@ export class LocalDiffusionProvider implements GenerationProvider {
       code: "local_diffusion_failed",
       message: "Local diffusion provider failed with a non-error throwable.",
       cause: error,
-      actionable: "Check local diffusion service health and request payload compatibility.",
+      actionable:
+        "Check local diffusion service health and request payload compatibility.",
     });
   }
 
-  async runJob(job: ProviderJob, ctx: ProviderRunContext): Promise<ProviderRunResult> {
+  async runJob(
+    job: ProviderJob,
+    ctx: ProviderRunContext,
+  ): Promise<ProviderRunResult> {
     const startedAt = nowIso(ctx.now);
     const fetchImpl = ctx.fetchImpl ?? globalThis.fetch;
 
@@ -131,7 +147,8 @@ export class LocalDiffusionProvider implements GenerationProvider {
         provider: this.name,
         code: "missing_fetch",
         message: "Global fetch is unavailable for Local Diffusion provider.",
-        actionable: "Use Node.js 18+ or pass a fetch implementation in the run context.",
+        actionable:
+          "Use Node.js 18+ or pass a fetch implementation in the run context.",
       });
     }
 
@@ -140,21 +157,25 @@ export class LocalDiffusionProvider implements GenerationProvider {
         fetchImpl,
         `${this.baseUrl.replace(/\/$/, "")}/generate`,
         {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: job.model,
+            prompt: job.prompt,
+            size: job.size,
+            quality: job.quality,
+            background: job.background,
+            output_format: job.outputFormat,
+            candidates: job.candidateCount,
+            control: this.toControlPayload(
+              job.target.edit?.inputs,
+              ctx.outDir,
+              job.targetId,
+            ),
+          }),
         },
-        body: JSON.stringify({
-          model: job.model,
-          prompt: job.prompt,
-          size: job.size,
-          quality: job.quality,
-          background: job.background,
-          output_format: job.outputFormat,
-          candidates: job.candidateCount,
-          control: this.toControlPayload(job.target.edit?.inputs, ctx.outDir, job.targetId),
-        }),
-      },
       );
 
       if (!response.ok) {
@@ -163,7 +184,8 @@ export class LocalDiffusionProvider implements GenerationProvider {
           code: "local_diffusion_http_error",
           status: response.status,
           message: `Local diffusion request failed with status ${response.status}.`,
-          actionable: "Check local diffusion API compatibility and service logs.",
+          actionable:
+            "Check local diffusion API compatibility and service logs.",
           cause: await response.text(),
         });
       }
@@ -182,7 +204,10 @@ export class LocalDiffusionProvider implements GenerationProvider {
       for (let index = 0; index < Math.max(job.candidateCount, 1); index += 1) {
         const image = images[index] ?? images[0];
         const bytes = await this.resolveImageBytes(image, fetchImpl);
-        const outputPath = index === 0 ? job.outPath : withCandidateSuffix(job.outPath, index + 1);
+        const outputPath =
+          index === 0
+            ? job.outPath
+            : withCandidateSuffix(job.outPath, index + 1);
         await mkdir(path.dirname(outputPath), { recursive: true });
         await writeFile(outputPath, bytes);
         outputs.push({ outputPath, bytesWritten: bytes.byteLength });
@@ -247,12 +272,28 @@ export class LocalDiffusionProvider implements GenerationProvider {
     imageData: { b64_json?: string; url?: string },
     fetchImpl: typeof fetch,
   ): Promise<Buffer> {
-    if (typeof imageData.b64_json === "string" && imageData.b64_json.length > 0) {
-      return Buffer.from(imageData.b64_json, "base64");
+    if (
+      typeof imageData.b64_json === "string" &&
+      imageData.b64_json.length > 0
+    ) {
+      const buffer = Buffer.from(imageData.b64_json, "base64");
+      if (buffer.byteLength > MAX_DECODED_IMAGE_BYTES) {
+        throw new ProviderError({
+          provider: this.name,
+          code: "local_diffusion_image_too_large",
+          message: `Decoded image exceeds ${MAX_DECODED_IMAGE_BYTES} byte safety limit.`,
+          actionable: "Configure local diffusion to output smaller images.",
+        });
+      }
+      return buffer;
     }
 
     if (typeof imageData.url === "string" && imageData.url.length > 0) {
-      const imageResponse = await this.requestWithTimeout(fetchImpl, imageData.url);
+      validateImageUrl(imageData.url, "local diffusion image download");
+      const imageResponse = await this.requestWithTimeout(
+        fetchImpl,
+        imageData.url,
+      );
       if (!imageResponse.ok) {
         throw new ProviderError({
           provider: this.name,
@@ -261,13 +302,23 @@ export class LocalDiffusionProvider implements GenerationProvider {
           message: `Local diffusion image download failed with status ${imageResponse.status}.`,
         });
       }
-      return Buffer.from(await imageResponse.arrayBuffer());
+      const buffer = Buffer.from(await imageResponse.arrayBuffer());
+      if (buffer.byteLength > MAX_DECODED_IMAGE_BYTES) {
+        throw new ProviderError({
+          provider: this.name,
+          code: "local_diffusion_image_too_large",
+          message: `Decoded image exceeds ${MAX_DECODED_IMAGE_BYTES} byte safety limit.`,
+          actionable: "Configure local diffusion to output smaller images.",
+        });
+      }
+      return buffer;
     }
 
     throw new ProviderError({
       provider: this.name,
       code: "local_diffusion_missing_image",
-      message: "Local diffusion image payload contained neither b64_json nor url fields.",
+      message:
+        "Local diffusion image payload contained neither b64_json nor url fields.",
     });
   }
 
@@ -292,12 +343,6 @@ export class LocalDiffusionProvider implements GenerationProvider {
       throw error;
     }
   }
-}
-
-function withCandidateSuffix(filePath: string, candidateNumber: number): string {
-  const ext = path.extname(filePath);
-  const base = filePath.slice(0, filePath.length - ext.length);
-  return `${base}.candidate-${candidateNumber}${ext}`;
 }
 
 export function createLocalDiffusionProvider(

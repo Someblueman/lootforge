@@ -2,8 +2,10 @@ import { spawn } from "node:child_process";
 
 import { buildStructuredPrompt } from "../providers/types.js";
 import type { CandidateVlmScore, PlannedTarget } from "../providers/types.js";
+import { parseTimeoutMs } from "../providers/runtime.js";
 import { parseCommandLine } from "./commandParser.js";
 import { resolvePathWithinRoot } from "../shared/paths.js";
+import { isRecord } from "../shared/typeGuards.js";
 
 const DEFAULT_VLM_GATE_THRESHOLD = 4;
 const DEFAULT_VLM_GATE_MAX_SCORE = 5;
@@ -82,7 +84,9 @@ export async function runCandidateVlmGate(
   };
 }
 
-function resolveVlmGatePolicy(target: PlannedTarget): { threshold: number; rubric?: string } | undefined {
+function resolveVlmGatePolicy(
+  target: PlannedTarget,
+): { threshold: number; rubric?: string } | undefined {
   const policy = target.generationPolicy?.vlmGate;
   if (!policy) {
     return undefined;
@@ -106,7 +110,9 @@ function resolveVlmGatePolicy(target: PlannedTarget): { threshold: number; rubri
 function resolveVlmGateConfig(targetId: string): VlmGateConfig {
   const command = process.env[VLM_GATE_COMMAND_ENV]?.trim();
   const url = process.env[VLM_GATE_URL_ENV]?.trim();
-  const timeoutMs = parseTimeoutMs(process.env[VLM_GATE_TIMEOUT_ENV]) ?? DEFAULT_VLM_GATE_TIMEOUT_MS;
+  const timeoutMs =
+    parseTimeoutMs(process.env[VLM_GATE_TIMEOUT_ENV]) ??
+    DEFAULT_VLM_GATE_TIMEOUT_MS;
 
   if (command) {
     return {
@@ -252,7 +258,9 @@ async function runVlmGateHttp(
     return parseVlmGateResponse(await response.text());
   } catch (error) {
     if (error instanceof Error && error.name === "AbortError") {
-      throw new Error(`HTTP gate request timed out after ${config.timeoutMs}ms.`);
+      throw new Error(
+        `HTTP gate request timed out after ${config.timeoutMs}ms.`,
+      );
     }
     throw error;
   } finally {
@@ -298,21 +306,4 @@ function parseVlmGateResponse(rawOutput: string): VlmGateResponse {
     score,
     ...(reason ? { reason } : {}),
   };
-}
-
-function parseTimeoutMs(value: string | undefined): number | undefined {
-  if (!value) {
-    return undefined;
-  }
-
-  const parsed = Number.parseInt(value.trim(), 10);
-  if (!Number.isFinite(parsed) || parsed <= 0) {
-    return undefined;
-  }
-
-  return parsed;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

@@ -70,8 +70,18 @@ export async function runSelectPipeline(
   );
 
   const [evalRaw, provenanceRaw] = await Promise.all([
-    readFile(evalReportPath, "utf8"),
-    readFile(provenancePath, "utf8"),
+    readFile(evalReportPath, "utf8").catch((error) => {
+      throw new Error(
+        `Failed to read eval report at ${evalReportPath}: ${error instanceof Error ? error.message : String(error)}`,
+        { cause: error },
+      );
+    }),
+    readFile(provenancePath, "utf8").catch((error) => {
+      throw new Error(
+        `Failed to read provenance at ${provenancePath}: ${error instanceof Error ? error.message : String(error)}`,
+        { cause: error },
+      );
+    }),
   ]);
 
   const evalReport = JSON.parse(evalRaw) as EvalReportShape;
@@ -117,7 +127,8 @@ export async function runSelectPipeline(
   targets.sort((left, right) => left.targetId.localeCompare(right.targetId));
 
   const selectionLockPath = path.resolve(
-    options.selectionLockPath ?? path.join(layout.outDir, "locks", "selection-lock.json"),
+    options.selectionLockPath ??
+      path.join(layout.outDir, "locks", "selection-lock.json"),
   );
 
   const lock: SelectionLockFile = {

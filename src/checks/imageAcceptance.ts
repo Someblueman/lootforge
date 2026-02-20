@@ -8,9 +8,12 @@ import { runPackInvariantChecks } from "./packInvariants.js";
 import type { PackInvariantSummary } from "./packInvariants.js";
 import type { PlannedTarget } from "../providers/types.js";
 import { normalizeOutputFormatAlias } from "../providers/types.js";
-import { normalizeTargetOutPath, resolvePathWithinDir } from "../shared/paths.js";
+import { parseSize } from "../shared/image.js";
+import {
+  normalizeTargetOutPath,
+  resolvePathWithinDir,
+} from "../shared/paths.js";
 
-const SIZE_PATTERN = /^(\d+)x(\d+)$/i;
 const DEFAULT_PALETTE_COMPLIANCE_MIN = 0.98;
 
 export interface ImageAcceptanceIssue {
@@ -75,25 +78,6 @@ interface InspectedImage {
   channels: number;
 }
 
-function parseSize(size: string | undefined): { width: number; height: number } | undefined {
-  if (!size) {
-    return undefined;
-  }
-
-  const match = SIZE_PATTERN.exec(size.trim());
-  if (!match) {
-    return undefined;
-  }
-
-  const width = Number.parseInt(match[1], 10);
-  const height = Number.parseInt(match[2], 10);
-  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
-    return undefined;
-  }
-
-  return { width, height };
-}
-
 async function inspectImage(imagePath: string): Promise<InspectedImage> {
   const image = sharp(imagePath, { failOn: "none" });
   const metadata = await image.metadata();
@@ -110,10 +94,14 @@ async function inspectImage(imagePath: string): Promise<InspectedImage> {
   const format = metadata.format ?? "unknown";
   const hasAlphaChannel = metadata.hasAlpha === true;
 
-  const rawResult = await image.ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+  const rawResult = await image
+    .ensureAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
   const channels = rawResult.info.channels;
   const raw = rawResult.data;
-  const hasTransparentPixels = channels >= 4 ? hasAnyTransparentPixels(raw, channels) : false;
+  const hasTransparentPixels =
+    channels >= 4 ? hasAnyTransparentPixels(raw, channels) : false;
 
   const fileStat = await stat(imagePath);
   return {
@@ -153,11 +141,15 @@ function outputFormatSupportsAlpha(format: string): boolean {
   return format === "png" || format === "webp";
 }
 
-function computeSeamScore(
-  inspected: InspectedImage,
-  stripPx: number,
-): number {
-  return computeSeamScoreForRegion(inspected, 0, 0, inspected.width, inspected.height, stripPx);
+function computeSeamScore(inspected: InspectedImage, stripPx: number): number {
+  return computeSeamScoreForRegion(
+    inspected,
+    0,
+    0,
+    inspected.width,
+    inspected.height,
+    stripPx,
+  );
 }
 
 function computeSeamScoreForRegion(
@@ -181,9 +173,11 @@ function computeSeamScoreForRegion(
   // Left vs right strips.
   for (let y = 0; y < regionHeight; y += 1) {
     for (let x = 0; x < strip; x += 1) {
-      const leftIndex = ((startY + y) * inspected.width + (startX + x)) * channels;
+      const leftIndex =
+        ((startY + y) * inspected.width + (startX + x)) * channels;
       const rightIndex =
-        ((startY + y) * inspected.width + (startX + regionWidth - strip + x)) * channels;
+        ((startY + y) * inspected.width + (startX + regionWidth - strip + x)) *
+        channels;
       total += mad(inspected.raw[leftIndex], inspected.raw[rightIndex]);
       total += mad(inspected.raw[leftIndex + 1], inspected.raw[rightIndex + 1]);
       total += mad(inspected.raw[leftIndex + 2], inspected.raw[rightIndex + 2]);
@@ -194,9 +188,11 @@ function computeSeamScoreForRegion(
   // Top vs bottom strips.
   for (let y = 0; y < strip; y += 1) {
     for (let x = 0; x < regionWidth; x += 1) {
-      const topIndex = ((startY + y) * inspected.width + (startX + x)) * channels;
+      const topIndex =
+        ((startY + y) * inspected.width + (startX + x)) * channels;
       const bottomIndex =
-        ((startY + regionHeight - strip + y) * inspected.width + (startX + x)) * channels;
+        ((startY + regionHeight - strip + y) * inspected.width + (startX + x)) *
+        channels;
       total += mad(inspected.raw[topIndex], inspected.raw[bottomIndex]);
       total += mad(inspected.raw[topIndex + 1], inspected.raw[bottomIndex + 1]);
       total += mad(inspected.raw[topIndex + 2], inspected.raw[bottomIndex + 2]);
@@ -261,7 +257,9 @@ function collectDistinctColors(inspected: InspectedImage): Set<number> {
       continue;
     }
     const packed =
-      (inspected.raw[i] << 16) | (inspected.raw[i + 1] << 8) | inspected.raw[i + 2];
+      (inspected.raw[i] << 16) |
+      (inspected.raw[i + 1] << 8) |
+      inspected.raw[i + 2];
     colors.add(packed >>> 0);
   }
 
@@ -296,7 +294,9 @@ function computeExactPaletteCompliance(
     }
 
     const packed =
-      (inspected.raw[i] << 16) | (inspected.raw[i + 1] << 8) | inspected.raw[i + 2];
+      (inspected.raw[i] << 16) |
+      (inspected.raw[i + 1] << 8) |
+      inspected.raw[i + 2];
     distinctColors.add(packed >>> 0);
     counted += 1;
     if (allowedColors.has(packed >>> 0)) {
@@ -383,7 +383,8 @@ export async function evaluateImageAcceptance(
   const expectedSize = parseSize(target.acceptance?.size);
   if (
     expectedSize &&
-    (inspected.width !== expectedSize.width || inspected.height !== expectedSize.height)
+    (inspected.width !== expectedSize.width ||
+      inspected.height !== expectedSize.height)
   ) {
     report.issues.push({
       level: "error",
@@ -394,7 +395,9 @@ export async function evaluateImageAcceptance(
     });
   }
 
-  const requestedOutputFormat = normalizeOutputFormatAlias(target.generationPolicy?.outputFormat);
+  const requestedOutputFormat = normalizeOutputFormatAlias(
+    target.generationPolicy?.outputFormat,
+  );
   const actualOutputFormat = normalizeOutputFormatAlias(inspected.format);
   if (actualOutputFormat !== requestedOutputFormat) {
     report.issues.push({
@@ -407,13 +410,17 @@ export async function evaluateImageAcceptance(
   }
 
   if (targetRequiresAlpha(target)) {
-    if (!inspected.hasAlphaChannel || !outputFormatSupportsAlpha(actualOutputFormat)) {
+    if (
+      !inspected.hasAlphaChannel ||
+      !outputFormatSupportsAlpha(actualOutputFormat)
+    ) {
       report.issues.push({
         level: "error",
         code: "alpha_channel_missing",
         targetId: target.id,
         imagePath,
-        message: "Target requires alpha but output format/channel is not alpha-capable.",
+        message:
+          "Target requires alpha but output format/channel is not alpha-capable.",
       });
     }
     if (!inspected.hasTransparentPixels) {
@@ -422,7 +429,8 @@ export async function evaluateImageAcceptance(
         code: "alpha_pixels_missing",
         targetId: target.id,
         imagePath,
-        message: "Target requires transparency but all pixels are fully opaque.",
+        message:
+          "Target requires transparency but all pixels are fully opaque.",
       });
     }
   }
@@ -535,15 +543,22 @@ export async function evaluateImageAcceptance(
         message: `Image size ${inspected.width}x${inspected.height} is not divisible by wrapGrid ${columns}x${rows}.`,
       });
     } else {
-      const seamStripPx = target.wrapGrid.seamStripPx ?? target.seamStripPx ?? 4;
-      const seamScore = computeWrapGridSeamScore(inspected, columns, rows, seamStripPx);
+      const seamStripPx =
+        target.wrapGrid.seamStripPx ?? target.seamStripPx ?? 4;
+      const seamScore = computeWrapGridSeamScore(
+        inspected,
+        columns,
+        rows,
+        seamStripPx,
+      );
       if (typeof seamScore === "number") {
         report.metrics = {
           ...report.metrics,
           wrapGridSeamScore: seamScore,
           wrapGridSeamStripPx: seamStripPx,
         };
-        const threshold = target.wrapGrid.seamThreshold ?? target.seamThreshold ?? 12;
+        const threshold =
+          target.wrapGrid.seamThreshold ?? target.seamThreshold ?? 12;
         if (seamScore > threshold) {
           report.issues.push({
             level: "error",
@@ -576,7 +591,9 @@ export async function evaluateImageAcceptance(
   }
 
   if (target.palette?.mode === "exact") {
-    const allowed = new Set((target.palette.colors ?? []).map((color) => hexToPackedColor(color)));
+    const allowed = new Set(
+      (target.palette.colors ?? []).map((color) => hexToPackedColor(color)),
+    );
     const compliance = computeExactPaletteCompliance(inspected, allowed);
     const requiredCompliance = requiredExactPaletteCompliance(target);
     report.metrics = {
@@ -615,9 +632,13 @@ export async function runImageAcceptanceChecks(params: {
   strict?: boolean;
 }): Promise<ImageAcceptanceReport> {
   const strict = params.strict ?? true;
-  const runtimeTargets = params.targets.filter((target) => !target.catalogDisabled);
+  const runtimeTargets = params.targets.filter(
+    (target) => !target.catalogDisabled,
+  );
   const items = await Promise.all(
-    runtimeTargets.map((target) => evaluateImageAcceptance(target, params.imagesDir)),
+    runtimeTargets.map((target) =>
+      evaluateImageAcceptance(target, params.imagesDir),
+    ),
   );
 
   const packInvariantResult = await runPackInvariantChecks({
@@ -643,16 +664,19 @@ export async function runImageAcceptanceChecks(params: {
   }
 
   const errors = items.reduce(
-    (count, item) => count + item.issues.filter((issue) => issue.level === "error").length,
+    (count, item) =>
+      count + item.issues.filter((issue) => issue.level === "error").length,
     0,
   );
   const warnings = items.reduce(
-    (count, item) => count + item.issues.filter((issue) => issue.level === "warning").length,
+    (count, item) =>
+      count + item.issues.filter((issue) => issue.level === "warning").length,
     0,
   );
 
-  const failed = items.filter((item) => item.issues.some((issue) => issue.level === "error"))
-    .length;
+  const failed = items.filter((item) =>
+    item.issues.some((issue) => issue.level === "error"),
+  ).length;
 
   return {
     generatedAt: new Date().toISOString(),
@@ -664,11 +688,15 @@ export async function runImageAcceptanceChecks(params: {
     errors,
     warnings,
     items,
-    ...(packInvariantResult.summary ? { packInvariants: packInvariantResult.summary } : {}),
+    ...(packInvariantResult.summary
+      ? { packInvariants: packInvariantResult.summary }
+      : {}),
   };
 }
 
-export function assertImageAcceptanceReport(report: ImageAcceptanceReport): void {
+export function assertImageAcceptanceReport(
+  report: ImageAcceptanceReport,
+): void {
   if (report.strict && report.errors > 0) {
     const examples = report.items
       .flatMap((item) => item.issues)

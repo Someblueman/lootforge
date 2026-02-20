@@ -3,3 +3,7 @@ dist/
 coverage/
 .npm-cache/
 .DS_Store
+
+# codemap local cache
+.codemap.state.json
+.codemap.state.analysis.json

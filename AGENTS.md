@@ -36,3 +36,9 @@
 - Include a concise summary of behavior changes.
 - Document new env vars and adapter/runtime contracts in `README.md`.
 - Note any residual gaps or follow-up work explicitly.
+
+<!-- codemap:begin -->
+## Codemap Routing (Agents)
+
+Always start by reading `CODEMAP.paths` to find the smallest set of files to inspect/edit. Avoid reading large architecture/docs files unless needed.
+<!-- codemap:end -->

@@ -70,7 +70,9 @@ function parseSize(size: string | undefined): { width: number; height: number } 
 export async function buildCatalog(
   targets: CatalogTarget[],
   imagesDir: string,
+  assetBaseUrl: string = "/assets",
 ): Promise<CatalogOutput> {
+  const resolvedAssetBaseUrl = resolveAssetBaseUrl(assetBaseUrl);
   const items: CatalogItem[] = [];
 
   for (const target of targets) {
@@ -106,14 +108,14 @@ export async function buildCatalog(
         target.auxiliaryMaps.aoFromLuma)
         ? {
             ...(target.auxiliaryMaps.normalFromHeight
-              ? { normalUrl: `/assets/images/${base}__normal${ext}` }
+              ? { normalUrl: `${resolvedAssetBaseUrl}/images/${base}__normal${ext}` }
               : {}),
             ...(target.auxiliaryMaps.specularFromLuma
-              ? { specularUrl: `/assets/images/${base}__specular${ext}` }
-              : {}),
+            ? { specularUrl: `${resolvedAssetBaseUrl}/images/${base}__specular${ext}` }
+            : {}),
             ...(target.auxiliaryMaps.aoFromLuma
-              ? { aoUrl: `/assets/images/${base}__ao${ext}` }
-              : {}),
+            ? { aoUrl: `${resolvedAssetBaseUrl}/images/${base}__ao${ext}` }
+            : {}),
           }
         : undefined;
 
@@ -122,7 +124,7 @@ export async function buildCatalog(
       kind: target.kind ?? "asset",
       atlasGroup: target.atlasGroup ?? null,
       out: normalizedOut,
-      url: `/assets/images/${normalizedOut}`,
+      url: `${resolvedAssetBaseUrl}/images/${normalizedOut}`,
       alphaRequired:
         target.runtimeSpec?.alphaRequired ?? target.acceptance?.alpha === true,
       previewWidth: target.runtimeSpec?.previewWidth ?? expectedSize.width,
@@ -143,4 +145,17 @@ export async function buildCatalog(
     generatedAt: new Date().toISOString(),
     items,
   };
+}
+
+function resolveAssetBaseUrl(rawAssetBaseUrl: string): string {
+  const trimmed = rawAssetBaseUrl.trim();
+  if (!trimmed || trimmed === "/") {
+    return "/assets";
+  }
+  const normalized = trimmed.replace(/\\/g, "/");
+  const withLeadingSlash = normalized.startsWith("/") ? normalized : `/${normalized}`;
+  const collapsed = withLeadingSlash.replace(/\/{2,}/g, "/");
+  const withoutTrailingSlash =
+    collapsed.endsWith("/") ? collapsed.slice(0, -1) : collapsed;
+  return withoutTrailingSlash || "/assets";
 }

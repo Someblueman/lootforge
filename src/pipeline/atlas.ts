@@ -60,6 +60,7 @@ export interface AtlasPipelineOptions {
   outDir: string;
   targetsIndexPath?: string;
   manifestPath?: string;
+  assetBaseUrl?: string;
 }
 
 export interface AtlasPipelineResult {
@@ -208,6 +209,9 @@ export async function runAtlasPipeline(
   );
   const atlasDir = layout.atlasDir;
   const imagesDir = layout.processedImagesDir;
+  const imageBaseUrl = resolveAssetBaseUrl(options.assetBaseUrl);
+  const atlasBaseUrl = `${imageBaseUrl}/atlases`;
+  const processedImagesBaseUrl = `${imageBaseUrl}/images`;
 
   await mkdir(atlasDir, { recursive: true });
 
@@ -238,8 +242,7 @@ export async function runAtlasPipeline(
       return {
         id: target.id,
         kind: target.kind || "asset",
-        // Runtime compatibility mirror remains /assets/images in this release.
-        url: `/assets/images/${target.out}`,
+        url: `${processedImagesBaseUrl}/${target.out}`,
         atlasGroup: target.atlasGroup ?? null,
         alphaRequired:
           target.runtimeSpec?.alphaRequired ?? target.acceptance?.alpha === true,
@@ -345,8 +348,8 @@ export async function runAtlasPipeline(
 
       bundles.push({
         id: groupId,
-        imageUrl: `/assets/atlases/${groupId}.png`,
-        jsonUrl: `/assets/atlases/${groupId}.json`,
+        imageUrl: `${atlasBaseUrl}/${groupId}.png`,
+        jsonUrl: `${atlasBaseUrl}/${groupId}.json`,
         targets: groupTargets.map((target) => target.id),
       });
     }
@@ -395,8 +398,8 @@ export async function runAtlasPipeline(
 
         bundles.push({
           id: bundleId,
-          imageUrl: `/assets/images/${target.out}`,
-          jsonUrl: `/assets/atlases/${bundleId}.json`,
+          imageUrl: `${processedImagesBaseUrl}/${target.out}`,
+          jsonUrl: `${atlasBaseUrl}/${bundleId}.json`,
           targets: bundleTargets,
         });
       }
@@ -418,4 +421,17 @@ export async function runAtlasPipeline(
     manifestPath: manifestPathOut,
     manifest,
   };
+}
+
+function resolveAssetBaseUrl(rawAssetBaseUrl: string | undefined): string {
+  const trimmed = (rawAssetBaseUrl ?? "/assets").trim();
+  if (!trimmed || trimmed === "/") {
+    return "/assets";
+  }
+  const normalized = trimmed.replace(/\\/g, "/");
+  const withLeadingSlash = normalized.startsWith("/") ? normalized : `/${normalized}`;
+  const collapsed = withLeadingSlash.replace(/\/{2,}/g, "/");
+  const withoutTrailingSlash =
+    collapsed.endsWith("/") ? collapsed.slice(0, -1) : collapsed;
+  return withoutTrailingSlash || "/assets";
 }

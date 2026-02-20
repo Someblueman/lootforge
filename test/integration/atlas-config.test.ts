@@ -106,4 +106,87 @@ describe("atlas config artifacts", () => {
     expect(await exists(path.join(result.atlasDir, "atlas-config.json"))).toBe(true);
     expect(result.manifest.atlasBundles.length).toBeGreaterThan(0);
   });
-});
+
+  test("uses explicit asset base url for generated catalog and atlas URLs", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "lootforge-atlas-baseurl-test-"));
+    const outDir = path.join(root, "out");
+    const manifestPath = path.join(outDir, "assets", "imagegen", "manifest.json");
+    const indexPath = path.join(outDir, "jobs", "targets-index.json");
+    const processedImagePath = path.join(
+      outDir,
+      "assets",
+      "imagegen",
+      "processed",
+      "images",
+      "hero.png",
+    );
+
+    await mkdir(path.dirname(manifestPath), { recursive: true });
+    await mkdir(path.dirname(indexPath), { recursive: true });
+    await mkdir(path.dirname(processedImagePath), { recursive: true });
+    await writeFile(
+      manifestPath,
+      `${JSON.stringify(
+        {
+          version: "next",
+          pack: { id: "test", version: "0.1.0", license: "MIT", author: "x" },
+          providers: { default: "openai" },
+          targets: [
+            {
+              id: "hero",
+              kind: "sprite",
+              out: "hero.png",
+              atlasGroup: "actors",
+              prompt: "hero",
+            },
+          ],
+        },
+        null,
+        2,
+      )}\n`,
+      "utf8",
+    );
+    await writeFile(
+      indexPath,
+      `${JSON.stringify(
+        {
+          targets: [
+            {
+              id: "hero",
+              kind: "sprite",
+              out: "hero.png",
+              atlasGroup: "actors",
+            },
+          ],
+        },
+        null,
+        2,
+      )}\n`,
+      "utf8",
+    );
+
+    await sharp({
+      create: {
+        width: 16,
+        height: 16,
+        channels: 4,
+        background: { r: 255, g: 0, b: 255, alpha: 1 },
+      },
+    })
+      .png()
+      .toFile(processedImagePath);
+
+    const result = await runAtlasPipeline({
+      outDir,
+      targetsIndexPath: indexPath,
+      manifestPath,
+      assetBaseUrl: "/cdn/assets",
+    });
+
+    expect(result.manifest.items[0]?.url).toBe("/cdn/assets/images/hero.png");
+    expect(result.manifest.atlasBundles[0]?.jsonUrl).toContain("/cdn/assets/atlases/");
+    expect(result.manifest.atlasBundles[0]?.imageUrl).toMatch(
+      /^\/cdn\/assets\/(?:images|atlases)\/.*$/,
+    );
+  });
+}); 

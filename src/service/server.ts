@@ -503,7 +503,10 @@ async function readJsonBody(req: IncomingMessage): Promise<unknown> {
 
 function decodeToolExecutionPayload(value: unknown): ServiceToolExecutionPayload {
   if (value === undefined || value === null) {
-    return { params: {} };
+    throw new ServiceRequestError("Tool request body is required.", {
+      status: 400,
+      code: "invalid_request_body",
+    });
   }
   if (!isRecord(value)) {
     throw new ServiceRequestError("Request body must be a JSON object.", {
@@ -518,13 +521,32 @@ function decodeToolExecutionPayload(value: unknown): ServiceToolExecutionPayload
       ? requestIdValue
       : undefined;
 
+  const hasArgs = Object.prototype.hasOwnProperty.call(value, "args");
+  const hasParams = Object.prototype.hasOwnProperty.call(value, "params");
+
+  if (hasArgs && hasParams) {
+    throw new ServiceRequestError("Provide either \"params\" or \"args\", not both.", {
+      status: 400,
+      code: "invalid_request_body",
+    });
+  }
+
   const argvValue = value.args;
-  if (argvValue !== undefined) {
+  if (hasArgs) {
     if (!Array.isArray(argvValue) || argvValue.some((item) => typeof item !== "string")) {
       throw new ServiceRequestError("Field \"args\" must be an array of strings.", {
         status: 400,
         code: "invalid_args_override",
       });
+    }
+    if (argvValue.length === 0) {
+      throw new ServiceRequestError(
+        "Field \"args\" must include at least one CLI argument.",
+        {
+          status: 400,
+          code: "invalid_args_override",
+        },
+      );
     }
     return {
       requestId,
@@ -533,12 +555,18 @@ function decodeToolExecutionPayload(value: unknown): ServiceToolExecutionPayload
     };
   }
 
-  const paramsValue =
-    value.params !== undefined
-      ? value.params
-      : stripMetaFields(value, new Set(["requestId"]));
+  const paramsValue = hasParams ? value.params : stripMetaFields(value, new Set(["requestId"]));
   if (paramsValue === undefined || paramsValue === null) {
-    return { requestId, params: {} };
+    throw new ServiceRequestError(
+      "Tool request body must include \"params\" or \"args\".",
+      { status: 400, code: "invalid_request_body" },
+    );
+  }
+  if (isRecord(paramsValue) && Object.keys(paramsValue).length === 0) {
+    throw new ServiceRequestError(
+      "Tool request body must include \"params\" with at least one field.",
+      { status: 400, code: "invalid_request_body" },
+    );
   }
   if (!isRecord(paramsValue)) {
     throw new ServiceRequestError("Field \"params\" must be an object.", {

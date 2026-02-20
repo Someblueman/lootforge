@@ -117,6 +117,12 @@ export interface GenerationPolicy {
   fallbackProviders?: ProviderName[];
   providerConcurrency?: number;
   rateLimitPerMinute?: number;
+  vlmGate?: VlmGatePolicy;
+}
+
+export interface VlmGatePolicy {
+  threshold?: number;
+  rubric?: string;
 }
 
 export interface TrimOperation {
@@ -233,6 +239,12 @@ export interface PlannedTarget {
   tileable?: boolean;
   seamThreshold?: number;
   seamStripPx?: number;
+  alphaHaloRiskMax?: number;
+  alphaStrayNoiseMax?: number;
+  alphaEdgeSharpnessMin?: number;
+  packTextureBudgetMB?: number;
+  spritesheetSilhouetteDriftMax?: number;
+  spritesheetAnchorDriftMax?: number;
   seamHeal?: SeamHealPolicy;
   wrapGrid?: WrapGridPolicy;
   palette?: PalettePolicy;
@@ -295,10 +307,11 @@ export interface NormalizedGenerationPolicy {
   background: "transparent" | "opaque" | string;
   outputFormat: NormalizedOutputFormat;
   candidates: number;
-  maxRetries: number;
+  maxRetries?: number;
   fallbackProviders: ProviderName[];
   providerConcurrency?: number;
   rateLimitPerMinute?: number;
+  vlmGate?: VlmGatePolicy;
 }
 
 export interface PolicyNormalizationIssue {
@@ -345,8 +358,19 @@ export interface CandidateScoreRecord {
   reasons: string[];
   components?: Record<string, number>;
   metrics?: Record<string, number>;
+  vlm?: CandidateVlmScore;
   warnings?: string[];
   selected?: boolean;
+}
+
+export interface CandidateVlmScore {
+  score: number;
+  threshold: number;
+  maxScore: number;
+  passed: boolean;
+  reason: string;
+  rubric?: string;
+  evaluator: "command" | "http";
 }
 
 export interface ProviderRunResult {
@@ -519,7 +543,7 @@ export function getTargetGenerationPolicy(target: PlannedTarget): NormalizedGene
   const maxRetriesRaw =
     typeof policy.maxRetries === "number" && Number.isFinite(policy.maxRetries)
       ? Math.round(policy.maxRetries)
-      : DEFAULT_MAX_RETRIES;
+      : undefined;
 
   return {
     size: policy.size?.trim() || DEFAULT_SIZE,
@@ -527,7 +551,7 @@ export function getTargetGenerationPolicy(target: PlannedTarget): NormalizedGene
     background: policy.background?.trim() || DEFAULT_BACKGROUND,
     outputFormat: normalizeOutputFormatAlias(policy.outputFormat || DEFAULT_OUTPUT_FORMAT),
     candidates: Math.max(1, candidatesRaw),
-    maxRetries: Math.max(0, maxRetriesRaw),
+    ...(typeof maxRetriesRaw === "number" ? { maxRetries: Math.max(0, maxRetriesRaw) } : {}),
     fallbackProviders: Array.isArray(policy.fallbackProviders)
       ? policy.fallbackProviders.filter((name): name is ProviderName => isProviderName(name))
       : [],
@@ -543,7 +567,28 @@ export function getTargetGenerationPolicy(target: PlannedTarget): NormalizedGene
       policy.rateLimitPerMinute > 0
         ? Math.round(policy.rateLimitPerMinute)
         : undefined,
+    vlmGate: normalizeVlmGatePolicy(policy.vlmGate),
   };
+}
+
+function normalizeVlmGatePolicy(policy: VlmGatePolicy | undefined): VlmGatePolicy | undefined {
+  if (!policy) {
+    return undefined;
+  }
+
+  const threshold =
+    typeof policy.threshold === "number" && Number.isFinite(policy.threshold)
+      ? policy.threshold
+      : 4;
+  const normalized: VlmGatePolicy = {
+    threshold: Math.max(0, Math.min(5, threshold)),
+  };
+
+  if (typeof policy.rubric === "string" && policy.rubric.trim()) {
+    normalized.rubric = policy.rubric.trim();
+  }
+
+  return normalized;
 }
 
 export function getTargetGenerationMode(target: PlannedTarget): GenerationMode {
@@ -584,11 +629,10 @@ export function normalizeGenerationPolicyForProvider(
   }
 
   if (policy.background === "transparent" && !capabilities.supportsTransparentBackground) {
-    policy.background = "opaque";
     issues.push({
-      level: "warning",
-      code: "transparent_background_normalized",
-      message: `${provider} does not guarantee transparent backgrounds; background normalized to opaque.`,
+      level: "error",
+      code: "transparent_background_unsupported",
+      message: `${provider} does not support transparent backgrounds.`,
     });
   }
 
@@ -701,6 +745,9 @@ export interface CreateJobParams {
   target: PlannedTarget;
   model: string;
   imagesDir: string;
+  defaults?: {
+    maxRetries?: number;
+  };
 }
 
 export function createProviderJob(params: CreateJobParams): ProviderJob {
@@ -749,12 +796,31 @@ export function createProviderJob(params: CreateJobParams): ProviderJob {
     background: normalized.policy.background,
     outputFormat: normalized.policy.outputFormat,
     candidateCount: normalized.policy.candidates,
-    maxRetries: normalized.policy.maxRetries,
+    maxRetries: firstNonNegativeInteger(
+      normalized.policy.maxRetries,
+      params.defaults?.maxRetries,
+      DEFAULT_MAX_RETRIES,
+    ),
     fallbackProviders: normalized.policy.fallbackProviders,
     providerConcurrency: normalized.policy.providerConcurrency,
     rateLimitPerMinute: normalized.policy.rateLimitPerMinute,
     target: params.target,
   };
+}
+
+function firstNonNegativeInteger(
+  ...values: Array<number | undefined>
+): number {
+  for (const value of values) {
+    if (typeof value !== "number" || !Number.isFinite(value)) {
+      continue;
+    }
+    const rounded = Math.round(value);
+    if (rounded >= 0) {
+      return rounded;
+    }
+  }
+  return DEFAULT_MAX_RETRIES;
 }
 
 export function nowIso(now?: () => Date): string {

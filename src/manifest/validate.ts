@@ -703,6 +703,13 @@ function normalizeTargetForGeneration(params: {
     seamThreshold:
       params.target.seamThreshold ?? params.evalProfile.hardGates?.seamThreshold,
     seamStripPx: params.target.seamStripPx ?? params.evalProfile.hardGates?.seamStripPx,
+    alphaHaloRiskMax: params.evalProfile.hardGates?.alphaHaloRiskMax,
+    alphaStrayNoiseMax: params.evalProfile.hardGates?.alphaStrayNoiseMax,
+    alphaEdgeSharpnessMin: params.evalProfile.hardGates?.alphaEdgeSharpnessMin,
+    packTextureBudgetMB: params.evalProfile.hardGates?.packTextureBudgetMB,
+    spritesheetSilhouetteDriftMax:
+      params.evalProfile.hardGates?.spritesheetSilhouetteDriftMax,
+    spritesheetAnchorDriftMax: params.evalProfile.hardGates?.spritesheetAnchorDriftMax,
     ...(seamHeal ? { seamHeal } : {}),
     ...(wrapGrid ? { wrapGrid } : {}),
     ...(palette ? { palette } : {}),
@@ -938,7 +945,7 @@ function toNormalizedGenerationPolicy(target: ManifestTarget): NormalizedGenerat
   const maxRetries =
     typeof target.generationPolicy?.maxRetries === "number"
       ? Math.max(0, Math.round(target.generationPolicy.maxRetries))
-      : 1;
+      : undefined;
 
   return {
     size: target.generationPolicy?.size?.trim() || target.acceptance?.size || "1024x1024",
@@ -946,11 +953,34 @@ function toNormalizedGenerationPolicy(target: ManifestTarget): NormalizedGenerat
     background: target.generationPolicy?.background?.trim() || "opaque",
     outputFormat,
     candidates,
-    maxRetries,
+    ...(typeof maxRetries === "number" ? { maxRetries } : {}),
     fallbackProviders: target.generationPolicy?.fallbackProviders ?? [],
     providerConcurrency: target.generationPolicy?.providerConcurrency,
     rateLimitPerMinute: target.generationPolicy?.rateLimitPerMinute,
+    vlmGate: normalizeVlmGatePolicy(target.generationPolicy?.vlmGate),
   };
+}
+
+function normalizeVlmGatePolicy(
+  policy: NonNullable<ManifestTarget["generationPolicy"]>["vlmGate"] | undefined,
+): NormalizedGenerationPolicy["vlmGate"] {
+  if (!policy) {
+    return undefined;
+  }
+
+  const threshold =
+    typeof policy.threshold === "number" && Number.isFinite(policy.threshold)
+      ? Math.max(0, Math.min(5, policy.threshold))
+      : 4;
+  const normalized = {
+    threshold,
+  } as NonNullable<NormalizedGenerationPolicy["vlmGate"]>;
+
+  if (typeof policy.rubric === "string" && policy.rubric.trim()) {
+    normalized.rubric = policy.rubric.trim();
+  }
+
+  return normalized;
 }
 
 function resolvePostProcess(

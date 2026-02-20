@@ -7,6 +7,14 @@
 - `version`: must be `"next"`
 - `pack`: `{ id, version, license?, author? }`
 - `providers`: `{ default, openai?, nano?, local? }`
+  - Provider configs support runtime fields:
+    - `model?`
+    - `endpoint?` (OpenAI generation endpoint, Nano API base)
+    - `timeoutMs?` (request timeout per provider call)
+    - `maxRetries?` (default retries when target policy omits `generationPolicy.maxRetries`)
+    - `minDelayMs?` (provider-level minimum spacing between jobs)
+    - `defaultConcurrency?` (provider-level worker count)
+  - `providers.local` also supports `baseUrl?` (alias for local endpoint)
 - `styleKits[]` (required, at least one)
   - `id`
   - `rulesPath`
@@ -21,7 +29,7 @@
   - `referenceImages[]`
 - `evaluationProfiles[]` (required, at least one)
   - `id`
-  - `hardGates?`: `{ requireAlpha?, maxFileSizeKB?, seamThreshold?, seamStripPx?, paletteComplianceMin? }`
+  - `hardGates?`: `{ requireAlpha?, maxFileSizeKB?, seamThreshold?, seamStripPx?, paletteComplianceMin?, alphaHaloRiskMax?, alphaStrayNoiseMax?, alphaEdgeSharpnessMin?, packTextureBudgetMB?, spritesheetSilhouetteDriftMax?, spritesheetAnchorDriftMax? }`
   - `scoreWeights?`: `{ readability?, fileSize?, consistency?, clip?, lpips?, ssim? }`
 - `atlas?`: atlas defaults + optional per-group overrides
 - `targets[]` (required)
@@ -53,11 +61,29 @@ Generation + processing:
 
 - `prompt` or `promptSpec` (required for non-`spritesheet` targets)
 - `generationPolicy`
+  - `generationPolicy.vlmGate?`: `{ threshold?, rubric? }`
+  - `threshold` defaults to `4` (scored on `0..5`) when gate is configured
 - `postProcess`
 - `acceptance`
 - `runtimeSpec`
 - `provider`, `model`, `edit`, `auxiliaryMaps`
+- `generationMode: "edit-first"` requires an edit-capable provider (`openai`, `local`, or `nano` with an image-edit-capable Gemini model)
 - `edit.inputs[].path` must resolve inside the active `--out` root at runtime
+- `generationPolicy.background: "transparent"` requires a provider that supports transparent outputs (unsupported providers now fail validation)
+- `generationPolicy.vlmGate` requires runtime evaluator transport via `LOOTFORGE_VLM_GATE_CMD` or `LOOTFORGE_VLM_GATE_URL`
+- edge-aware hard gates can be configured in `evaluationProfiles[].hardGates`:
+  - `alphaHaloRiskMax` (`0..1`, lower is stricter)
+  - `alphaStrayNoiseMax` (`0..1`, lower is stricter)
+  - `alphaEdgeSharpnessMin` (`0..1`, higher is stricter)
+- pack-level gates can be configured in `evaluationProfiles[].hardGates` and are normalized onto each planned target:
+  - `packTextureBudgetMB` (`>0`, optional profile-level uncompressed texture budget)
+  - `spritesheetSilhouetteDriftMax` (`0..1`, optional max adjacent-frame silhouette drift)
+  - `spritesheetAnchorDriftMax` (`0..1`, optional max adjacent-frame anchor drift)
+
+Provider runtime precedence for generate/regenerate:
+- target-level `generationPolicy` overrides provider defaults for retries/concurrency settings
+- provider runtime fields resolve from manifest and can be overridden by environment variables (`LOOTFORGE_*` / provider-specific env aliases)
+- capability parity is enforced at runtime (`supports(...)` must match provider capability flags)
 
 ## Spritesheet targets
 
@@ -72,6 +98,12 @@ Planner behavior:
 
 - expands each animation frame into internal frame targets under `__frames/...`
 - emits a generation-disabled sheet target that process stage assembles
+
+Pack invariants enforced during acceptance/eval:
+- runtime output uniqueness across non-catalog targets (case-insensitive normalized path)
+- spritesheet sheet/frame family and atlas-group integrity checks
+- continuity metrics per animation (`maxSilhouetteDrift`, `maxAnchorDrift`) with optional hard-gate thresholds
+- optional profile texture budget gate using estimated uncompressed bytes (`width * height * 4`)
 
 ## Example (minimal sprite)
 
@@ -108,7 +140,13 @@ Planner behavior:
       "id": "sprite-quality",
       "hardGates": {
         "requireAlpha": true,
-        "maxFileSizeKB": 512
+        "maxFileSizeKB": 512,
+        "alphaHaloRiskMax": 0.08,
+        "alphaStrayNoiseMax": 0.01,
+        "alphaEdgeSharpnessMin": 0.8,
+        "packTextureBudgetMB": 48,
+        "spritesheetSilhouetteDriftMax": 0.2,
+        "spritesheetAnchorDriftMax": 0.15
       }
     }
   ],
@@ -127,7 +165,11 @@ Planner behavior:
         "background": "transparent",
         "outputFormat": "png",
         "quality": "high",
-        "candidates": 4
+        "candidates": 4,
+        "vlmGate": {
+          "threshold": 4,
+          "rubric": "Score silhouette clarity and framing quality from 0 to 5."
+        }
       },
       "postProcess": {
         "resizeTo": "512x512",

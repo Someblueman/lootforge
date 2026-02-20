@@ -22,6 +22,7 @@ interface ProvenanceRunShape {
     candidateScores?: Array<{
       outputPath: string;
       score: number;
+      passedAcceptance?: boolean;
       selected?: boolean;
     }>;
   }>;
@@ -90,7 +91,17 @@ export async function runSelectPipeline(
 
     const selected =
       (job.candidateScores ?? []).find((candidate) => candidate.selected) ??
-      (job.candidateScores ?? []).sort((a, b) => b.score - a.score)[0];
+      [...(job.candidateScores ?? [])].sort((a, b) => {
+        const leftPassed = a.passedAcceptance !== false;
+        const rightPassed = b.passedAcceptance !== false;
+        if (leftPassed !== rightPassed) {
+          return leftPassed ? -1 : 1;
+        }
+        if (a.score !== b.score) {
+          return b.score - a.score;
+        }
+        return a.outputPath.localeCompare(b.outputPath);
+      })[0];
 
     targets.push({
       targetId: job.targetId,

@@ -181,4 +181,57 @@ describe("openai provider", () => {
       code: "openai_edit_input_unsafe_path",
     });
   });
+
+  it("applies provider-level maxRetries when target policy omits it", async () => {
+    const tempRoot = await mkdtemp(path.join(os.tmpdir(), "lootforge-openai-default-retries-"));
+    const provider = new OpenAIProvider({ maxRetries: 4 });
+    const target = createTarget({
+      generationPolicy: {
+        size: "1024x1024",
+        quality: "high",
+        background: "transparent",
+        outputFormat: "png",
+        candidates: 1,
+        fallbackProviders: [],
+      },
+    });
+
+    const [job] = provider.prepareJobs([target], {
+      outDir: tempRoot,
+      imagesDir: tempRoot,
+    });
+
+    expect(job.maxRetries).toBe(4);
+  });
+
+  it("returns an explicit timeout error when the OpenAI request exceeds timeoutMs", async () => {
+    process.env.OPENAI_API_KEY = "test-key";
+    const tempRoot = await mkdtemp(path.join(os.tmpdir(), "lootforge-openai-timeout-"));
+    const outPath = path.join(tempRoot, "hero.png");
+    const provider = new OpenAIProvider({
+      endpoint: "https://example.test/generations",
+      timeoutMs: 5,
+    });
+
+    const fetchImpl: typeof fetch = async (_input, init) =>
+      new Promise<Response>((_resolve, reject) => {
+        const signal = init?.signal;
+        if (!signal) {
+          return;
+        }
+        signal.addEventListener("abort", () => {
+          reject(new DOMException("Aborted", "AbortError"));
+        });
+      });
+
+    await expect(
+      provider.runJob(createJob(createTarget(), outPath), {
+        outDir: tempRoot,
+        imagesDir: tempRoot,
+        fetchImpl,
+      }),
+    ).rejects.toMatchObject({
+      code: "openai_request_timeout",
+    });
+  });
 });

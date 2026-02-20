@@ -18,6 +18,41 @@ describe("review pipeline", () => {
       `${JSON.stringify(
         {
           generatedAt: "2026-02-18T00:00:00.000Z",
+          packInvariants: {
+            errors: 1,
+            warnings: 1,
+            issues: [
+              {
+                level: "error",
+                code: "pack_duplicate_runtime_out",
+                message: "Runtime output collision for normalized path \"dupes/hero.png\".",
+                targetIds: ["hero-low", "hero-high"],
+              },
+              {
+                level: "warning",
+                code: "pack_texture_budget_profile_mismatch",
+                message: "Conflicting texture budget values in profile.",
+                targetIds: ["hero-high"],
+                evaluationProfileId: "sprite-quality",
+              },
+            ],
+            metrics: {
+              textureBudgetMBByProfile: {
+                "sprite-quality": {
+                  estimatedMB: 12.3,
+                  budgetMB: 10,
+                  targetCount: 2,
+                },
+              },
+              spritesheetContinuityByAnimation: {
+                "hero.sheet:walk": {
+                  comparisons: 3,
+                  maxSilhouetteDrift: 0.1444,
+                  maxAnchorDrift: 0.0912,
+                },
+              },
+            },
+          },
           targets: [
             {
               targetId: "hero-low",
@@ -39,6 +74,36 @@ describe("review pipeline", () => {
                 readabilityScore: 0.88,
                 alphaCoverage: 0.97,
               },
+              candidateVlm: {
+                score: 4.5,
+                threshold: 4,
+                maxScore: 5,
+                passed: true,
+                reason: "readable framing",
+                evaluator: "command",
+              },
+              candidateVlmGrades: [
+                {
+                  outputPath: "/tmp/candidates/hero-high-v1.png",
+                  selected: false,
+                  score: 3.1,
+                  threshold: 4,
+                  maxScore: 5,
+                  passed: false,
+                  reason: "cropped weapon",
+                  evaluator: "command",
+                },
+                {
+                  outputPath: "/tmp/candidates/hero-high-v2.png",
+                  selected: true,
+                  score: 4.5,
+                  threshold: 4,
+                  maxScore: 5,
+                  passed: true,
+                  reason: "readable framing",
+                  evaluator: "command",
+                },
+              ],
               adapterScore: 10,
               adapterScoreComponents: {
                 clip: 7,
@@ -62,13 +127,21 @@ describe("review pipeline", () => {
     const html = await readFile(result.reviewHtmlPath, "utf8");
 
     expect(html).toContain("Score Details");
+    expect(html).toContain("Pack Invariants");
+    expect(html).toContain("Errors: 1");
+    expect(html).toContain("pack_duplicate_runtime_out");
+    expect(html).toContain("Texture budget sprite-quality");
+    expect(html).toContain("Continuity hero.sheet:walk");
     expect(html).toContain("Candidate reasons (2)");
+    expect(html).toContain("VLM candidate grades (2)");
     expect(html).toContain("Adapter score components (2)");
     expect(html).toContain("good_readability");
+    expect(html).toContain("cropped weapon");
     expect(html).toContain("clip.rawScore");
 
-    const highScoreIndex = html.indexOf("hero-high");
-    const lowScoreIndex = html.indexOf("hero-low");
+    const tableBody = html.slice(html.indexOf("<tbody>"));
+    const highScoreIndex = tableBody.indexOf("hero-high");
+    const lowScoreIndex = tableBody.indexOf("hero-low");
     expect(highScoreIndex).toBeGreaterThanOrEqual(0);
     expect(lowScoreIndex).toBeGreaterThanOrEqual(0);
     expect(highScoreIndex).toBeLessThan(lowScoreIndex);

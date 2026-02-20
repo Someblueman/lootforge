@@ -1,6 +1,15 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
+import { resolvePathWithinRoot } from "../shared/paths.js";
+import {
+  DEFAULT_PROVIDER_REQUEST_TIMEOUT_MS,
+  fetchWithTimeout,
+  normalizeNonNegativeInteger,
+  normalizePositiveInteger,
+  ProviderRequestTimeoutError,
+  toOptionalNonNegativeInteger,
+} from "./runtime.js";
 import {
   createProviderJob,
   GenerationProvider,
@@ -15,14 +24,21 @@ import {
   ProviderRunContext,
   ProviderRunResult,
   PROVIDER_CAPABILITIES,
+  TargetEditInput,
 } from "./types.js";
 
 const GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
 const DEFAULT_NANO_MODEL = "gemini-2.5-flash-image";
+const DEFAULT_EDIT_IMAGE_MIME_TYPE = "image/png";
 
 export interface NanoProviderOptions {
   model?: string;
   apiBase?: string;
+  supportsEdits?: boolean;
+  timeoutMs?: number;
+  maxRetries?: number;
+  minDelayMs?: number;
+  defaultConcurrency?: number;
 }
 
 interface GeminiInlineData {
@@ -32,14 +48,36 @@ interface GeminiInlineData {
 
 export class NanoProvider implements GenerationProvider {
   readonly name = "nano" as const;
-  readonly capabilities: ProviderCapabilities = PROVIDER_CAPABILITIES.nano;
+  readonly capabilities: ProviderCapabilities;
 
   private readonly model: string;
   private readonly apiBase: string;
+  private readonly timeoutMs: number;
+  private readonly maxRetries?: number;
 
   constructor(options: NanoProviderOptions = {}) {
-    this.model = options.model ?? DEFAULT_NANO_MODEL;
+    const defaults = PROVIDER_CAPABILITIES.nano;
+    const model = options.model ?? DEFAULT_NANO_MODEL;
+    const supportsEdits =
+      typeof options.supportsEdits === "boolean"
+        ? options.supportsEdits
+        : supportsNanoImageEdits(model);
+    this.capabilities = {
+      ...defaults,
+      supportsEdits,
+      defaultConcurrency: normalizePositiveInteger(
+        options.defaultConcurrency,
+        defaults.defaultConcurrency,
+      ),
+      minDelayMs: normalizeNonNegativeInteger(options.minDelayMs, defaults.minDelayMs),
+    };
+    this.model = model;
     this.apiBase = options.apiBase ?? GEMINI_API_BASE;
+    this.timeoutMs = normalizePositiveInteger(
+      options.timeoutMs,
+      DEFAULT_PROVIDER_REQUEST_TIMEOUT_MS,
+    );
+    this.maxRetries = toOptionalNonNegativeInteger(options.maxRetries);
   }
 
   prepareJobs(targets: PlannedTarget[], ctx: ProviderPrepareContext): ProviderJob[] {
@@ -49,6 +87,9 @@ export class NanoProvider implements GenerationProvider {
         target,
         model: target.model ?? this.model,
         imagesDir: ctx.imagesDir,
+        defaults: {
+          maxRetries: this.maxRetries,
+        },
       }),
     );
   }
@@ -56,7 +97,7 @@ export class NanoProvider implements GenerationProvider {
   supports(feature: ProviderFeature): boolean {
     if (feature === "image-generation") return true;
     if (feature === "transparent-background") return false;
-    if (feature === "image-edits") return true;
+    if (feature === "image-edits") return this.capabilities.supportsEdits;
     if (feature === "multi-candidate") return true;
     if (feature === "controlnet") return false;
     return false;
@@ -92,6 +133,7 @@ export class NanoProvider implements GenerationProvider {
     const startedAt = nowIso(ctx.now);
     const fetchImpl = ctx.fetchImpl ?? globalThis.fetch;
     const apiKey = process.env.GEMINI_API_KEY?.trim();
+    const useEdits = this.shouldUseEdits(job);
 
     if (!apiKey) {
       throw new ProviderError({
@@ -111,41 +153,33 @@ export class NanoProvider implements GenerationProvider {
       });
     }
 
+    if (useEdits && !this.capabilities.supportsEdits) {
+      throw new ProviderError({
+        provider: this.name,
+        code: "nano_edit_unsupported_model",
+        message: `Nano provider model "${job.model}" does not advertise edit-first image support.`,
+        actionable:
+          "Use an image-edit-capable Gemini image model (for example gemini-2.5-flash-image) or switch providers for edit-first targets.",
+      });
+    }
+
     const endpoint =
       `${this.apiBase}/${encodeURIComponent(job.model)}:generateContent` +
       `?key=${encodeURIComponent(apiKey)}`;
 
     try {
+      const requestPayload = useEdits
+        ? await this.buildEditRequestPayload(job, ctx)
+        : this.buildTextRequestPayload(job);
       const candidateOutputs: ProviderCandidateOutput[] = [];
       const count = Math.max(job.candidateCount, 1);
       for (let index = 0; index < count; index += 1) {
-        const response = await fetchImpl(endpoint, {
+        const response = await this.requestWithTimeout(fetchImpl, endpoint, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({
-            contents: [
-              {
-                role: "user",
-                parts: [
-                  {
-                    text: [
-                      job.prompt,
-                      "",
-                      "Output requirements:",
-                      `- image size: ${job.size}`,
-                      `- image format: ${job.outputFormat}`,
-                      `- background: ${job.background}`,
-                    ].join("\n"),
-                  },
-                ],
-              },
-            ],
-            generationConfig: {
-              responseModalities: ["TEXT", "IMAGE"],
-            },
-          }),
+          body: JSON.stringify(requestPayload),
         });
 
         if (!response.ok) {
@@ -217,6 +251,195 @@ export class NanoProvider implements GenerationProvider {
     }
   }
 
+  private shouldUseEdits(job: ProviderJob): boolean {
+    if (job.target.generationMode !== "edit-first") {
+      return false;
+    }
+
+    return (job.target.edit?.inputs?.length ?? 0) > 0;
+  }
+
+  private buildTextRequestPayload(job: ProviderJob): {
+    contents: Array<{ role: "user"; parts: Array<{ text: string }> }>;
+    generationConfig: { responseModalities: ["TEXT", "IMAGE"] };
+  } {
+    return {
+      contents: [
+        {
+          role: "user",
+          parts: [
+            {
+              text: [
+                job.prompt,
+                "",
+                "Output requirements:",
+                `- image size: ${job.size}`,
+                `- image format: ${job.outputFormat}`,
+                `- background: ${job.background}`,
+              ].join("\n"),
+            },
+          ],
+        },
+      ],
+      generationConfig: {
+        responseModalities: ["TEXT", "IMAGE"],
+      },
+    };
+  }
+
+  private async buildEditRequestPayload(
+    job: ProviderJob,
+    ctx: ProviderRunContext,
+  ): Promise<{
+    contents: Array<{
+      role: "user";
+      parts: Array<
+        | { text: string }
+        | { inlineData: { mimeType: string; data: string } }
+      >;
+    }>;
+    generationConfig: { responseModalities: ["TEXT", "IMAGE"] };
+  }> {
+    const editInputs = job.target.edit?.inputs ?? [];
+    const baseAndReferenceInputs = editInputs.filter((input) => input.role !== "mask");
+
+    if (baseAndReferenceInputs.length === 0) {
+      throw new ProviderError({
+        provider: this.name,
+        code: "nano_edit_missing_base_image",
+        message: `Target "${job.targetId}" requested edit-first mode but no base/reference inputs were provided.`,
+        actionable:
+          "Add at least one edit input with role base/reference for generationMode=edit-first.",
+      });
+    }
+
+    const parts: Array<
+      | { text: string }
+      | { inlineData: { mimeType: string; data: string } }
+    > = [{ text: this.buildEditPrompt(job, editInputs) }];
+
+    for (const [index, input] of editInputs.entries()) {
+      const resolvedPath = this.resolveEditInputPath(input.path, ctx.outDir, job.targetId);
+      const imageBytes = await this.readEditInputBytes(resolvedPath, job.targetId);
+      parts.push({
+        text: this.describeEditInput(index + 1, input),
+      });
+      parts.push({
+        inlineData: {
+          mimeType: this.mimeTypeForPath(resolvedPath),
+          data: imageBytes.toString("base64"),
+        },
+      });
+    }
+
+    return {
+      contents: [
+        {
+          role: "user",
+          parts,
+        },
+      ],
+      generationConfig: {
+        responseModalities: ["TEXT", "IMAGE"],
+      },
+    };
+  }
+
+  private buildEditPrompt(job: ProviderJob, inputs: TargetEditInput[]): string {
+    const instruction = job.target.edit?.instruction?.trim();
+    const preserveCompositionHint = job.target.edit?.preserveComposition
+      ? "Preserve composition and camera framing unless the instruction explicitly changes them."
+      : "";
+    const hasMask = inputs.some((input) => input.role === "mask");
+    const maskHint = hasMask
+      ? "If a mask input is provided, treat white/opaque regions as editable and preserve dark/transparent regions."
+      : "";
+
+    if (!instruction) {
+      return [
+        "Use the supplied edit input images to modify the asset.",
+        preserveCompositionHint,
+        maskHint,
+        "Target style/output requirements:",
+        job.prompt,
+      ]
+        .filter(Boolean)
+        .join("\n\n");
+    }
+
+    return [
+      instruction,
+      preserveCompositionHint,
+      maskHint,
+      "Target style/output requirements:",
+      job.prompt,
+    ]
+      .filter(Boolean)
+      .join("\n\n");
+  }
+
+  private describeEditInput(index: number, input: TargetEditInput): string {
+    const role = input.role ?? "reference";
+    const fidelity = input.fidelity ?? "medium";
+    if (role === "mask") {
+      return `Input ${index}: role=mask, fidelity=${fidelity}. Use this as the edit mask guide.`;
+    }
+    if (role === "base") {
+      return `Input ${index}: role=base, fidelity=${fidelity}. Preserve identity and composition unless instructed otherwise.`;
+    }
+    return `Input ${index}: role=reference, fidelity=${fidelity}. Use this for style and detail guidance.`;
+  }
+
+  private resolveEditInputPath(
+    inputPath: string,
+    outDir: string,
+    targetId: string,
+  ): string {
+    try {
+      return resolvePathWithinRoot(
+        outDir,
+        inputPath,
+        `edit input path for target "${targetId}"`,
+      );
+    } catch (error) {
+      throw new ProviderError({
+        provider: this.name,
+        code: "nano_edit_input_unsafe_path",
+        message: `Unsafe edit input path "${inputPath}" for target "${targetId}".`,
+        actionable: `Edit input paths must stay within the output root (${path.resolve(outDir)}).`,
+        cause: error,
+      });
+    }
+  }
+
+  private async readEditInputBytes(
+    inputPath: string,
+    targetId: string,
+  ): Promise<Buffer> {
+    try {
+      return await readFile(inputPath);
+    } catch (error) {
+      throw new ProviderError({
+        provider: this.name,
+        code: "nano_edit_input_unreadable",
+        message: `Failed to read edit input "${inputPath}" for target "${targetId}".`,
+        actionable:
+          "Ensure edit input files exist and paths are correct relative to --out (or absolute).",
+        cause: error,
+      });
+    }
+  }
+
+  private mimeTypeForPath(filePath: string): string {
+    const ext = path.extname(filePath).toLowerCase();
+    if (ext === ".jpg" || ext === ".jpeg") return "image/jpeg";
+    if (ext === ".webp") return "image/webp";
+    if (ext === ".gif") return "image/gif";
+    if (ext === ".bmp") return "image/bmp";
+    if (ext === ".svg") return "image/svg+xml";
+    return DEFAULT_EDIT_IMAGE_MIME_TYPE;
+  }
+
   private findInlineImage(payload: {
     candidates?: Array<{
       content?: { parts?: Array<{ inlineData?: GeminiInlineData }> };
@@ -232,6 +455,28 @@ export class NanoProvider implements GenerationProvider {
 
     return undefined;
   }
+
+  private async requestWithTimeout(
+    fetchImpl: typeof fetch,
+    input: Parameters<typeof fetch>[0],
+    init?: RequestInit,
+  ): Promise<Response> {
+    try {
+      return await fetchWithTimeout(fetchImpl, input, init, this.timeoutMs);
+    } catch (error) {
+      if (error instanceof ProviderRequestTimeoutError) {
+        throw new ProviderError({
+          provider: this.name,
+          code: "nano_request_timeout",
+          message: `Nano provider request timed out after ${error.timeoutMs}ms.`,
+          actionable:
+            "Increase providers.nano.timeoutMs or LOOTFORGE_NANO_TIMEOUT_MS and retry.",
+          cause: error,
+        });
+      }
+      throw error;
+    }
+  }
 }
 
 function withCandidateSuffix(filePath: string, candidateNumber: number): string {
@@ -242,4 +487,8 @@ function withCandidateSuffix(filePath: string, candidateNumber: number): string 
 
 export function createNanoProvider(options: NanoProviderOptions = {}): NanoProvider {
   return new NanoProvider(options);
+}
+
+function supportsNanoImageEdits(model: string): boolean {
+  return model.toLowerCase().includes("image");
 }

@@ -14,3 +14,8 @@ Current scope: rewrite LootForge for the strongest asset-generation pipeline out
 - 2026-02-18: Extended review HTML with per-target score-component detail blocks for eval/review explainability parity.
 - 2026-02-18: Implemented `lootforge regenerate --edit` command flow that uses approved selection-lock outputs as edit bases and carries regeneration source metadata into run provenance.
 - 2026-02-18: Converted `docs/ROADMAP.md` to a release-only roadmap (no separate gap-audit section), with all remaining work tracked directly in `0.2.0`/`0.3.0`/`0.4.0`/`0.5.0`/`1.0.0` queues.
+- 2026-02-19: Implemented `0.3.0` pack-level invariants and spritesheet continuity gates (manifest hard-gates, normalized target propagation, acceptance/eval/review reporting, and stage-artifact contract support).
+- 2026-02-19: Added coverage for strict eval failure and select approval propagation from pack-level hard errors, plus contract/review tests for optional `packInvariants` summaries.
+- 2026-02-20: Added canonical generation request contract endpoint (`POST /v1/generation/requests`) plus mapping layer from service requests to `plan -> generate` pipeline targets.
+- 2026-02-20: Implemented optional service mode (`lootforge serve`) with stable HTTP `v1` command endpoints and discovery metadata for MCP wrapper compatibility.
+- 2026-02-20: Implemented Nano/Gemini edit-first parity for image-capable models with safe edit-input path handling and provider-level tests.

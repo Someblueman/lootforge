@@ -11,6 +11,7 @@ import { runPlanCommand } from "./commands/plan.js";
 import { runProcessCommand } from "./commands/process.js";
 import { runRegenerateCommand } from "./commands/regenerate.js";
 import { runReviewCommand } from "./commands/review.js";
+import { runServeCommand } from "./commands/serve.js";
 import { runSelectCommand } from "./commands/select.js";
 import { runValidateCommand } from "./commands/validate.js";
 import { getErrorExitCode, getErrorMessage } from "../shared/errors.js";
@@ -112,6 +113,14 @@ export async function main(argv: string[]): Promise<number> {
       return 0;
     }
 
+    if (command === "serve") {
+      const result = await runServeCommand(rest);
+      process.stdout.write(
+        `Service mode listening on ${result.url} (API ${result.apiVersion})${result.defaultOutDir ? `, default out: ${result.defaultOutDir}` : ""}\n`,
+      );
+      return 0;
+    }
+
     process.stderr.write(`lootforge: unknown command "${command}"\n`);
     writeUsage("stderr");
     return 1;
@@ -139,6 +148,7 @@ function writeUsage(stream: "stdout" | "stderr"): void {
       "  select                       Build selection lockfile from eval + provenance",
       "  atlas                        Build atlas outputs and atlas manifest",
       "  package                      Assemble distributable asset-pack artifacts",
+      "  serve                        Start optional HTTP service mode for pipeline commands",
       "",
       "Options:",
       "  --manifest <path>            Manifest path (default assets/imagegen/manifest.json)",
@@ -159,6 +169,8 @@ function writeUsage(stream: "stdout" | "stderr"): void {
       "  --provenance <path>          Provenance run path for select",
       "  --html <path>                Review HTML output path override",
       "  --runtimes <a,b,c>           Extra runtime manifests for package (phaser,pixi,unity)",
+      "  --host <host>                Service bind host for serve (default 127.0.0.1)",
+      "  --port <port>                Service bind port for serve (default 8744)",
       "",
     ].join("\n"),
   );

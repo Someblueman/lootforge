@@ -208,4 +208,90 @@ describe("process -> atlas -> package integration", () => {
     expect(report.errors).toBe(0);
     expect((report.items[0]?.metrics?.seamScore ?? Number.POSITIVE_INFINITY)).toBeLessThanOrEqual(8);
   });
+
+  test("emits resize variants and auxiliary maps for processed outputs", async () => {
+    const tempRoot = await mkdtemp(path.join(os.tmpdir(), "lootforge-process-derived-"));
+    const outDir = path.join(tempRoot, "work");
+    const indexPath = path.join(outDir, "jobs", "targets-index.json");
+    const rawImagePath = path.join(outDir, "assets", "imagegen", "raw", "hero.png");
+
+    await mkdir(path.dirname(indexPath), { recursive: true });
+    await mkdir(path.dirname(rawImagePath), { recursive: true });
+
+    await writeFile(
+      indexPath,
+      `${JSON.stringify(
+        {
+          targets: [
+            {
+              id: "hero",
+              kind: "sprite",
+              out: "hero.png",
+              promptSpec: { primary: "hero sprite" },
+              generationPolicy: {
+                outputFormat: "png",
+                background: "transparent",
+              },
+              postProcess: {
+                resizeTo: { width: 32, height: 32 },
+                operations: {
+                  resizeVariants: {
+                    variants: [
+                      { name: "half", width: 16, height: 16, algorithm: "nearest" },
+                      { name: "tiny", width: 8, height: 8, algorithm: "nearest" },
+                    ],
+                  },
+                },
+              },
+              auxiliaryMaps: {
+                normalFromHeight: true,
+                specularFromLuma: true,
+                aoFromLuma: true,
+              },
+              acceptance: { size: "32x32", alpha: true, maxFileSizeKB: 256 },
+              runtimeSpec: { alphaRequired: true },
+            },
+          ],
+        },
+        null,
+        2,
+      )}\n`,
+      "utf8",
+    );
+
+    await sharp({
+      create: {
+        width: 64,
+        height: 64,
+        channels: 4,
+        background: { r: 180, g: 120, b: 40, alpha: 0 },
+      },
+    })
+      .png()
+      .toFile(rawImagePath);
+
+    const result = await runProcessPipeline({
+      outDir,
+      targetsIndexPath: indexPath,
+      strict: true,
+      mirrorLegacyImages: false,
+    });
+
+    expect(result.variantCount).toBe(2);
+    expect(
+      await exists(path.join(outDir, "assets", "imagegen", "processed", "images", "hero__half.png")),
+    ).toBe(true);
+    expect(
+      await exists(path.join(outDir, "assets", "imagegen", "processed", "images", "hero__tiny.png")),
+    ).toBe(true);
+    expect(
+      await exists(path.join(outDir, "assets", "imagegen", "processed", "images", "hero__normal.png")),
+    ).toBe(true);
+    expect(
+      await exists(path.join(outDir, "assets", "imagegen", "processed", "images", "hero__specular.png")),
+    ).toBe(true);
+    expect(
+      await exists(path.join(outDir, "assets", "imagegen", "processed", "images", "hero__ao.png")),
+    ).toBe(true);
+  });
 });

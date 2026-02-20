@@ -19,6 +19,7 @@ import {
   ProviderSelection,
   sha256Hex,
 } from "../providers/types.js";
+import { resolveProviderRegistryOptions } from "../providers/runtimeConfig.js";
 import {
   normalizeTargetOutPath,
   resolvePathWithinRoot,
@@ -76,6 +77,7 @@ export interface GenerateProgressEvent {
 
 interface TargetsIndexShape {
   targets?: PlannedTarget[];
+  manifestPath?: string;
 }
 
 interface TargetTask {
@@ -108,12 +110,18 @@ export async function runGeneratePipeline(
     options.targetsIndexPath ?? path.join(layout.jobsDir, "targets-index.json"),
   );
   const providerSelection = options.provider ?? "auto";
-  const registry = options.registry ?? createProviderRegistry();
   const imagesDir = layout.rawDir;
   const skipLocked = options.skipLocked ?? true;
 
   const indexRaw = await readFile(targetsIndexPath, "utf8");
   const index = parseTargetsIndex(indexRaw, targetsIndexPath);
+  const registry =
+    options.registry ??
+    createProviderRegistry(
+      await resolveProviderRegistryOptions(
+        resolveManifestPathFromIndex(index, targetsIndexPath),
+      ),
+    );
   const targets = normalizeTargets(index, targetsIndexPath);
   const filteredTargets = filterTargetsByIds(
     targets.filter((target) => target.generationDisabled !== true),
@@ -396,6 +404,12 @@ async function runTaskWithFallback(params: {
 
   for (const providerName of providerChain) {
     const provider = getProvider(params.registry, providerName);
+    if (targetRequiresEditSupport(params.task.target) && !provider.supports("image-edits")) {
+      lastError = new Error(
+        `Provider "${providerName}" does not support edit-first generation for target "${params.task.target.id}".`,
+      );
+      continue;
+    }
     const preparedJobs = await provider.prepareJobs([params.task.target], {
       outDir: params.outDir,
       imagesDir: params.imagesDir,
@@ -503,6 +517,13 @@ function backoffMsForAttempt(attempt: number): number {
   return Math.min(5000, 300 * 2 ** (attempt - 1));
 }
 
+function targetRequiresEditSupport(target: PlannedTarget): boolean {
+  if (target.generationMode !== "edit-first") {
+    return false;
+  }
+  return (target.edit?.inputs?.length ?? 0) > 0;
+}
+
 function computeProviderDelayMs(task: TargetTask, fallbackDelay: number): number {
   const requestedRateLimit = task.target.generationPolicy?.rateLimitPerMinute;
   if (
@@ -515,6 +536,23 @@ function computeProviderDelayMs(task: TargetTask, fallbackDelay: number): number
   }
 
   return fallbackDelay;
+}
+
+function resolveManifestPathFromIndex(
+  index: TargetsIndexShape,
+  targetsIndexPath: string,
+): string | undefined {
+  if (typeof index.manifestPath !== "string") {
+    return undefined;
+  }
+  const trimmed = index.manifestPath.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+  if (path.isAbsolute(trimmed)) {
+    return trimmed;
+  }
+  return path.resolve(path.dirname(targetsIndexPath), trimmed);
 }
 
 function delay(ms: number): Promise<void> {

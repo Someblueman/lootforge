@@ -53,11 +53,14 @@ Key outcomes:
 
 - `next` manifest schema with style kits, evaluation profiles, and spritesheet planning
 - Provider selection: `openai`, `nano`, `local`, or `auto`
-- Provider-aware normalization (`jpg -> jpeg`, transparent/background compatibility checks)
+- Provider-aware normalization (`jpg -> jpeg`) with explicit unsupported-provider errors (no silent transparent fallback)
+- Enforced provider runtime contract (manifest/env endpoint, timeout, retry, delay, concurrency)
 - Deterministic job IDs keyed to normalized generation policy
 - Multi-candidate generation with deterministic best-of scoring
+- Optional VLM candidate gating (`generationPolicy.vlmGate`) with per-candidate traceability
 - Post-process operators (`trim`, `pad/extrude`, `quantize`, `outline`, `resizeVariants`)
 - Pixel-level acceptance checks with JSON report output
+- Pack-level invariants in acceptance/eval (runtime-output uniqueness, spritesheet continuity, optional texture budgets)
 - Atlas stage with optional TexturePacker integration plus reproducibility artifacts
 - Pack assembly with runtime manifests and review artifacts
 
@@ -67,6 +70,7 @@ Key outcomes:
 - [Quickstart (end-to-end)](#quickstart-end-to-end)
 - [CLI Commands](#cli-commands)
 - [Manifest Schema](#manifest-version-next)
+- [Service Mode](#lootforge-serve)
 - [Environment Variables](#environment-variables)
 - [Status / Roadmap](#status--roadmap)
 
@@ -204,6 +208,7 @@ For full option coverage, run `lootforge <command> --help`.
 | `review` | Render review artifact from eval outputs | `review/review.html` |
 | `select` | Materialize approved selections into lockfile | `locks/selection-lock.json` |
 | `package` | Assemble runtime-ready distributable packs | `dist/packs/*` + final zip |
+| `serve` | Start local HTTP service mode for tool/command execution | `v1` JSON endpoints |
 
 ### `lootforge init`
 
@@ -236,6 +241,7 @@ lootforge plan --manifest assets/imagegen/manifest.json --out assets/imagegen
 Outputs:
 - `<out>/checks/validation-report.json`
 - Optional: `<out>/checks/image-acceptance-report.json`
+  - acceptance report may include top-level `packInvariants` summary when pack-level checks emit issues/metrics
 
 Key flags:
 - `--strict true|false` (default: `true`)
@@ -293,6 +299,7 @@ Reads raw outputs, applies post-processing and acceptance checks, and writes:
 - Compatibility mirror: `<out>/assets/images/*`
 - `<out>/assets/imagegen/processed/catalog.json`
 - `<out>/checks/image-acceptance-report.json`
+  - includes optional `packInvariants` summary (`errors`, `warnings`, `issues`, `metrics`)
 
 Example:
 ```bash
@@ -327,6 +334,30 @@ Example:
 lootforge package --out assets/imagegen --runtimes pixi,unity
 ```
 
+### `lootforge serve`
+
+Starts a local HTTP service wrapper for command execution (no auth/credit layer in core).
+
+Key flags:
+- `--host <host>` optional (default `127.0.0.1`)
+- `--port <port>` optional (default `8744`)
+- `--out <dir>` optional default output root used when request payload omits `out`
+
+Core endpoints:
+- `GET /v1/health`
+- `GET /v1/tools`
+- `GET /v1/contracts/generation-request`
+- `POST /v1/tools/:name`
+- `POST /v1/:name` (alias)
+- `POST /v1/generation/requests` (canonical request -> `plan` + `generate` mapping)
+
+Example:
+```bash
+lootforge serve --host 127.0.0.1 --port 8744 --out assets/imagegen
+```
+
+Service request/response contract details: `docs/SERVICE_MODE.md`
+
 ### `lootforge eval`
 
 Runs hard/soft quality scoring and writes:
@@ -336,6 +367,17 @@ Runs hard/soft quality scoring and writes:
   - `adapterHealth.active`: adapters that returned at least one successful result
   - `adapterHealth.failed`: adapters that failed or were enabled but unconfigured
   - `adapterHealth.adapters[]`: per-adapter mode, target attempt/success/fail counters, warnings
+- `eval-report.json` also includes VLM gate traceability when enabled:
+  - `candidateVlm`: selected candidate VLM score/threshold/decision
+  - `candidateVlmGrades[]`: per-candidate VLM score, threshold, pass/fail, evaluator mode, and reason
+- `eval-report.json` acceptance metrics include edge-aware alpha boundary signals:
+  - `alphaHaloRisk`
+  - `alphaStrayNoise`
+  - `alphaEdgeSharpness`
+- `eval-report.json` may include a top-level `packInvariants` summary:
+  - `errors`, `warnings`, and issue list
+  - continuity metrics per animation (`maxSilhouetteDrift`, `maxAnchorDrift`)
+  - texture budget metrics by evaluation profile
 
 Optional CLIP/LPIPS/SSIM adapter execution:
 - Enable adapters with:
@@ -356,6 +398,13 @@ Optional CLIP/LPIPS/SSIM adapter execution:
   - `examples/adapters/stdin-adapter-example.js`
   - `examples/adapters/http-adapter-example.js`
 - Adapter `referenceImages` payload paths are normalized to absolute paths under the active `--out` root.
+- Optional VLM candidate hard gate:
+  - configure per target with `generationPolicy.vlmGate`
+  - evaluator transport:
+    - `LOOTFORGE_VLM_GATE_CMD` (stdin/stdout JSON)
+    - `LOOTFORGE_VLM_GATE_URL` (HTTP JSON POST)
+  - timeout override: `LOOTFORGE_VLM_GATE_TIMEOUT_MS`
+  - candidates below threshold are rejected before final candidate selection
 
 Example:
 ```bash
@@ -366,7 +415,7 @@ lootforge eval --out assets/imagegen --strict true
 
 Builds a review artifact from eval data:
 - `<out>/review/review.html`
-- Includes per-target score breakdown details (candidate reasons/metrics + adapter components/metrics/warnings).
+- Includes per-target score breakdown details (candidate reasons/metrics, VLM gate traces, and adapter components/metrics/warnings).
 
 Example:
 ```bash
@@ -389,6 +438,8 @@ Top-level fields:
 - `version`: must be `next`
 - `pack`: `{ id, version, license, author }` (required)
 - `providers`: `{ default, openai?, nano?, local? }` (required)
+  - each provider may define runtime defaults: `endpoint`, `timeoutMs`, `maxRetries`, `minDelayMs`, `defaultConcurrency`
+  - `providers.local` may also define `baseUrl` (local endpoint alias)
 - `styleKits[]` (required)
 - `consistencyGroups[]` (optional)
 - `evaluationProfiles[]` (required)
@@ -402,13 +453,24 @@ Top-level fields:
 Per target:
 - `id`, `kind`, `out`, `atlasGroup?`, `styleKitId`, `consistencyGroup`, `evaluationProfileId`
 - `generationMode`: `text|edit-first`
+- `edit-first` mode requires a provider with `image-edits` support (`openai`, `local`, and `nano` when using an image-edit-capable Gemini model)
 - `edit.inputs[].path`: when used, must resolve inside the active `--out` root at runtime (`generate`, `eval`, and `regenerate`)
+- `generationPolicy.background: "transparent"` requires a provider that supports transparent outputs (unsupported providers now fail validation)
+- `generationPolicy.vlmGate?`: optional candidate gate (`threshold` defaults to `4` on a `0..5` scale, optional `rubric`)
 - `prompt` (string or structured object) for non-spritesheet targets
 - `provider?` (`openai|nano|local`)
 - `acceptance`: `{ size, alpha, maxFileSizeKB }`
 - optional generation/runtime fields (`generationPolicy`, `postProcess`, `runtimeSpec`, `model`, `edit`, `auxiliaryMaps`, `palette`, `tileable`, `seamThreshold`, `seamStripPx`, `seamHeal`, `wrapGrid`)
 - `seamHeal`: optional pass for tileables (`enabled`, `stripPx`, `strength`) applied during process before final encode.
 - `wrapGrid`: optional per-cell tile validation (`columns`, `rows`, optional seam thresholds) enforced in image acceptance.
+- edge-aware boundary gates are configured via `evaluationProfiles[].hardGates`:
+  - `alphaHaloRiskMax` (`0..1`)
+  - `alphaStrayNoiseMax` (`0..1`)
+  - `alphaEdgeSharpnessMin` (`0..1`)
+- pack-level hard gates are configured via `evaluationProfiles[].hardGates`:
+  - `packTextureBudgetMB` (`>0`)
+  - `spritesheetSilhouetteDriftMax` (`0..1`)
+  - `spritesheetAnchorDriftMax` (`0..1`)
 - `kind: "spritesheet"` targets define `animations` and are expanded/assembled by the pipeline
 
 Minimal example:
@@ -448,7 +510,16 @@ Minimal example:
   "evaluationProfiles": [
     {
       "id": "sprite-quality",
-      "hardGates": { "requireAlpha": true, "maxFileSizeKB": 512 }
+      "hardGates": {
+        "requireAlpha": true,
+        "maxFileSizeKB": 512,
+        "alphaHaloRiskMax": 0.08,
+        "alphaStrayNoiseMax": 0.01,
+        "alphaEdgeSharpnessMin": 0.8,
+        "packTextureBudgetMB": 48,
+        "spritesheetSilhouetteDriftMax": 0.2,
+        "spritesheetAnchorDriftMax": 0.15
+      }
     }
   ],
   "targets": [
@@ -478,6 +549,12 @@ Minimal example:
 ```
 
 See also: `docs/manifest-schema.md`
+
+Provider runtime precedence (`generate` / `regenerate`):
+- target-level `generationPolicy.maxRetries` overrides provider retry defaults
+- provider runtime defaults load from manifest `providers.<name>` config
+- environment overrides can replace provider runtime defaults without manifest edits
+- provider capability parity is enforced at startup (`supports(...)` must match declared capabilities)
 
 ## Output Contract
 
@@ -510,8 +587,26 @@ Provider keys:
 - `OPENAI_API_KEY`: required for OpenAI generation
 - `GEMINI_API_KEY`: required for Nano generation
 
-Local provider endpoint:
-- `LOCAL_DIFFUSION_BASE_URL`: optional local diffusion adapter endpoint (default `http://127.0.0.1:8188`)
+Provider runtime overrides (env wins over manifest provider config):
+- OpenAI:
+  - `LOOTFORGE_OPENAI_ENDPOINT` (or `OPENAI_IMAGES_ENDPOINT`)
+  - `LOOTFORGE_OPENAI_EDITS_ENDPOINT` (or `OPENAI_EDITS_ENDPOINT`)
+  - `LOOTFORGE_OPENAI_TIMEOUT_MS` (or `OPENAI_TIMEOUT_MS`)
+  - `LOOTFORGE_OPENAI_MAX_RETRIES` (or `OPENAI_MAX_RETRIES`)
+  - `LOOTFORGE_OPENAI_MIN_DELAY_MS` (or `OPENAI_MIN_DELAY_MS`)
+  - `LOOTFORGE_OPENAI_DEFAULT_CONCURRENCY` (or `OPENAI_DEFAULT_CONCURRENCY`)
+- Nano/Gemini:
+  - `LOOTFORGE_NANO_ENDPOINT` (or `GEMINI_API_BASE`)
+  - `LOOTFORGE_NANO_TIMEOUT_MS` (or `GEMINI_TIMEOUT_MS`)
+  - `LOOTFORGE_NANO_MAX_RETRIES` (or `GEMINI_MAX_RETRIES`)
+  - `LOOTFORGE_NANO_MIN_DELAY_MS` (or `GEMINI_MIN_DELAY_MS`)
+  - `LOOTFORGE_NANO_DEFAULT_CONCURRENCY` (or `GEMINI_DEFAULT_CONCURRENCY`)
+- Local diffusion:
+  - `LOOTFORGE_LOCAL_ENDPOINT` (or `LOCAL_DIFFUSION_BASE_URL`)
+  - `LOOTFORGE_LOCAL_TIMEOUT_MS` (or `LOCAL_DIFFUSION_TIMEOUT_MS`)
+  - `LOOTFORGE_LOCAL_MAX_RETRIES` (or `LOCAL_DIFFUSION_MAX_RETRIES`)
+  - `LOOTFORGE_LOCAL_MIN_DELAY_MS` (or `LOCAL_DIFFUSION_MIN_DELAY_MS`)
+  - `LOOTFORGE_LOCAL_DEFAULT_CONCURRENCY` (or `LOCAL_DIFFUSION_DEFAULT_CONCURRENCY`)
 
 Eval adapter toggles:
 - `LOOTFORGE_ENABLE_CLIP_ADAPTER`: enable CLIP adapter execution in `lootforge eval`
@@ -527,6 +622,16 @@ Eval adapter timeout controls:
 - `LOOTFORGE_ADAPTER_TIMEOUT_MS`: global timeout (ms)
 - `LOOTFORGE_<NAME>_ADAPTER_TIMEOUT_MS`: per-adapter timeout override (ms)
 
+VLM gate transport:
+- `LOOTFORGE_VLM_GATE_CMD`: command transport for VLM candidate gate scoring
+- `LOOTFORGE_VLM_GATE_URL`: HTTP transport for VLM candidate gate scoring
+- `LOOTFORGE_VLM_GATE_TIMEOUT_MS`: timeout override for VLM gate requests (ms)
+
+Service mode:
+- `LOOTFORGE_SERVICE_HOST`: default host for `lootforge serve`
+- `LOOTFORGE_SERVICE_PORT`: default port for `lootforge serve`
+- `LOOTFORGE_SERVICE_OUT`: default output root injected when service payload omits `out`
+
 No network keys are required for `init`, `plan`, `validate`, `atlas`, or `package`.
 
 ## Development
@@ -537,6 +642,7 @@ Local verification commands:
 - `npm test`
 - `npm run test:unit`
 - `npm run test:integration`
+- `npm run test:coverage:critical`
 
 `0.3.0` release-train branch policy:
 - Keep `main` release-only until `0.3.0` is ready to cut.

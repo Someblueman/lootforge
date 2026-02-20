@@ -5,6 +5,7 @@ import {
   ImageAcceptanceItemReport,
   runImageAcceptanceChecks,
 } from "../checks/imageAcceptance.js";
+import type { PackInvariantSummary } from "../checks/packInvariants.js";
 import {
   getEnabledSoftAdapterStatuses,
   runEnabledSoftAdapters,
@@ -27,10 +28,23 @@ interface ProvenanceRun {
       passedAcceptance: boolean;
       reasons: string[];
       metrics?: Record<string, number>;
+      vlm?: {
+        score: number;
+        threshold: number;
+        maxScore: number;
+        passed: boolean;
+        reason: string;
+        rubric?: string;
+        evaluator: "command" | "http";
+      };
       selected?: boolean;
     }>;
   }>;
 }
+
+type ProvenanceCandidateScore = NonNullable<
+  NonNullable<ProvenanceRun["jobs"]>[number]["candidateScores"]
+>[number];
 
 export interface EvalPipelineOptions {
   outDir: string;
@@ -50,6 +64,26 @@ export interface EvalTargetResult {
   candidateScore?: number;
   candidateReasons?: string[];
   candidateMetrics?: Record<string, number>;
+  candidateVlm?: {
+    score: number;
+    threshold: number;
+    maxScore: number;
+    passed: boolean;
+    reason: string;
+    rubric?: string;
+    evaluator: "command" | "http";
+  };
+  candidateVlmGrades?: Array<{
+    outputPath: string;
+    selected: boolean;
+    score: number;
+    threshold: number;
+    maxScore: number;
+    passed: boolean;
+    reason: string;
+    rubric?: string;
+    evaluator: "command" | "http";
+  }>;
   adapterMetrics?: Record<string, number>;
   adapterScore?: number;
   adapterScoreComponents?: Record<string, number>;
@@ -84,6 +118,7 @@ export interface EvalReport {
     }>;
   };
   adapterWarnings: string[];
+  packInvariants?: PackInvariantSummary;
   targets: EvalTargetResult[];
 }
 
@@ -111,10 +146,7 @@ export async function runEvalPipeline(options: EvalPipelineOptions): Promise<Eva
 
   const provenance = await readProvenance(path.join(layout.provenanceDir, "run.json"));
   const candidateScoresByTarget = new Map(
-    (provenance.jobs ?? []).map((job) => [
-      job.targetId,
-      (job.candidateScores ?? []).find((score) => score.selected) ?? job.candidateScores?.[0],
-    ]),
+    (provenance.jobs ?? []).map((job) => [job.targetId, job.candidateScores ?? []]),
   );
 
   const reportAdapterWarnings: string[] = [];
@@ -147,7 +179,29 @@ export async function runEvalPipeline(options: EvalPipelineOptions): Promise<Eva
       continue;
     }
 
-    const candidate = candidateScoresByTarget.get(item.targetId);
+    const candidateScores = candidateScoresByTarget.get(item.targetId) ?? [];
+    const candidate =
+      candidateScores.find((score) => score.selected) ?? candidateScores[0];
+    const candidateVlmGrades = candidateScores
+      .filter(
+        (
+          score,
+        ): score is ProvenanceCandidateScore & {
+          vlm: NonNullable<ProvenanceCandidateScore["vlm"]>;
+        } =>
+          Boolean(score.vlm),
+      )
+      .map((score) => ({
+        outputPath: score.outputPath,
+        selected: score.selected === true,
+        score: score.vlm.score,
+        threshold: score.vlm.threshold,
+        maxScore: score.vlm.maxScore,
+        passed: score.vlm.passed,
+        reason: score.vlm.reason,
+        rubric: score.vlm.rubric,
+        evaluator: score.vlm.evaluator,
+      }));
     const adapterMetrics: Record<string, number> = {};
     const adapterScoreComponents: Record<string, number> = {};
     const adapterWarnings: string[] = [];
@@ -233,6 +287,8 @@ export async function runEvalPipeline(options: EvalPipelineOptions): Promise<Eva
       candidateScore,
       candidateReasons: candidate?.reasons,
       candidateMetrics: candidate?.metrics,
+      ...(candidate?.vlm ? { candidateVlm: candidate.vlm } : {}),
+      ...(candidateVlmGrades.length > 0 ? { candidateVlmGrades } : {}),
       adapterMetrics,
       ...(adapterScore !== 0 ? { adapterScore } : {}),
       ...(Object.keys(adapterScoreComponents).length > 0
@@ -276,6 +332,7 @@ export async function runEvalPipeline(options: EvalPipelineOptions): Promise<Eva
       adapters: adapterHealthEntries,
     },
     adapterWarnings: reportAdapterWarnings,
+    ...(acceptance.packInvariants ? { packInvariants: acceptance.packInvariants } : {}),
     targets: targetResults,
   };
 
@@ -300,7 +357,7 @@ async function loadTargets(targetsIndexPath: string): Promise<PlannedTarget[]> {
   if (!Array.isArray(parsed.targets)) {
     return [];
   }
-  return parsed.targets.filter((target) => !target.catalogDisabled);
+  return parsed.targets;
 }
 
 async function readProvenance(runPath: string): Promise<ProvenanceRun> {

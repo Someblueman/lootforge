@@ -1,6 +1,6 @@
 # LootForge Public Release Roadmap
 
-Last updated: 2026-02-19
+Last updated: 2026-02-20
 
 ## Goal
 Move LootForge from a strong early foundation (`0.1.x`) to a dependable, public-facing release with:
@@ -181,6 +181,11 @@ Completed 2026-02-19 in this release track:
 - Hardened path safety for edit/adapters with in-root normalization for `edit.inputs` and lock/reference path expansion before provider/adapter use.
 - Added versioned stage-artifact contract schemas (`targets-index`, `provenance/run`, `acceptance-report`, `eval-report`, `selection-lock`) and fixture-pack smoke validation for `plan -> generate -> process -> eval -> review -> select`.
 
+Completed 2026-02-20 in this release track:
+- Release-gate coverage hardening:
+  - added integration coverage for generate fallback chains, approved lock skip/copy behavior, and candidate replacement selection,
+  - added direct unit coverage for generate CLI arg parsing and boolean flag handling,
+  - tightened CI test gates to fail on missing unit/integration suites and enforce critical-path coverage thresholds.
 - Make provider configuration an enforced runtime contract:
   - consistently apply manifest/env endpoint, timeout, retry, delay, and concurrency settings across all providers,
   - add capability-claim parity checks so provider feature flags reflect actual runtime behavior.
@@ -188,23 +193,32 @@ Completed 2026-02-19 in this release track:
   - eliminate repeated candidate-image decode/stats passes during scoring,
   - run enabled soft adapters in parallel with deterministic result aggregation,
   - reduce repeated PNG decode work for resize variants and auxiliary map derivation.
-- Release-gate coverage hardening:
-  - add integration tests for generate fallback chains, approved lock skip/copy behavior, and candidate replacement selection,
-  - add direct unit coverage for generate CLI argument parsing and boolean flag handling,
-  - tighten CI test gates (fail if suites are missing, add coverage thresholds for critical paths).
-- Add optional service mode with stable HTTP generation endpoints and MCP wrapper compatibility (no auth/credit layer in core).
-- Define a canonical generation request contract and mapping layer between service requests and manifest/pipeline targets.
-- Implement Nano/Gemini edit-first parity (where supported) with tests.
 - Add automated VLM candidate grading gates:
-  - score candidates for silhouette clarity, framing/cutoff, and structural fidelity,
-  - discard candidates below manifest threshold (default `4/5`) before review output.
+  - add manifest-configurable `generationPolicy.vlmGate` with threshold default `4/5` and optional rubric text,
+  - reject below-threshold candidates before final selection and persist per-candidate VLM decisions in provenance,
+  - surface VLM score/threshold/reason traceability in eval and review artifacts.
 - Add edge-aware quality scoring and hard-gate coverage:
-  - measure alpha-boundary sharpness, halo/bleed risk, and stray-pixel noise on transparent outputs,
-  - surface boundary-focused failure reasons in candidate scoring, eval, and review artifacts.
+  - added alpha-boundary metrics (`alphaHaloRisk`, `alphaStrayNoise`, `alphaEdgeSharpness`) to candidate scoring and eval acceptance output,
+  - enforce configurable hard-gate thresholds from evaluation profiles for halo risk, stray noise, and boundary edge sharpness,
+  - surface boundary-focused rejection reasons in candidate score records and acceptance issue diagnostics.
 - Expand acceptance from single-image checks to pack-level invariants:
-  - enforce pack-level runtime/output uniqueness and atlas grouping integrity checks,
-  - add spritesheet continuity checks (frame-to-frame silhouette/anchor drift),
-  - add optional texture-memory budget gates for pack outputs.
+  - enforce runtime/output uniqueness across non-catalog targets and spritesheet atlas-family integrity checks,
+  - add spritesheet continuity checks (adjacent-frame silhouette/anchor drift metrics + optional hard-gate thresholds),
+  - add optional profile texture-memory budget gates and propagate pack-level summary into acceptance/eval/review artifacts.
+- Add optional service mode with stable HTTP generation endpoints and MCP wrapper compatibility:
+  - added `lootforge serve` command with stable JSON endpoints (`/v1/health`, `/v1/tools`, `/v1/tools/:name`, `/v1/:name`),
+  - added command/tool metadata discovery and deterministic request/response envelopes for wrapper integration,
+  - kept core service mode intentionally unauthenticated (no auth/credit layer in core).
+- Define a canonical generation request contract and mapping layer between service requests and manifest/pipeline targets:
+  - added `POST /v1/generation/requests` contract endpoint that maps canonical service requests into `plan -> generate`,
+  - added `GET /v1/contracts/generation-request` schema/field descriptor for wrapper discovery,
+  - added inline manifest materialization and normalized request metadata in service response payloads.
+- Implement Nano/Gemini edit-first parity (where supported) with tests:
+  - added Gemini/Nano edit-first request mapping with role-aware input handling for `base`, `mask`, and `reference` inputs,
+  - enforce safe in-root edit input path resolution and explicit Nano edit error codes for unsupported models / unreadable inputs,
+  - added deterministic unit coverage for Nano text-mode and edit-first request execution paths.
+
+Remaining queued items:
 - Add manifest schema scaffolding for directed synthesis controls:
   - `targets[].controlImage`, `targets[].controlMode` (`canny|depth|openpose`),
   - `styleKits[].styleReferenceImages`, `styleKits[].loraPath`, `styleKits[].loraStrength`,
@@ -216,8 +230,6 @@ Completed 2026-02-19 in this release track:
 - Add coarse-to-fine candidate promotion controls:
   - run lower-cost candidate generation/scoring first,
   - promote top-K candidates into high-fidelity refinement passes only when quality gates justify extra compute.
-- Extend eval/review artifacts with VLM grade traceability:
-  - include per-candidate VLM rubric output, threshold decision, and rejection reasons.
 - Add manifest policy coverage checks:
   - fail release gates when documented manifest policy fields are neither implemented nor marked as reserved.
 - Add model capability introspection contract and endpoint for provider feature gating (pixel/high-res/references).
@@ -225,6 +237,20 @@ Completed 2026-02-19 in this release track:
 - Add consistency-group drift/outlier scoring using CLIP/LPIPS signals.
 - Introduce per-kind scoring presets and manifest-level scoring profile overrides.
 - Add aggregate group-level review/eval warnings and ranking influence controls.
+
+#### 2D Investigation Follow-ups (Visual QA + Policy)
+- Add machine-checkable visual style-bible policy contracts:
+  - extend style constraints beyond palette (line weight, shading rules, UI geometry constraints),
+  - enforce policy compliance in validate/eval with explicit per-target diagnostics.
+- Add sprite identity + pose adherence QA modules:
+  - add frame-to-frame identity drift scoring for animation families,
+  - add optional pose-target checks and rejection reasons for frame candidates.
+- Expand tile QA from seam-only checks to topology constraints:
+  - validate self/one-to-one/many-to-many adjacency compatibility from explicit tile rules,
+  - report topology violations separately from texture seam metrics for map assembly reliability.
+- Add layered export + matting-assisted alpha QA pipeline:
+  - add first-class layered artifacts for sprite/UI/VFX workflows with deterministic export contracts,
+  - add matting-derived transparency QA checks (halo/fringe/mask consistency) in eval/review diagnostics.
 
 ## Future (After Upcoming)
 These are high-impact but should follow once `0.2.0` and `0.3.0` stabilize.
@@ -257,6 +283,19 @@ These are high-impact but should follow once `0.2.0` and `0.3.0` stabilize.
   - pin workflow action revisions and emit SBOM + build provenance artifacts,
   - add policy checks for insecure soft-adapter execution configuration.
 - Expand runtime export presets and metadata for Unity/Godot integration.
+
+#### 2D Investigation Follow-ups (Runtime/Export)
+- Add first-class autotile runtime contract exports:
+  - emit 4-neighbor bitmask metadata (`4 bits -> 16-entry LUT`) for deterministic tile-index selection,
+  - support tileset variant blocks (e.g., separate `4x4` banks for water-edge vs cliff-edge families) with runtime selection hints.
+  - define canonical neighbor bit ordering, map-boundary behavior, and deterministic variant-picking rules so runtime implementations stay consistent across engines.
+- Add vector/layered asset interoperability gates:
+  - add first-class SVG target support (generation, validation, review, and package/export stages),
+  - validate SVG structure/layer hygiene before packaging and publish deterministic export conventions,
+  - define layered-artifact contracts for downstream toolchains that expect editable layered inputs.
+- Add asset-license provenance release gates:
+  - require machine-readable provenance metadata for visual datasets, reference assets, and model families used per target,
+  - fail packaging/release checks when license status is unresolved or violates configured policy.
 - Add atlas-capacity planning and multipack spillover safeguards:
   - compute safe atlas frame capacity with padding/extrusion/mip constraints before pack build,
   - warn/fail on atlas overcommit and auto-spill frames to additional atlas pages when enabled.

@@ -3,6 +3,14 @@ import path from "node:path";
 
 import { resolvePathWithinRoot } from "../shared/paths.js";
 import {
+  DEFAULT_PROVIDER_REQUEST_TIMEOUT_MS,
+  fetchWithTimeout,
+  normalizeNonNegativeInteger,
+  normalizePositiveInteger,
+  ProviderRequestTimeoutError,
+  toOptionalNonNegativeInteger,
+} from "./runtime.js";
+import {
   createProviderJob,
   GenerationProvider,
   nowIso,
@@ -25,6 +33,10 @@ const DEFAULT_LOCAL_BASE_URL = "http://127.0.0.1:8188";
 export interface LocalDiffusionProviderOptions {
   model?: string;
   baseUrl?: string;
+  timeoutMs?: number;
+  maxRetries?: number;
+  minDelayMs?: number;
+  defaultConcurrency?: number;
 }
 
 interface LocalImageResponse {
@@ -36,14 +48,30 @@ interface LocalImageResponse {
 
 export class LocalDiffusionProvider implements GenerationProvider {
   readonly name = "local" as const;
-  readonly capabilities: ProviderCapabilities = PROVIDER_CAPABILITIES.local;
+  readonly capabilities: ProviderCapabilities;
 
   private readonly model: string;
   private readonly baseUrl: string;
+  private readonly timeoutMs: number;
+  private readonly maxRetries?: number;
 
   constructor(options: LocalDiffusionProviderOptions = {}) {
+    const defaults = PROVIDER_CAPABILITIES.local;
+    this.capabilities = {
+      ...defaults,
+      defaultConcurrency: normalizePositiveInteger(
+        options.defaultConcurrency,
+        defaults.defaultConcurrency,
+      ),
+      minDelayMs: normalizeNonNegativeInteger(options.minDelayMs, defaults.minDelayMs),
+    };
     this.model = options.model ?? DEFAULT_LOCAL_MODEL;
     this.baseUrl = options.baseUrl ?? process.env.LOCAL_DIFFUSION_BASE_URL ?? DEFAULT_LOCAL_BASE_URL;
+    this.timeoutMs = normalizePositiveInteger(
+      options.timeoutMs,
+      DEFAULT_PROVIDER_REQUEST_TIMEOUT_MS,
+    );
+    this.maxRetries = toOptionalNonNegativeInteger(options.maxRetries);
   }
 
   prepareJobs(targets: PlannedTarget[], ctx: ProviderPrepareContext): ProviderJob[] {
@@ -53,6 +81,9 @@ export class LocalDiffusionProvider implements GenerationProvider {
         target,
         model: target.model ?? this.model,
         imagesDir: ctx.imagesDir,
+        defaults: {
+          maxRetries: this.maxRetries,
+        },
       }),
     );
   }
@@ -105,7 +136,10 @@ export class LocalDiffusionProvider implements GenerationProvider {
     }
 
     try {
-      const response = await fetchImpl(`${this.baseUrl.replace(/\/$/, "")}/generate`, {
+      const response = await this.requestWithTimeout(
+        fetchImpl,
+        `${this.baseUrl.replace(/\/$/, "")}/generate`,
+        {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -120,7 +154,8 @@ export class LocalDiffusionProvider implements GenerationProvider {
           candidates: job.candidateCount,
           control: this.toControlPayload(job.target.edit?.inputs, ctx.outDir, job.targetId),
         }),
-      });
+      },
+      );
 
       if (!response.ok) {
         throw new ProviderError({
@@ -217,7 +252,7 @@ export class LocalDiffusionProvider implements GenerationProvider {
     }
 
     if (typeof imageData.url === "string" && imageData.url.length > 0) {
-      const imageResponse = await fetchImpl(imageData.url);
+      const imageResponse = await this.requestWithTimeout(fetchImpl, imageData.url);
       if (!imageResponse.ok) {
         throw new ProviderError({
           provider: this.name,
@@ -234,6 +269,28 @@ export class LocalDiffusionProvider implements GenerationProvider {
       code: "local_diffusion_missing_image",
       message: "Local diffusion image payload contained neither b64_json nor url fields.",
     });
+  }
+
+  private async requestWithTimeout(
+    fetchImpl: typeof fetch,
+    input: Parameters<typeof fetch>[0],
+    init?: RequestInit,
+  ): Promise<Response> {
+    try {
+      return await fetchWithTimeout(fetchImpl, input, init, this.timeoutMs);
+    } catch (error) {
+      if (error instanceof ProviderRequestTimeoutError) {
+        throw new ProviderError({
+          provider: this.name,
+          code: "local_diffusion_request_timeout",
+          message: `Local diffusion request timed out after ${error.timeoutMs}ms.`,
+          actionable:
+            "Increase providers.local.timeoutMs or LOOTFORGE_LOCAL_TIMEOUT_MS and retry.",
+          cause: error,
+        });
+      }
+      throw error;
+    }
   }
 }
 

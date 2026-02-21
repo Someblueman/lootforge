@@ -2,7 +2,7 @@
 import { access, cp, mkdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
 
-import { scoreCandidateImages } from "../checks/candidateScore.js";
+import { scoreCandidateImages, type ScoreCandidateImagesOptions } from "../checks/candidateScore.js";
 import { writeRunProvenance } from "../output/provenance.js";
 import {
   createProviderRegistry,
@@ -109,6 +109,11 @@ interface ScoredCandidateSet {
   scores: CandidateScoreRecord[];
   bestPath: string;
 }
+
+const COARSE_TO_FINE_DRAFT_SCORING_OPTIONS: Omit<ScoreCandidateImagesOptions, "outDir"> = {
+  includeSoftAdapters: false,
+  includeVlmGate: false,
+};
 
 export async function runGeneratePipeline(
   options: GeneratePipelineOptions,
@@ -481,13 +486,16 @@ async function runTaskWithFallback(params: {
           fetchImpl: params.fetchImpl,
         });
 
+        const coarseToFinePolicy = normalizedPolicy.coarseToFine;
         const draftCandidates = await scoreProviderRunCandidates({
           target: params.task.target,
           runResult,
           outDir: params.outDir,
+          ...(coarseToFinePolicy?.enabled
+            ? { scoreOptions: COARSE_TO_FINE_DRAFT_SCORING_OPTIONS }
+            : {}),
         });
 
-        const coarseToFinePolicy = normalizedPolicy.coarseToFine;
         if (coarseToFinePolicy?.enabled) {
           const coarseToFineResult = await runCoarseToFineRefinement({
             provider,
@@ -573,6 +581,7 @@ async function scoreProviderRunCandidates(params: {
   target: PlannedTarget;
   runResult: ProviderRunResult;
   outDir: string;
+  scoreOptions?: Omit<ScoreCandidateImagesOptions, "outDir">;
 }): Promise<ScoredCandidateSet> {
   const candidateOutputs =
     params.runResult.candidateOutputs && params.runResult.candidateOutputs.length > 0
@@ -587,7 +596,10 @@ async function scoreProviderRunCandidates(params: {
   const candidateSelection = await scoreCandidateImages(
     params.target,
     candidateOutputs.map((candidate) => candidate.outputPath),
-    { outDir: params.outDir },
+    {
+      outDir: params.outDir,
+      ...(params.scoreOptions ?? {}),
+    },
   );
 
   return {
@@ -781,6 +793,7 @@ async function runCoarseToFineRefinement(params: {
       target: params.task.target,
       runResult: refineRunResult,
       outDir: params.runContext.outDir,
+      scoreOptions: COARSE_TO_FINE_DRAFT_SCORING_OPTIONS,
     });
 
     await copyIfDifferent(refineSelection.bestPath, refineJob.outPath);

@@ -498,6 +498,7 @@ Per target:
 - `generationPolicy.vlmGate?`: optional candidate gate (`threshold` defaults to `4` on a `0..5` scale, optional `rubric`)
 - `generationPolicy.coarseToFine?`: optional promotion controls (`enabled`, `promoteTopK`, `minDraftScore`, `requireDraftAcceptance`)
 - `generationPolicy.draftQuality` / `generationPolicy.finalQuality`: optional quality split used by coarse-pass and refinement-pass generation
+  - when coarse-to-fine is enabled, draft/intermediate promotion ranking uses local image metrics only; full VLM/soft-adapter scoring runs on final promoted refine candidates
 - directed-synthesis scaffolding:
   - `controlImage?` with `controlMode?` (`canny|depth|openpose`) must be provided together
   - `generationPolicy.highQuality?`

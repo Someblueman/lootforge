@@ -1,11 +1,16 @@
 # LootForge Prioritized Issue Backlog
 
-Last updated: 2026-02-18
+Last updated: 2026-02-21
 
 This list translates `docs/ROADMAP.md` into issue-ready work items with explicit acceptance criteria.
 
 Recent completion (2026-02-20):
 
+- Implemented stage-artifact contract schema coverage and fixture-pack compatibility checks.
+- Implemented provider runtime contract enforcement across OpenAI/Nano/Local with capability parity checks.
+- Implemented automated VLM candidate grading gates with score/threshold/reason traceability in eval/review.
+- Implemented edge-aware alpha-boundary scoring and configurable hard-gate rejection thresholds.
+- Implemented pack-level acceptance invariants, spritesheet continuity checks, and optional texture-memory budget gates.
 - Implemented Manifest Policy Coverage Gate:
   - added machine-checkable policy index (`docs/MANIFEST_POLICY_COVERAGE.md`),
   - added release gate script (`npm run check:manifest-policy`) that enforces `implemented|reserved` status and test evidence for implemented fields,
@@ -21,61 +26,43 @@ Recent completion (2026-02-20):
 
 ## P0 (Immediate: `0.3.0`)
 
-### 1) Stage Artifact Contract Schemas and Compatibility Tests
+### 1) Coarse-to-Fine Candidate Promotion
+
+- **Release target:** `0.3.0` to `0.4.0` bridge
+- **Why now:** Improve quality-per-cost by refining only promising candidates.
+- **Acceptance criteria:**
+  - Pipeline supports low-cost first pass and top-K promotion into high-fidelity refinement.
+  - Promotion decisions and discarded candidates are recorded in provenance.
+  - Benchmarks show reduced provider cost per approved asset for equivalent acceptance rate.
+
+### 2) Template-Driven Pack Orchestration + Dependency-Aware Style Chaining
 
 - **Release target:** `0.3.0`
-- **Why now:** Prevent stage drift and make artifacts safely reusable across pipeline runs.
+- **Why now:** Pack-level coherence depends on deterministic dependency order and explicit style-reference lineage.
 - **Acceptance criteria:**
-  - JSON schema or equivalent validators exist for `targets-index`, `provenance/run`, `acceptance-report`, `eval-report`, and `selection-lock`.
-  - A fixture-pack CI smoke test runs `plan -> generate -> process -> eval -> review -> select` and validates all emitted artifacts against the schemas.
-  - Contract failures produce clear error codes and file/field-level diagnostics.
+  - Template contract can declare dependency-aware target orchestration and style-reference chaining.
+  - Planner execution is deterministic, validates dependency cycles, and fails on unresolved references.
+  - Provenance records effective style-reference lineage per generated target.
 
-### 2) Provider Runtime Contract Enforcement
+### 3) Consistency-Group Drift/Outlier Scoring
 
 - **Release target:** `0.3.0`
-- **Why now:** Provider config in manifest/env must be operational, not advisory.
+- **Why now:** `0.3.0` focuses on consistency quality beyond single-image heuristics.
 - **Acceptance criteria:**
-  - Endpoint, timeout, retry, min-delay, concurrency, and rate-limit settings are applied uniformly for OpenAI, Nano, and Local providers.
-  - Provider capability assertions (`supportsControlNet`, edit support, transparency support, candidate support) are verified by tests against real request-shape behavior.
-  - Unsupported feature requests fail with explicit diagnostics and no silent fallback.
+  - Group-level drift/outlier scoring exists using CLIP/LPIPS across sibling targets.
+  - Outlier diagnostics are emitted with clear reasons and metric values in eval/review.
+  - Group consistency signals can influence final ranking deterministically.
 
-### 3) VLM Candidate Gating and Traceability
+### 4) Aggregate Group-Level Warnings + Ranking Influence Controls
 
 - **Release target:** `0.3.0`
-- **Why now:** Raise floor quality and reduce human review load.
+- **Why now:** Teams need pack-level visibility and tunable influence of coherence signals.
 - **Acceptance criteria:**
-  - Manifest-configurable VLM gate supports thresholding (default `4/5`) and optional per-target rubric text.
-  - Candidates below threshold are excluded before final selection.
-  - Eval/review outputs include per-candidate VLM score, threshold, and rejection reason.
+  - Eval/review artifacts emit aggregate group-level warning summaries.
+  - Manifest/evaluation profiles can configure group-warning thresholds and ranking influence weights.
+  - Selection outputs trace how group-level signals affected candidate decisions.
 
-### 4) Edge-Aware Boundary Quality Gates
-
-- **Release target:** `0.3.0`
-- **Why now:** Boundary artifacts are a top runtime-quality failure mode for sprites.
-- **Acceptance criteria:**
-  - Candidate scoring and eval include alpha-boundary metrics (halo/bleed risk, stray-pixel noise, edge sharpness).
-  - Boundary failures are surfaced as structured reasons in score records.
-  - Hard-gate mode can reject outputs above configured boundary-artifact thresholds.
-
-### 5) Pack-Level Invariants and Spritesheet Continuity
-
-- **Release target:** `0.3.0`
-- **Why now:** Single-image checks are insufficient for production packs.
-- **Acceptance criteria:**
-  - Pack checks enforce normalized runtime/output uniqueness and atlas-group integrity.
-  - Spritesheet continuity checks flag frame-to-frame silhouette/anchor drift.
-  - Optional texture budget gate reports total pack memory and fails when over threshold.
-
-### 6) Manifest Policy Coverage Gate
-
-- **Release target:** `0.3.0`
-- **Why now:** Keep schema/docs and implementation in sync.
-- **Acceptance criteria:**
-  - Release checks fail when documented manifest policy fields are neither implemented nor explicitly marked `reserved`.
-  - A policy coverage report is generated in CI.
-  - New manifest fields require tests before merge.
-
-### 7) Agentic Auto-Correction (Self-Healing Pipeline)
+### 5) Agentic Auto-Correction (Self-Healing Pipeline)
 
 - **Release target:** `0.3.0` to `0.4.0` bridge
 - **Why now:** Reduce human review load by actively reacting to VLM and edge-boundary failures.
@@ -83,6 +70,16 @@ Recent completion (2026-02-20):
   - When a candidate hard-fails a VLM or Boundary gate, its critique string automatically drives an `edit-first` regeneration attempt.
   - Generative loops have a configurable max retry limit.
   - Provenance accurately captures auto-correction attempts and their deltas.
+
+### 6) 2D Visual QA + Policy Follow-up Pack
+
+- **Release target:** `0.3.0` stretch / `0.4.0` bridge
+- **Why now:** Remaining visual QA gaps are still a source of production-quality drift.
+- **Acceptance criteria:**
+  - Visual style-bible policy checks are machine-checkable (line/shading/UI geometry) with explicit validate/eval diagnostics.
+  - Sprite identity and optional pose adherence checks can score/reject animation-frame drift.
+  - Tile QA validates topology rules (self/one-to-one/many-to-many adjacency) separately from seam metrics.
+  - Layered export and matting-assisted alpha QA are covered by deterministic artifact contracts and eval diagnostics.
 
 ## P1 (Next: `0.4.0`)
 
@@ -113,16 +110,7 @@ Recent completion (2026-02-20):
   - LoRA path/strength is included in local request payload and validation.
   - Provenance captures model, IP-Adapter references, LoRA identity, and strength.
 
-### 10) Coarse-to-Fine Candidate Promotion
-
-- **Release target:** `0.3.0` to `0.4.0` bridge
-- **Why now:** Improve quality-per-cost by refining only promising candidates.
-- **Acceptance criteria:**
-  - Pipeline supports low-cost first pass and top-K promotion into high-fidelity refinement.
-  - Promotion decisions and discarded candidates are recorded in provenance.
-  - Benchmarks show reduced provider cost per approved asset for equivalent acceptance rate.
-
-### 11) 3D-to-2D Projection & Automating ControlNets
+### 10) 3D-to-2D Projection & Automating ControlNets
 
 - **Release target:** `0.4.0`
 - **Why now:** Drawing or gathering boundary maps manually for ControlNet scales poorly.

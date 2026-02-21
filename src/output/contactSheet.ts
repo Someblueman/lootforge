@@ -3,6 +3,8 @@ import path from "node:path";
 
 import sharp from "sharp";
 
+import { openImage } from "../shared/image.js";
+
 const IMAGE_PATTERN = /\.(png|jpe?g|webp)$/i;
 
 const EMPTY_PNG_BASE64 =
@@ -125,9 +127,7 @@ export async function writeContactSheetPng(
     const left = padding + column * (cellWidth + padding);
     const top = padding + row * (cellHeight + padding);
 
-    const thumbBuffer = await sharp(path.join(imagesDir, filename), {
-      failOn: "none",
-    })
+    const thumbBuffer = await openImage(path.join(imagesDir, filename), "pipeline")
       .resize(thumbnailSize, thumbnailSize, {
         fit: "contain",
         background: { r: 0, g: 0, b: 0, alpha: 0 },

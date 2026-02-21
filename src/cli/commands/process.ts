@@ -1,6 +1,7 @@
 import path from "node:path";
 
 import { runProcessPipeline } from "../../pipeline/process.js";
+import { readArgValue, parseBooleanArg } from "../parseArgs.js";
 
 export interface ProcessCommandArgs {
   outDir: string;
@@ -24,7 +25,7 @@ export function parseProcessCommandArgs(argv: string[]): ProcessCommandArgs {
   return {
     outDir: path.resolve(outFlag ?? process.cwd()),
     targetsIndexPath: indexFlag ? path.resolve(indexFlag) : undefined,
-    strict: parseBooleanArg(strictFlag ?? "true"),
+    strict: parseBooleanArg(strictFlag ?? "true", "--strict"),
   };
 }
 
@@ -43,32 +44,4 @@ export async function runProcessCommand(argv: string[]): Promise<ProcessCommandR
     processedCount: result.processedCount,
     variantCount: result.variantCount,
   };
-}
-
-function parseBooleanArg(value: string): boolean {
-  const normalized = value.trim().toLowerCase();
-  if (["true", "1", "yes", "y"].includes(normalized)) {
-    return true;
-  }
-  if (["false", "0", "no", "n"].includes(normalized)) {
-    return false;
-  }
-  throw new Error(`Invalid boolean value "${value}" for --strict. Use true or false.`);
-}
-
-function readArgValue(argv: string[], name: string): string | undefined {
-  const exact = `--${name}`;
-  const prefix = `--${name}=`;
-
-  for (let index = 0; index < argv.length; index += 1) {
-    const arg = argv[index];
-    if (arg.startsWith(prefix)) {
-      return arg.slice(prefix.length);
-    }
-    if (arg === exact) {
-      return argv[index + 1];
-    }
-  }
-
-  return undefined;
 }

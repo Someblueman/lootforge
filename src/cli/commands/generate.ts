@@ -6,6 +6,7 @@ import {
   runGeneratePipeline,
 } from "../../pipeline/generate.js";
 import { type ProviderSelection } from "../../providers/types.js";
+import { readArgValue, parseBooleanArg } from "../parseArgs.js";
 
 export interface GenerateCommandArgs {
   manifestPath?: string;
@@ -41,7 +42,7 @@ export function parseGenerateCommandArgs(argv: string[]): GenerateCommandArgs {
     targetsIndexPath: indexFlag ? path.resolve(indexFlag) : undefined,
     provider: parseGenerateProviderFlag(providerFlag),
     selectionLockPath: lockFlag ? path.resolve(lockFlag) : undefined,
-    skipLocked: parseBooleanArg(skipLockedFlag ?? "true"),
+    skipLocked: parseBooleanArg(skipLockedFlag ?? "true", "--skip-locked"),
     ids: idsFlag
       ? idsFlag
           .split(",")
@@ -97,32 +98,4 @@ function writeGenerateProgressLog(event: GenerateProgressEvent): void {
   }
 
   process.stdout.write(`${slot}failed ${target}: ${event.message ?? "unknown error"}\n`);
-}
-
-function readArgValue(argv: string[], name: string): string | undefined {
-  const exact = `--${name}`;
-  const prefix = `--${name}=`;
-
-  for (let index = 0; index < argv.length; index += 1) {
-    const arg = argv[index];
-    if (arg.startsWith(prefix)) {
-      return arg.slice(prefix.length);
-    }
-    if (arg === exact) {
-      return argv[index + 1];
-    }
-  }
-
-  return undefined;
-}
-
-function parseBooleanArg(value: string): boolean {
-  const normalized = value.trim().toLowerCase();
-  if (["true", "1", "yes", "y"].includes(normalized)) {
-    return true;
-  }
-  if (["false", "0", "no", "n"].includes(normalized)) {
-    return false;
-  }
-  throw new Error(`Invalid boolean value "${value}" for --skip-locked. Use true or false.`);
 }

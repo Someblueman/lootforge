@@ -4,9 +4,10 @@ import { runImageAcceptanceChecks } from "../../checks/imageAcceptance.js";
 import { loadManifestSource } from "../../manifest/load.js";
 import { type ManifestV2, type ValidationReport } from "../../manifest/types.js";
 import { normalizeManifestTargets, validateManifestSource } from "../../manifest/validate.js";
-import { getErrorMessage, CliError } from "../../shared/errors.js";
+import { getErrorMessage } from "../../shared/errors.js";
 import { writeJsonFile } from "../../shared/fs.js";
 import { resolveManifestPath, resolveOutDir, resolveStagePathLayout } from "../../shared/paths.js";
+import { readArgValue, parseBooleanArg } from "../parseArgs.js";
 
 export interface ValidateCommandArgs {
   manifestPath: string;
@@ -137,35 +138,4 @@ export async function runValidateCommand(argv: string[]): Promise<ValidateComman
     strict: args.strict,
     exitCode: strictFailure ? 1 : 0,
   };
-}
-
-function parseBooleanArg(value: string, flagName: string): boolean {
-  const normalized = value.trim().toLowerCase();
-  if (["true", "1", "yes", "y"].includes(normalized)) {
-    return true;
-  }
-  if (["false", "0", "no", "n"].includes(normalized)) {
-    return false;
-  }
-  throw new CliError(`Invalid boolean value "${value}" for ${flagName}. Use true or false.`, {
-    code: "invalid_boolean_flag",
-    exitCode: 1,
-  });
-}
-
-function readArgValue(argv: string[], name: string): string | undefined {
-  const exact = `--${name}`;
-  const prefix = `${exact}=`;
-
-  for (let index = 0; index < argv.length; index += 1) {
-    const arg = argv[index];
-    if (arg.startsWith(prefix)) {
-      return arg.slice(prefix.length);
-    }
-    if (arg === exact) {
-      return argv[index + 1];
-    }
-  }
-
-  return undefined;
 }

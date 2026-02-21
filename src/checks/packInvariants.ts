@@ -1,6 +1,5 @@
-import sharp from "sharp";
-
 import { type PlannedTarget } from "../providers/types.js";
+import { openImage } from "../shared/image.js";
 import { normalizeTargetOutPath, resolvePathWithinDir } from "../shared/paths.js";
 
 const BYTES_PER_MEGABYTE = 1024 * 1024;
@@ -519,7 +518,7 @@ async function inspectSpritesheetFrames(params: {
     );
 
     try {
-      const raw = await sharp(framePath, { failOn: "none" })
+      const raw = await openImage(framePath, "qa")
         .ensureAlpha()
         .raw()
         .toBuffer({ resolveWithObject: true });

@@ -1,14 +1,12 @@
 import { stat } from "node:fs/promises";
 import path from "node:path";
 
-import sharp from "sharp";
-
 import { computeBoundaryQualityMetrics } from "./boundaryMetrics.js";
 import { runPackInvariantChecks } from "./packInvariants.js";
 import { type PackInvariantSummary } from "./packInvariants.js";
 import { type PlannedTarget } from "../providers/types.js";
 import { normalizeOutputFormatAlias } from "../providers/types.js";
-import { parseSize } from "../shared/image.js";
+import { openImage, parseSize } from "../shared/image.js";
 import { normalizeTargetOutPath, resolvePathWithinDir } from "../shared/paths.js";
 
 const DEFAULT_PALETTE_COMPLIANCE_MIN = 0.98;
@@ -108,8 +106,10 @@ interface MattingQualityMetrics {
 }
 
 async function inspectImage(imagePath: string): Promise<InspectedImage> {
-  const image = sharp(imagePath, { failOn: "none" });
-  const metadata = await image.metadata();
+  const [metadata, rawResult] = await Promise.all([
+    openImage(imagePath, "qa").metadata(),
+    openImage(imagePath, "qa").ensureAlpha().raw().toBuffer({ resolveWithObject: true }),
+  ]);
 
   if (
     typeof metadata.width !== "number" ||
@@ -122,18 +122,19 @@ async function inspectImage(imagePath: string): Promise<InspectedImage> {
 
   const format = (metadata.format as string | undefined) ?? "unknown";
   const hasAlphaChannel = metadata.hasAlpha;
-
-  const rawResult = await image.ensureAlpha().raw().toBuffer({ resolveWithObject: true });
   const channels = rawResult.info.channels;
   const raw = rawResult.data;
   const hasTransparentPixels = channels >= 4 ? hasAnyTransparentPixels(raw, channels) : false;
 
-  const fileStat = await stat(imagePath);
+  const sizeBytes =
+    typeof metadata.size === "number" && metadata.size > 0
+      ? metadata.size
+      : (await stat(imagePath)).size;
   return {
     width: metadata.width,
     height: metadata.height,
     format,
-    sizeBytes: fileStat.size,
+    sizeBytes,
     hasAlphaChannel,
     hasTransparentPixels,
     raw,

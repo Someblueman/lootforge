@@ -1,12 +1,10 @@
 import { readFile } from "node:fs/promises";
 
-import sharp from "sharp";
-
 import { computeBoundaryQualityMetrics } from "./boundaryMetrics.js";
 import { runEnabledSoftAdapters } from "./softAdapters.js";
 import { runCandidateVlmGate, targetHasVlmGate } from "./vlmGate.js";
 import { type CandidateScoreRecord, type PlannedTarget } from "../providers/types.js";
-import { parseSize } from "../shared/image.js";
+import { openImage, parseSize } from "../shared/image.js";
 const DEFAULT_EXACT_PALETTE_COMPLIANCE = 0.98;
 
 interface CandidateInspection {
@@ -220,7 +218,7 @@ async function inspectCandidate(
   outputPath: string,
 ): Promise<CandidateInspection> {
   const imageBytes = await readFile(outputPath);
-  const image = sharp(imageBytes, { failOn: "none" });
+  const image = openImage(imageBytes, "qa");
   const metadata = await image.metadata();
 
   if (

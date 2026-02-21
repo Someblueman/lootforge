@@ -1,6 +1,7 @@
 import path from "node:path";
 
 import { runEvalPipeline } from "../../pipeline/eval.js";
+import { readArgValue, parseBooleanArg } from "../parseArgs.js";
 
 export interface EvalCommandResult {
   reportPath: string;
@@ -28,32 +29,4 @@ export async function runEvalCommand(argv: string[]): Promise<EvalCommandResult>
     targetCount: result.report.targetCount,
     failed: result.report.failed,
   };
-}
-
-function readArgValue(argv: string[], name: string): string | undefined {
-  const exact = `--${name}`;
-  const prefix = `--${name}=`;
-
-  for (let index = 0; index < argv.length; index += 1) {
-    const arg = argv[index];
-    if (arg.startsWith(prefix)) {
-      return arg.slice(prefix.length);
-    }
-    if (arg === exact) {
-      return argv[index + 1];
-    }
-  }
-
-  return undefined;
-}
-
-function parseBooleanArg(value: string, flagName: string): boolean {
-  const normalized = value.trim().toLowerCase();
-  if (["true", "1", "yes", "y"].includes(normalized)) {
-    return true;
-  }
-  if (["false", "0", "no", "n"].includes(normalized)) {
-    return false;
-  }
-  throw new Error(`Invalid boolean value "${value}" for ${flagName}. Use true or false.`);
 }

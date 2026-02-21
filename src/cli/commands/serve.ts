@@ -2,6 +2,7 @@ import path from "node:path";
 
 import { SERVICE_API_VERSION, startLootForgeService } from "../../service/server.js";
 import { CliError } from "../../shared/errors.js";
+import { readArgValue } from "../parseArgs.js";
 
 const DEFAULT_SERVICE_HOST = "127.0.0.1";
 const DEFAULT_SERVICE_PORT = 8744;
@@ -107,21 +108,4 @@ function registerShutdownHandlers(close: () => Promise<void>): void {
   process.once("SIGTERM", () => {
     shutdown("SIGTERM");
   });
-}
-
-function readArgValue(argv: string[], name: string): string | undefined {
-  const exact = `--${name}`;
-  const prefix = `${exact}=`;
-
-  for (let index = 0; index < argv.length; index += 1) {
-    const arg = argv[index];
-    if (arg.startsWith(prefix)) {
-      return arg.slice(prefix.length);
-    }
-    if (arg === exact) {
-      return argv[index + 1];
-    }
-  }
-
-  return undefined;
 }

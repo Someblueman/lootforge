@@ -260,7 +260,20 @@ export async function startLootForgeService(
   options: StartLootForgeServiceOptions,
 ): Promise<LootForgeService> {
   const server = createServer((req, res) => {
-    void handleRequest(req, res, options);
+    void handleRequest(req, res, options).catch((error: unknown) => {
+      console.error("Unhandled request error:", error);
+      if (!res.headersSent) {
+        res.statusCode = 500;
+        res.setHeader("content-type", "application/json; charset=utf-8");
+        res.end(
+          JSON.stringify({
+            ok: false,
+            apiVersion: SERVICE_API_VERSION,
+            error: { code: "internal_error", message: "Unexpected server error." },
+          }),
+        );
+      }
+    });
   });
 
   await new Promise<void>((resolve, reject) => {

@@ -12,6 +12,7 @@ export const TARGET_KINDS = [
   "spritesheet",
 ] as const;
 export const CONTROL_MODES = ["canny", "depth", "openpose"] as const;
+export const GENERATION_MODES = ["text", "edit-first"] as const;
 
 export type ProviderName = (typeof PROVIDER_NAMES)[number];
 export type ProviderSelection = ProviderName | "auto";
@@ -26,7 +27,7 @@ export type PostProcessAlgorithm = (typeof POST_PROCESS_ALGORITHMS)[number];
 export type NormalizedOutputFormat = "png" | "jpeg" | "webp";
 export type TargetKind = (typeof TARGET_KINDS)[number];
 export type ControlMode = (typeof CONTROL_MODES)[number];
-export type GenerationMode = "text" | "edit-first";
+export type GenerationMode = (typeof GENERATION_MODES)[number];
 export type PaletteMode = "exact" | "max-colors";
 
 export interface ProviderCapabilities {

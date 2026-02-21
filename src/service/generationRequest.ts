@@ -6,12 +6,13 @@ import { z } from "zod";
 import { runPlanCommand } from "../cli/commands/plan.js";
 import { parseGenerateProviderFlag } from "../pipeline/generate.js";
 import { runGeneratePipeline } from "../pipeline/generate.js";
+import { PROVIDER_NAMES } from "../providers/types-core.js";
 import type { ProviderSelection } from "../providers/types.js";
 import { isRecord } from "../shared/typeGuards.js";
 
 export const CANONICAL_GENERATION_REQUEST_VERSION = "v1";
 
-const providerSelectionSchema = z.enum(["openai", "nano", "local", "auto"]);
+const providerSelectionSchema = z.enum([...PROVIDER_NAMES, "auto"]);
 const canonicalGenerationRequestSchema = z
   .object({
     manifestPath: z.string().trim().min(1).optional(),

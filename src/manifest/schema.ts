@@ -1,12 +1,28 @@
 import { z } from "zod";
 
 import { TARGET_KINDS } from "../providers/types.js";
+import {
+  AcceptanceSchema,
+  AuxiliaryMapsSchema,
+  CoarseToFineBaseSchema,
+  ControlModeSchema,
+  EditInputSchema,
+  EditSchema,
+  GenerationModeSchema,
+  HiresFixSchema,
+  nonEmptyString,
+  PalettePolicyBaseSchema,
+  PromptSpecBaseShape,
+  ProviderNameSchema,
+  RuntimeSpecBaseSchema,
+  ScoreWeightsSchema,
+  VlmGateSchema,
+} from "../shared/schemas.js";
 
-const nonEmptyString = z.string().trim().min(1);
-
-export const ProviderNameSchema = z.enum(["openai", "nano", "local"]);
+export { ProviderNameSchema };
 
 export const PromptSpecSchema = z.object({
+  ...PromptSpecBaseShape,
   primary: nonEmptyString,
   useCase: nonEmptyString.optional(),
   stylePreset: nonEmptyString.optional(),
@@ -21,21 +37,13 @@ export const PromptSpecSchema = z.object({
   negative: nonEmptyString.optional(),
 });
 
-export const ManifestGenerationModeSchema = z.enum(["text", "edit-first"]);
-export const ManifestControlModeSchema = z.enum(["canny", "depth", "openpose"]);
+export const ManifestGenerationModeSchema = GenerationModeSchema;
+export const ManifestControlModeSchema = ControlModeSchema;
 export const ManifestTargetKindSchema = z.enum(TARGET_KINDS);
 
-export const ManifestVlmGateSchema = z.object({
-  threshold: z.number().min(0).max(5).optional(),
-  rubric: nonEmptyString.optional(),
-});
+export const ManifestVlmGateSchema = VlmGateSchema;
 
-export const ManifestCoarseToFineSchema = z.object({
-  enabled: z.boolean().optional(),
-  promoteTopK: z.number().int().min(1).optional(),
-  minDraftScore: z.number().optional(),
-  requireDraftAcceptance: z.boolean().optional(),
-});
+export const ManifestCoarseToFineSchema = CoarseToFineBaseSchema;
 
 export const ManifestGenerationPolicySchema = z.object({
   size: nonEmptyString.optional(),
@@ -43,13 +51,7 @@ export const ManifestGenerationPolicySchema = z.object({
   outputFormat: nonEmptyString.optional(),
   quality: nonEmptyString.optional(),
   highQuality: z.boolean().optional(),
-  hiresFix: z
-    .object({
-      enabled: z.boolean().optional(),
-      upscale: z.number().min(1.01).max(4).optional(),
-      denoiseStrength: z.number().min(0).max(1).optional(),
-    })
-    .optional(),
+  hiresFix: HiresFixSchema.optional(),
   draftQuality: nonEmptyString.optional(),
   finalQuality: nonEmptyString.optional(),
   candidates: z.number().int().min(1).optional(),
@@ -61,16 +63,9 @@ export const ManifestGenerationPolicySchema = z.object({
   coarseToFine: ManifestCoarseToFineSchema.optional(),
 });
 
-export const ManifestAcceptanceSchema = z.object({
-  size: nonEmptyString.optional(),
-  alpha: z.boolean().optional(),
-  maxFileSizeKB: z.number().int().positive().optional(),
-});
+export const ManifestAcceptanceSchema = AcceptanceSchema;
 
-export const ManifestRuntimeSpecSchema = z.object({
-  alphaRequired: z.boolean().optional(),
-  previewWidth: z.number().int().positive().optional(),
-  previewHeight: z.number().int().positive().optional(),
+export const ManifestRuntimeSpecSchema = RuntimeSpecBaseSchema.extend({
   anchorX: z.number().min(0).max(1).optional(),
   anchorY: z.number().min(0).max(1).optional(),
 });
@@ -138,35 +133,18 @@ export const ManifestPostProcessSchema = z.object({
   operations: ManifestPostProcessOperationsSchema.optional(),
 });
 
-export const ManifestEditInputSchema = z.object({
-  path: nonEmptyString,
-  role: z.enum(["base", "mask", "reference"]).optional(),
-  fidelity: z.enum(["low", "medium", "high"]).optional(),
-});
+export const ManifestEditInputSchema = EditInputSchema;
 
-export const ManifestEditSchema = z.object({
-  mode: z.enum(["edit", "iterate"]).optional(),
-  instruction: nonEmptyString.optional(),
-  inputs: z.array(ManifestEditInputSchema).optional(),
-  preserveComposition: z.boolean().optional(),
-});
+export const ManifestEditSchema = EditSchema;
 
-export const ManifestAuxiliaryMapsSchema = z.object({
-  normalFromHeight: z.boolean().optional(),
-  specularFromLuma: z.boolean().optional(),
-  aoFromLuma: z.boolean().optional(),
-});
+export const ManifestAuxiliaryMapsSchema = AuxiliaryMapsSchema;
 
-export const ManifestPalettePolicySchema = z
-  .object({
-    mode: z.enum(["exact", "max-colors"]),
-    colors: z.array(nonEmptyString).optional(),
-    maxColors: z.number().int().min(2).max(256).optional(),
-    dither: z.number().min(0).max(1).optional(),
-    strict: z.boolean().optional(),
-  })
-  .superRefine((palette, ctx) => {
-    if (palette.mode === "exact" && (!palette.colors || palette.colors.length === 0)) {
+export const ManifestPalettePolicySchema = PalettePolicyBaseSchema.superRefine(
+  (palette, ctx) => {
+    if (
+      palette.mode === "exact" &&
+      (!palette.colors || palette.colors.length === 0)
+    ) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["colors"],
@@ -174,7 +152,10 @@ export const ManifestPalettePolicySchema = z
       });
     }
 
-    if (palette.mode === "max-colors" && typeof palette.maxColors !== "number") {
+    if (
+      palette.mode === "max-colors" &&
+      typeof palette.maxColors !== "number"
+    ) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["maxColors"],
@@ -189,7 +170,8 @@ export const ManifestPalettePolicySchema = z
         message: "Palette strict mode is only supported for exact palettes.",
       });
     }
-  });
+  },
+);
 
 const animationPivotSchema = z.object({
   x: z.number().min(0).max(1),
@@ -264,7 +246,8 @@ export const ManifestTargetSchema = z
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["prompt"],
-        message: "Each non-spritesheet target requires `prompt` or `promptSpec`.",
+        message:
+          "Each non-spritesheet target requires `prompt` or `promptSpec`.",
       });
     }
 
@@ -304,11 +287,9 @@ export const ManifestProvidersSchema = z.object({
   default: ProviderNameSchema.default("openai"),
   openai: ManifestProviderConfigSchema.optional(),
   nano: ManifestProviderConfigSchema.optional(),
-  local: ManifestProviderConfigSchema
-    .extend({
-      baseUrl: nonEmptyString.optional(),
-    })
-    .optional(),
+  local: ManifestProviderConfigSchema.extend({
+    baseUrl: nonEmptyString.optional(),
+  }).optional(),
 });
 
 export const ManifestStyleKitSchema = z
@@ -340,14 +321,7 @@ export const ManifestConsistencyGroupSchema = z.object({
   referenceImages: z.array(nonEmptyString).default([]),
 });
 
-export const ManifestScoreWeightsSchema = z.object({
-  readability: z.number().optional(),
-  fileSize: z.number().optional(),
-  consistency: z.number().optional(),
-  clip: z.number().optional(),
-  lpips: z.number().optional(),
-  ssim: z.number().optional(),
-});
+export const ManifestScoreWeightsSchema = ScoreWeightsSchema;
 
 export const ManifestEvaluationProfileSchema = z.object({
   id: nonEmptyString,

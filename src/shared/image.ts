@@ -56,8 +56,7 @@ export async function postProcessGeneratedImage(
 }
 
 export async function inspectImage(imagePath: string): Promise<ImageInspection> {
-  const image = sharp(imagePath, { failOn: "none" });
-  const metadata = await image.metadata();
+  const metadata = await sharp(imagePath, { failOn: "none" }).metadata();
   if (
     typeof metadata.width !== "number" ||
     typeof metadata.height !== "number" ||
@@ -70,16 +69,19 @@ export async function inspectImage(imagePath: string): Promise<ImageInspection> 
   const hasAlphaChannel = metadata.hasAlpha;
   let hasTransparentPixels = false;
   if (hasAlphaChannel) {
-    const stats = await image.stats();
+    const stats = await sharp(imagePath, { failOn: "none" }).stats();
     const alphaChannel = stats.channels[stats.channels.length - 1];
     hasTransparentPixels = alphaChannel.min < 255;
   }
 
-  const fileStat = await stat(imagePath);
+  const sizeBytes =
+    typeof metadata.size === "number" && metadata.size > 0
+      ? metadata.size
+      : (await stat(imagePath)).size;
   return {
     width: metadata.width,
     height: metadata.height,
-    sizeBytes: fileStat.size,
+    sizeBytes,
     hasAlphaChannel,
     hasTransparentPixels,
   };

@@ -1,14 +1,12 @@
 import { stat } from "node:fs/promises";
 import path from "node:path";
 
-import sharp from "sharp";
-
 import { computeBoundaryQualityMetrics } from "./boundaryMetrics.js";
 import { runPackInvariantChecks } from "./packInvariants.js";
 import { type PackInvariantSummary } from "./packInvariants.js";
 import { type PlannedTarget } from "../providers/types.js";
 import { normalizeOutputFormatAlias } from "../providers/types.js";
-import { parseSize } from "../shared/image.js";
+import { openImage, parseSize } from "../shared/image.js";
 import { normalizeTargetOutPath, resolvePathWithinDir } from "../shared/paths.js";
 
 const DEFAULT_PALETTE_COMPLIANCE_MIN = 0.98;
@@ -109,8 +107,8 @@ interface MattingQualityMetrics {
 
 async function inspectImage(imagePath: string): Promise<InspectedImage> {
   const [metadata, rawResult] = await Promise.all([
-    sharp(imagePath, { failOn: "none" }).metadata(),
-    sharp(imagePath, { failOn: "none" }).ensureAlpha().raw().toBuffer({ resolveWithObject: true }),
+    openImage(imagePath, "qa").metadata(),
+    openImage(imagePath, "qa").ensureAlpha().raw().toBuffer({ resolveWithObject: true }),
   ]);
 
   if (

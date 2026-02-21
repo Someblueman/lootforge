@@ -8,6 +8,18 @@ import {
   type PlannedTarget,
 } from "../providers/types.js";
 
+/**
+ * Centralized Sharp instantiation with context-appropriate `failOn`.
+ *
+ * - `"pipeline"`: tolerates minor corruption from image generators (`failOn: "none"`).
+ * - `"qa"`: surfaces corruption as errors so QA gates catch bad images (`failOn: "warning"`).
+ */
+export type ImageContext = "pipeline" | "qa";
+
+export function openImage(input: string | Buffer, context: ImageContext): sharp.Sharp {
+  return sharp(input, { failOn: context === "pipeline" ? "none" : "warning" });
+}
+
 export const SIZE_PATTERN = /^(\d+)x(\d+)$/i;
 
 export interface ImageInspection {
@@ -34,7 +46,7 @@ export async function postProcessGeneratedImage(
     return inspectImage(imagePath);
   }
 
-  let pipeline = sharp(imagePath, { failOn: "none" });
+  let pipeline = openImage(imagePath, "pipeline");
   if (postProcess.resizeTo) {
     const alphaRequired = requiresAlpha(target);
     pipeline = pipeline.resize(postProcess.resizeTo.width, postProcess.resizeTo.height, {
@@ -56,7 +68,7 @@ export async function postProcessGeneratedImage(
 }
 
 export async function inspectImage(imagePath: string): Promise<ImageInspection> {
-  const metadata = await sharp(imagePath, { failOn: "none" }).metadata();
+  const metadata = await openImage(imagePath, "pipeline").metadata();
   if (
     typeof metadata.width !== "number" ||
     typeof metadata.height !== "number" ||
@@ -69,7 +81,7 @@ export async function inspectImage(imagePath: string): Promise<ImageInspection> 
   const hasAlphaChannel = metadata.hasAlpha;
   let hasTransparentPixels = false;
   if (hasAlphaChannel) {
-    const stats = await sharp(imagePath, { failOn: "none" }).stats();
+    const stats = await openImage(imagePath, "pipeline").stats();
     const alphaChannel = stats.channels[stats.channels.length - 1];
     hasTransparentPixels = alphaChannel.min < 255;
   }

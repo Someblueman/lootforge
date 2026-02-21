@@ -13,6 +13,7 @@ import {
 import { buildCatalog } from "../output/catalog.js";
 import { getTargetPostProcessPolicy, type PlannedTarget } from "../providers/types.js";
 import { writeJsonFile } from "../shared/fs.js";
+import { openImage } from "../shared/image.js";
 import {
   normalizeTargetOutPath,
   resolvePathWithinDir,
@@ -134,7 +135,7 @@ async function writeDerivedVariant(params: {
   legacyPath: string;
   mirrorLegacy: boolean;
 }): Promise<void> {
-  const encoded = await sharp(params.buffer, { failOn: "none" })
+  const encoded = await openImage(params.buffer, "pipeline")
     .png({ compressionLevel: 9 })
     .toBuffer();
   await mkdir(path.dirname(params.processedPath), { recursive: true });
@@ -159,7 +160,7 @@ async function smartCropImage(
 ): Promise<Buffer> {
   const mode = options.mode ?? "alpha-bounds";
   const padding = clamp(Math.round(options.padding ?? 0), 0, 256);
-  const metadata = await sharp(imageBuffer, { failOn: "none" }).metadata();
+  const metadata = await openImage(imageBuffer, "pipeline").metadata();
   const width = metadata.width;
   const height = metadata.height;
   if (width <= 0 || height <= 0) {
@@ -192,7 +193,7 @@ async function smartCropImage(
       return imageBuffer;
     }
   } else {
-    const rawResult = await sharp(imageBuffer, { failOn: "none" })
+    const rawResult = await openImage(imageBuffer, "pipeline")
       .ensureAlpha()
       .raw()
       .toBuffer({ resolveWithObject: true });
@@ -236,7 +237,7 @@ async function smartCropImage(
     return imageBuffer;
   }
 
-  return sharp(imageBuffer, { failOn: "none" })
+  return openImage(imageBuffer, "pipeline")
     .extract({
       left: cropLeft,
       top: cropTop,
@@ -378,7 +379,7 @@ async function processSingleTarget(params: {
   const pixelPerfectEnabled = pixelPerfect ? pixelPerfect.enabled !== false : false;
 
   let variantCount = 0;
-  let outputBuffer = await sharp(params.rawImagePath, { failOn: "none" })
+  let outputBuffer = await openImage(params.rawImagePath, "pipeline")
     .ensureAlpha()
     .png()
     .toBuffer();
@@ -395,7 +396,7 @@ async function processSingleTarget(params: {
 
   const trimConfig = postProcess.operations?.trim;
   if (trimConfig?.enabled === true || trimConfig?.threshold !== undefined) {
-    outputBuffer = await sharp(outputBuffer, { failOn: "none" })
+    outputBuffer = await openImage(outputBuffer, "pipeline")
       .trim({ threshold: trimConfig.threshold ?? 10 })
       .png()
       .toBuffer();
@@ -404,7 +405,7 @@ async function processSingleTarget(params: {
   const padConfig = postProcess.operations?.pad;
   if (padConfig && padConfig.pixels > 0) {
     const background = parseColorHex(padConfig.background);
-    outputBuffer = await sharp(outputBuffer, { failOn: "none" })
+    outputBuffer = await openImage(outputBuffer, "pipeline")
       .extend({
         top: padConfig.pixels,
         bottom: padConfig.pixels,
@@ -435,7 +436,7 @@ async function processSingleTarget(params: {
   }
 
   if (postProcess.resizeTo) {
-    outputBuffer = await sharp(outputBuffer, { failOn: "none" })
+    outputBuffer = await openImage(outputBuffer, "pipeline")
       .resize(postProcess.resizeTo.width, postProcess.resizeTo.height, {
         fit: "contain",
         background:
@@ -458,9 +459,9 @@ async function processSingleTarget(params: {
     typeof pixelPerfect?.scale === "number" &&
     pixelPerfect.scale > 1
   ) {
-    const metadata = await sharp(outputBuffer, { failOn: "none" }).metadata();
+    const metadata = await openImage(outputBuffer, "pipeline").metadata();
     if (metadata.width && metadata.height) {
-      outputBuffer = await sharp(outputBuffer, { failOn: "none" })
+      outputBuffer = await openImage(outputBuffer, "pipeline")
         .resize(metadata.width * pixelPerfect.scale, metadata.height * pixelPerfect.scale, {
           fit: "fill",
           kernel: kernelForAlgorithm("nearest"),
@@ -515,7 +516,7 @@ async function processSingleTarget(params: {
   if (usePaletteQuantization) {
     // Palette quantization changes pixel colors during PNG encode, so we must
     // decode back to get the quantized raw pixel data for variant generation.
-    const decodedMain = await sharp(encodedMain, { failOn: "none" })
+    const decodedMain = await openImage(encodedMain, "pipeline")
       .ensureAlpha()
       .raw()
       .toBuffer({ resolveWithObject: true });
@@ -524,7 +525,7 @@ async function processSingleTarget(params: {
   } else {
     // No quantization: decode raw pixels directly from the pre-encode buffer,
     // avoiding a wasteful decode of the compressed PNG.
-    const rawResult = await sharp(outputBuffer, { failOn: "none" })
+    const rawResult = await openImage(outputBuffer, "pipeline")
       .ensureAlpha()
       .raw()
       .toBuffer({ resolveWithObject: true });
@@ -739,7 +740,7 @@ async function assembleSpritesheetTarget(params: {
       frameTarget.out,
       `spritesheet frame for target "${frameTarget.id}"`,
     );
-    const result = await sharp(framePath, { failOn: "none" })
+    const result = await openImage(framePath, "pipeline")
       .png()
       .toBuffer({ resolveWithObject: true });
     const { width, height } = result.info;

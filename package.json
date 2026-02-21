@@ -18,8 +18,12 @@
     "test:unit": "vitest run test/unit",
     "test:integration": "vitest run test/integration",
     "test:coverage:critical": "vitest run --coverage",
-    "lint": "tsc --noEmit -p tsconfig.json",
+    "lint": "eslint src/ test/",
+    "lint:fix": "eslint src/ test/ --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "typecheck": "tsc --noEmit -p tsconfig.json",
+    "check": "npm run typecheck && npm run lint && npm run format:check",
     "check:manifest-policy": "node scripts/check-manifest-policy-coverage.mjs --report coverage/manifest-policy-coverage.json"
   },
   "dependencies": {
@@ -28,12 +32,20 @@
     "zod": "^3.25.76"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.3",
     "@types/node": "^22.13.1",
     "@types/yauzl": "^2.10.3",
     "@types/yazl": "^2.4.5",
     "@vitest/coverage-v8": "^4.0.18",
+    "eslint": "^9.39.3",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-import-resolver-typescript": "^4.4.4",
+    "eslint-plugin-import-x": "^4.16.1",
+    "eslint-plugin-n": "^17.24.0",
+    "prettier": "^3.8.1",
     "tsx": "^4.19.2",
     "typescript": "^5.7.3",
+    "typescript-eslint": "^8.56.0",
     "vitest": "^4.0.18",
     "yauzl": "^3.2.0"
   }

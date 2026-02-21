@@ -11,8 +11,8 @@ import { runPlanCommand } from "./commands/plan.js";
 import { runProcessCommand } from "./commands/process.js";
 import { runRegenerateCommand } from "./commands/regenerate.js";
 import { runReviewCommand } from "./commands/review.js";
-import { runServeCommand } from "./commands/serve.js";
 import { runSelectCommand } from "./commands/select.js";
+import { runServeCommand } from "./commands/serve.js";
 import { runValidateCommand } from "./commands/validate.js";
 import { getErrorExitCode, getErrorMessage } from "../shared/errors.js";
 
@@ -35,9 +35,7 @@ export async function main(argv: string[]): Promise<number> {
 
     if (command === "plan") {
       const result = await runPlanCommand(rest);
-      process.stdout.write(
-        `Planned ${result.targets} target(s) -> ${result.targetsIndexPath}.\n`,
-      );
+      process.stdout.write(`Planned ${result.targets} target(s) -> ${result.targetsIndexPath}.\n`);
       return 0;
     }
 
@@ -194,7 +192,7 @@ if (isDirectExecution()) {
     .then((exitCode) => {
       process.exitCode = exitCode;
     })
-    .catch((error) => {
+    .catch((error: unknown) => {
       process.stderr.write(`lootforge: ${getErrorMessage(error)}\n`);
       process.exitCode = getErrorExitCode(error, 1);
     });

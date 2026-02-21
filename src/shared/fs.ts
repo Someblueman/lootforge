@@ -27,10 +27,7 @@ export async function writeJsonFile(filePath: string, value: unknown): Promise<v
   await writeFile(filePath, `${JSON.stringify(value, null, 2)}\n`, "utf8");
 }
 
-export async function writeJsonLines(
-  filePath: string,
-  rows: ReadonlyArray<unknown>,
-): Promise<void> {
+export async function writeJsonLines(filePath: string, rows: readonly unknown[]): Promise<void> {
   await ensureParentDir(filePath);
   const body = rows.map((row) => JSON.stringify(row)).join("\n");
   await writeFile(filePath, body.length > 0 ? `${body}\n` : "", "utf8");

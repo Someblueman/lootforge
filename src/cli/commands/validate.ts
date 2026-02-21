@@ -2,8 +2,8 @@ import path from "node:path";
 
 import { runImageAcceptanceChecks } from "../../checks/imageAcceptance.js";
 import { loadManifestSource } from "../../manifest/load.js";
+import { type ManifestV2, type ValidationReport } from "../../manifest/types.js";
 import { normalizeManifestTargets, validateManifestSource } from "../../manifest/validate.js";
-import type { ManifestV2, ValidationReport } from "../../manifest/types.js";
 import { getErrorMessage, CliError } from "../../shared/errors.js";
 import { writeJsonFile } from "../../shared/fs.js";
 import { resolveManifestPath, resolveOutDir, resolveStagePathLayout } from "../../shared/paths.js";
@@ -43,9 +43,7 @@ export function parseValidateCommandArgs(argv: string[]): ValidateCommandArgs {
   };
 }
 
-export async function runValidateCommand(
-  argv: string[],
-): Promise<ValidateCommandResult> {
+export async function runValidateCommand(argv: string[]): Promise<ValidateCommandResult> {
   const args = parseValidateCommandArgs(argv);
   const reportPath = path.join(args.outDir, "checks", "validation-report.json");
 
@@ -102,11 +100,7 @@ export async function runValidateCommand(
         strict: args.strict,
       });
 
-      imageAcceptanceReportPath = path.join(
-        args.outDir,
-        "checks",
-        "image-acceptance-report.json",
-      );
+      imageAcceptanceReportPath = path.join(args.outDir, "checks", "image-acceptance-report.json");
       await writeJsonFile(imageAcceptanceReportPath, acceptanceReport);
 
       report.issues.push(
@@ -153,10 +147,10 @@ function parseBooleanArg(value: string, flagName: string): boolean {
   if (["false", "0", "no", "n"].includes(normalized)) {
     return false;
   }
-  throw new CliError(
-    `Invalid boolean value \"${value}\" for ${flagName}. Use true or false.`,
-    { code: "invalid_boolean_flag", exitCode: 1 },
-  );
+  throw new CliError(`Invalid boolean value "${value}" for ${flagName}. Use true or false.`, {
+    code: "invalid_boolean_flag",
+    exitCode: 1,
+  });
 }
 
 function readArgValue(argv: string[], name: string): string | undefined {

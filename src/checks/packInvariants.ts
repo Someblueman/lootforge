@@ -1,6 +1,6 @@
 import sharp from "sharp";
 
-import type { PlannedTarget } from "../providers/types.js";
+import { type PlannedTarget } from "../providers/types.js";
 import { normalizeTargetOutPath, resolvePathWithinDir } from "../shared/paths.js";
 
 const BYTES_PER_MEGABYTE = 1024 * 1024;
@@ -151,14 +151,15 @@ export async function runPackInvariantChecks(params: {
   };
 
   const hasMetrics = Object.keys(metrics).length > 0;
-  const summary = issues.length > 0 || hasMetrics
-    ? {
-        errors: issues.filter((issue) => issue.level === "error").length,
-        warnings: issues.filter((issue) => issue.level === "warning").length,
-        issues,
-        ...(hasMetrics ? { metrics } : {}),
-      }
-    : undefined;
+  const summary =
+    issues.length > 0 || hasMetrics
+      ? {
+          errors: issues.filter((issue) => issue.level === "error").length,
+          warnings: issues.filter((issue) => issue.level === "warning").length,
+          issues,
+          ...(hasMetrics ? { metrics } : {}),
+        }
+      : undefined;
 
   return {
     summary,
@@ -209,13 +210,11 @@ function collectSpritesheetFamilies(targets: PlannedTarget[]): Map<string, PackF
       continue;
     }
 
-    const family =
-      families.get(sheetTargetId) ??
-      {
-        id: sheetTargetId,
-        sheets: [],
-        frames: [],
-      };
+    const family = families.get(sheetTargetId) ?? {
+      id: sheetTargetId,
+      sheets: [],
+      frames: [],
+    };
 
     if (target.spritesheet?.isSheet === true) {
       family.sheets.push(target);
@@ -233,7 +232,9 @@ async function enforceSpritesheetFamilyInvariants(params: {
   family: PackFamily;
   imagesDir: string;
   addIssue: (issue: PackInvariantIssue) => void;
-  continuityMetricsByAnimation: NonNullable<PackInvariantMetrics["spritesheetContinuityByAnimation"]>;
+  continuityMetricsByAnimation: NonNullable<
+    PackInvariantMetrics["spritesheetContinuityByAnimation"]
+  >;
   runtimeTargetIds: Set<string>;
 }): Promise<void> {
   const { family } = params;
@@ -261,7 +262,7 @@ async function enforceSpritesheetFamilyInvariants(params: {
     });
   }
 
-  const sheetTarget = sheetTargets[0];
+  const sheetTarget = sheetTargets[0] as PlannedTarget | undefined;
   if (!sheetTarget) {
     return;
   }
@@ -290,7 +291,10 @@ async function enforceSpritesheetFamilyInvariants(params: {
   }
 
   const expectedAnimationCounts = new Map<string, number>(
-    (sheetTarget.spritesheet?.animations ?? []).map((animation) => [animation.name, animation.count]),
+    (sheetTarget.spritesheet?.animations ?? []).map((animation) => [
+      animation.name,
+      animation.count,
+    ]),
   );
   const framesByAnimation = new Map<string, PlannedTarget[]>();
   for (const frame of frameTargets) {
@@ -393,13 +397,11 @@ async function enforceSpritesheetFamilyInvariants(params: {
       maxAnchorDrift: Number(maxAnchorDrift.toFixed(6)),
     };
 
-    const silhouetteThreshold = resolveMaxDriftThreshold(
-      [sheetTarget.spritesheetSilhouetteDriftMax, ...orderedFrames.map((frame) => frame.spritesheetSilhouetteDriftMax)],
-    );
-    if (
-      typeof silhouetteThreshold === "number" &&
-      maxSilhouetteDrift > silhouetteThreshold
-    ) {
+    const silhouetteThreshold = resolveMaxDriftThreshold([
+      sheetTarget.spritesheetSilhouetteDriftMax,
+      ...orderedFrames.map((frame) => frame.spritesheetSilhouetteDriftMax),
+    ]);
+    if (typeof silhouetteThreshold === "number" && maxSilhouetteDrift > silhouetteThreshold) {
       params.addIssue({
         level: "error",
         code: "spritesheet_silhouette_drift_exceeded",
@@ -414,9 +416,10 @@ async function enforceSpritesheetFamilyInvariants(params: {
       });
     }
 
-    const anchorThreshold = resolveMaxDriftThreshold(
-      [sheetTarget.spritesheetAnchorDriftMax, ...orderedFrames.map((frame) => frame.spritesheetAnchorDriftMax)],
-    );
+    const anchorThreshold = resolveMaxDriftThreshold([
+      sheetTarget.spritesheetAnchorDriftMax,
+      ...orderedFrames.map((frame) => frame.spritesheetAnchorDriftMax),
+    ]);
     if (typeof anchorThreshold === "number" && maxAnchorDrift > anchorThreshold) {
       params.addIssue({
         level: "error",
@@ -615,7 +618,7 @@ function clamp01(value: number): number {
   return value;
 }
 
-function resolveMaxDriftThreshold(values: Array<number | undefined>): number | undefined {
+function resolveMaxDriftThreshold(values: (number | undefined)[]): number | undefined {
   for (const value of values) {
     if (typeof value === "number" && Number.isFinite(value)) {
       return value;
@@ -644,14 +647,12 @@ function enforceTextureBudgetByProfile(params: {
 
   for (const target of params.runtimeTargets) {
     const profileId = target.evaluationProfileId ?? "__default__";
-    const entry =
-      profileStats.get(profileId) ??
-      {
-        targetIds: new Set<string>(),
-        estimatedBytes: 0,
-        budgetMB: undefined,
-        hasMismatchedBudget: false,
-      };
+    const entry = profileStats.get(profileId) ?? {
+      targetIds: new Set<string>(),
+      estimatedBytes: 0,
+      budgetMB: undefined,
+      hasMismatchedBudget: false,
+    };
 
     entry.targetIds.add(target.id);
 

@@ -1,28 +1,25 @@
-import {
-  nowIso,
-  parseProviderSelection,
-  PlannedTarget,
-  ProviderName,
-} from "../providers/types.js";
-import { safeParseManifestV2 } from "./schema.js";
 import { resolveStyleKitPaletteDefaults } from "./normalize-palette.js";
 import {
   expandSpritesheetTarget,
   normalizeTargetForGeneration,
   toProviderJobSpec,
 } from "./normalize-target.js";
+import { safeParseManifestV2 } from "./schema.js";
+import { collectSemanticIssues, toSchemaValidationIssue } from "./semantic-validation.js";
 import {
-  collectSemanticIssues,
-  toSchemaValidationIssue,
-} from "./semantic-validation.js";
-import type {
-  ManifestSource,
-  ManifestV2,
-  ManifestValidationResult,
-  PlanArtifacts,
-  PlannedProviderJobSpec,
-  ValidationIssue,
+  type ManifestSource,
+  type ManifestV2,
+  type ManifestValidationResult,
+  type PlanArtifacts,
+  type PlannedProviderJobSpec,
+  type ValidationIssue,
 } from "./types.js";
+import {
+  nowIso,
+  parseProviderSelection,
+  type PlannedTarget,
+  type ProviderName,
+} from "../providers/types.js";
 
 export interface ValidateManifestOptions {
   now?: () => Date;
@@ -68,7 +65,7 @@ export function normalizeManifestTargets(
   manifest: ManifestV2,
   options: NormalizeManifestTargetsOptions = {},
 ): PlannedTarget[] {
-  const defaultProvider = manifest.providers?.default ?? "openai";
+  const defaultProvider = manifest.providers.default ?? "openai";
   const styleKitById = new Map(manifest.styleKits.map((kit) => [kit.id, kit]));
   const styleKitPaletteDefaults = resolveStyleKitPaletteDefaults(
     manifest.styleKits,
@@ -91,9 +88,7 @@ export function normalizeManifestTargets(
     const styleKit = styleKitById.get(target.styleKitId);
     const consistencyGroup = consistencyGroupById.get(target.consistencyGroup);
     const evalProfile = evaluationById.get(target.evaluationProfileId);
-    const styleKitPaletteDefault = styleKit
-      ? styleKitPaletteDefaults.get(styleKit.id)
-      : undefined;
+    const styleKitPaletteDefault = styleKit ? styleKitPaletteDefaults.get(styleKit.id) : undefined;
 
     if (!styleKit) {
       throw new Error(
@@ -113,19 +108,13 @@ export function normalizeManifestTargets(
       );
     }
 
-    if (
-      consistencyGroup?.styleKitId &&
-      consistencyGroup.styleKitId !== target.styleKitId
-    ) {
+    if (consistencyGroup?.styleKitId && consistencyGroup.styleKitId !== target.styleKitId) {
       throw new Error(
         `Target "${target.id}" uses styleKitId "${target.styleKitId}" but consistency group "${consistencyGroup.id}" is bound to "${consistencyGroup.styleKitId}".`,
       );
     }
 
-    if (
-      target.scoringProfile &&
-      !scoringProfileById.has(target.scoringProfile)
-    ) {
+    if (target.scoringProfile && !scoringProfileById.has(target.scoringProfile)) {
       throw new Error(
         `Target "${target.id}" references missing scoringProfile "${target.scoringProfile}".`,
       );
@@ -202,8 +191,6 @@ export function createPlanArtifacts(
   };
 }
 
-export function parseManifestProviderFlag(
-  value: string | undefined,
-): ProviderName | "auto" {
+export function parseManifestProviderFlag(value: string | undefined): ProviderName | "auto" {
   return parseProviderSelection(value);
 }

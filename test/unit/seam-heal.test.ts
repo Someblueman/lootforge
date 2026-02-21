@@ -2,7 +2,7 @@ import sharp from "sharp";
 import { describe, expect, it } from "vitest";
 
 import { applySeamHeal } from "../../src/pipeline/seamHeal.js";
-import type { PlannedTarget } from "../../src/providers/types.js";
+import { type PlannedTarget } from "../../src/providers/types.js";
 
 async function createEdgeMismatchImage(width: number, height: number): Promise<Buffer> {
   const channels = 4;
@@ -40,7 +40,7 @@ function edgeDelta(raw: Buffer, width: number, height: number, channels: number)
   let total = 0;
   let count = 0;
   for (let y = 0; y < height; y += 1) {
-    const left = (y * width) * channels;
+    const left = y * width * channels;
     const right = (y * width + (width - 1)) * channels;
     for (let c = 0; c < 3; c += 1) {
       total += Math.abs(raw[left + c] - raw[right + c]);

@@ -3,6 +3,7 @@
 `next` is the only supported manifest contract in this rewrite.
 
 Manifest policy coverage gate:
+
 - `docs/MANIFEST_POLICY_COVERAGE.md` is the machine-checkable index of documented policy fields.
 - `npm run check:manifest-policy` validates coverage status (`implemented|reserved`) and required test evidence, then emits `coverage/manifest-policy-coverage.json`.
 
@@ -46,6 +47,7 @@ Manifest policy coverage gate:
 - `targets[]` (required)
 
 Style kit palette defaults:
+
 - If a target omits `palette`, LootForge will attempt to load `styleKits[].palettePath` and apply it as an exact palette policy.
 - If `targets[].palette` is provided, it overrides any style-kit palette default.
 
@@ -109,6 +111,7 @@ Generation + processing:
   - `spritesheetAnchorDriftMax` (`0..1`, optional max adjacent-frame anchor drift)
 
 Provider runtime precedence for generate/regenerate:
+
 - target-level `generationPolicy` overrides provider defaults for retries/concurrency settings
 - provider runtime fields resolve from manifest and can be overridden by environment variables (`LOOTFORGE_*` / provider-specific env aliases)
 - capability parity is enforced at runtime (`supports(...)` must match provider capability flags)
@@ -128,6 +131,7 @@ Planner behavior:
 - emits a generation-disabled sheet target that process stage assembles
 
 Pack invariants enforced during acceptance/eval:
+
 - runtime output uniqueness across non-catalog targets (case-insensitive normalized path)
 - spritesheet sheet/frame family and atlas-group integrity checks
 - continuity metrics per animation (`maxSilhouetteDrift`, `maxAnchorDrift`) with optional hard-gate thresholds

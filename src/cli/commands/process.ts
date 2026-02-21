@@ -53,7 +53,7 @@ function parseBooleanArg(value: string): boolean {
   if (["false", "0", "no", "n"].includes(normalized)) {
     return false;
   }
-  throw new Error(`Invalid boolean value \"${value}\" for --strict. Use true or false.`);
+  throw new Error(`Invalid boolean value "${value}" for --strict. Use true or false.`);
 }
 
 function readArgValue(argv: string[], name: string): string | undefined {

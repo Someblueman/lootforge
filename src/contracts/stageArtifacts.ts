@@ -2,25 +2,25 @@ import { readFile } from "node:fs/promises";
 
 import { z } from "zod";
 
-const nonEmptyString = z.string().trim().min(1);
+import {
+  AcceptanceSchema,
+  AuxiliaryMapsSchema,
+  CoarseToFineBaseSchema,
+  ControlModeSchema,
+  EditSchema,
+  GenerationModeSchema,
+  HiresFixSchema,
+  nonEmptyString,
+  PalettePolicyBaseSchema,
+  PromptSpecBaseShape,
+  ProviderNameSchema,
+  RuntimeSpecBaseSchema,
+  ScoreWeightsSchema,
+  VlmGateSchema,
+} from "../shared/schemas.js";
+import { formatIssuePath as formatPathBase } from "../shared/zod.js";
 
-const providerNameSchema = z.enum(["openai", "nano", "local"]);
-const generationModeSchema = z.enum(["text", "edit-first"]);
-
-const promptSpecSchema = z.object({
-  primary: nonEmptyString,
-  useCase: z.string().optional(),
-  stylePreset: z.string().optional(),
-  scene: z.string().optional(),
-  subject: z.string().optional(),
-  style: z.string().optional(),
-  composition: z.string().optional(),
-  lighting: z.string().optional(),
-  palette: z.string().optional(),
-  materials: z.string().optional(),
-  constraints: z.string().optional(),
-  negative: z.string().optional(),
-});
+const promptSpecSchema = z.object(PromptSpecBaseShape);
 
 const generationPolicySchema = z.object({
   size: nonEmptyString,
@@ -30,32 +30,18 @@ const generationPolicySchema = z.object({
   background: nonEmptyString,
   outputFormat: z.enum(["png", "jpeg", "webp"]),
   highQuality: z.boolean().optional(),
-  hiresFix: z
-    .object({
-      enabled: z.boolean().optional(),
-      upscale: z.number().min(1.01).max(4).optional(),
-      denoiseStrength: z.number().min(0).max(1).optional(),
-    })
-    .optional(),
+  hiresFix: HiresFixSchema.optional(),
   candidates: z.number().int().min(1),
   maxRetries: z.number().int().min(0),
-  fallbackProviders: z.array(providerNameSchema),
+  fallbackProviders: z.array(ProviderNameSchema),
   providerConcurrency: z.number().int().positive().optional(),
   rateLimitPerMinute: z.number().int().positive().optional(),
-  vlmGate: z
-    .object({
-      threshold: z.number().min(0).max(5).optional(),
-      rubric: nonEmptyString.optional(),
-    })
-    .optional(),
-  coarseToFine: z
-    .object({
-      enabled: z.boolean(),
-      promoteTopK: z.number().int().min(1),
-      minDraftScore: z.number().optional(),
-      requireDraftAcceptance: z.boolean(),
-    })
-    .optional(),
+  vlmGate: VlmGateSchema.optional(),
+  coarseToFine: CoarseToFineBaseSchema.extend({
+    enabled: z.boolean(),
+    promoteTopK: z.number().int().min(1),
+    requireDraftAcceptance: z.boolean(),
+  }).optional(),
 });
 
 const resizeVariantSchema = z.object({
@@ -131,19 +117,6 @@ const postProcessSchema = z.object({
     .optional(),
 });
 
-const targetEditInputSchema = z.object({
-  path: nonEmptyString,
-  role: z.enum(["base", "mask", "reference"]).optional(),
-  fidelity: z.enum(["low", "medium", "high"]).optional(),
-});
-
-const targetEditSchema = z.object({
-  mode: z.enum(["edit", "iterate"]).optional(),
-  instruction: nonEmptyString.optional(),
-  inputs: z.array(targetEditInputSchema).optional(),
-  preserveComposition: z.boolean().optional(),
-});
-
 const regenerationSourceSchema = z.object({
   mode: z.enum(["selection-lock", "selection-lock-edit"]),
   selectionLockPath: nonEmptyString,
@@ -162,21 +135,12 @@ const plannedTargetSchema = z.object({
   loraPath: nonEmptyString.optional(),
   loraStrength: z.number().min(0).max(2).optional(),
   consistencyGroup: nonEmptyString.optional(),
-  generationMode: generationModeSchema.optional(),
+  generationMode: GenerationModeSchema.optional(),
   evaluationProfileId: nonEmptyString.optional(),
   scoringProfile: nonEmptyString.optional(),
   controlImage: nonEmptyString.optional(),
-  controlMode: z.enum(["canny", "depth", "openpose"]).optional(),
-  scoreWeights: z
-    .object({
-      readability: z.number().optional(),
-      fileSize: z.number().optional(),
-      consistency: z.number().optional(),
-      clip: z.number().optional(),
-      lpips: z.number().optional(),
-      ssim: z.number().optional(),
-    })
-    .optional(),
+  controlMode: ControlModeSchema.optional(),
+  scoreWeights: ScoreWeightsSchema.optional(),
   tileable: z.boolean().optional(),
   seamThreshold: z.number().optional(),
   seamStripPx: z.number().int().positive().optional(),
@@ -201,15 +165,7 @@ const plannedTargetSchema = z.object({
       seamStripPx: z.number().int().positive().optional(),
     })
     .optional(),
-  palette: z
-    .object({
-      mode: z.enum(["exact", "max-colors"]),
-      colors: z.array(nonEmptyString).optional(),
-      maxColors: z.number().int().min(2).max(256).optional(),
-      dither: z.number().min(0).max(1).optional(),
-      strict: z.boolean().optional(),
-    })
-    .optional(),
+  palette: PalettePolicyBaseSchema.optional(),
   generationDisabled: z.boolean().optional(),
   catalogDisabled: z.boolean().optional(),
   spritesheet: z
@@ -245,36 +201,16 @@ const plannedTargetSchema = z.object({
         .optional(),
     })
     .optional(),
-  acceptance: z
-    .object({
-      size: nonEmptyString.optional(),
-      alpha: z.boolean().optional(),
-      maxFileSizeKB: z.number().int().positive().optional(),
-    })
-    .optional(),
-  runtimeSpec: z
-    .object({
-      alphaRequired: z.boolean().optional(),
-      previewWidth: z.number().int().positive().optional(),
-      previewHeight: z.number().int().positive().optional(),
-      anchorX: z.number().optional(),
-      anchorY: z.number().optional(),
-    })
-    .optional(),
+  acceptance: AcceptanceSchema.optional(),
+  runtimeSpec: RuntimeSpecBaseSchema.optional(),
   promptSpec: promptSpecSchema,
   generationPolicy: generationPolicySchema.optional(),
   postProcess: postProcessSchema.optional(),
-  provider: providerNameSchema.optional(),
+  provider: ProviderNameSchema.optional(),
   model: nonEmptyString.optional(),
-  edit: targetEditSchema.optional(),
+  edit: EditSchema.optional(),
   regenerationSource: regenerationSourceSchema.optional(),
-  auxiliaryMaps: z
-    .object({
-      normalFromHeight: z.boolean().optional(),
-      specularFromLuma: z.boolean().optional(),
-      aoFromLuma: z.boolean().optional(),
-    })
-    .optional(),
+  auxiliaryMaps: AuxiliaryMapsSchema.optional(),
 });
 
 const candidateScoreSchema = z.object({
@@ -354,7 +290,7 @@ const stageArtifactSchemas = {
     jobs: z.array(
       z.object({
         jobId: nonEmptyString,
-        provider: providerNameSchema,
+        provider: ProviderNameSchema,
         model: nonEmptyString,
         targetId: nonEmptyString,
         inputHash: nonEmptyString,
@@ -401,8 +337,8 @@ const stageArtifactSchemas = {
             warnings: z.array(nonEmptyString).optional(),
           })
           .optional(),
-        generationMode: generationModeSchema.optional(),
-        edit: targetEditSchema.optional(),
+        generationMode: GenerationModeSchema.optional(),
+        edit: EditSchema.optional(),
         regenerationSource: regenerationSourceSchema.optional(),
         warnings: z.array(nonEmptyString).optional(),
       }),
@@ -411,8 +347,8 @@ const stageArtifactSchemas = {
       .array(
         z.object({
           targetId: nonEmptyString,
-          provider: providerNameSchema,
-          attemptedProviders: z.array(providerNameSchema),
+          provider: ProviderNameSchema,
+          attemptedProviders: z.array(ProviderNameSchema),
           message: nonEmptyString,
         }),
       )
@@ -553,7 +489,7 @@ const stageArtifactSchemas = {
         approved: z.boolean(),
         inputHash: nonEmptyString,
         selectedOutputPath: nonEmptyString,
-        provider: providerNameSchema.optional(),
+        provider: ProviderNameSchema.optional(),
         model: nonEmptyString.optional(),
         score: z.number().optional(),
       }),
@@ -594,7 +530,7 @@ export class StageArtifactContractError extends Error {
   declare readonly cause?: unknown;
 
   constructor(init: StageArtifactContractErrorInit) {
-    const first = init.diagnostics[0];
+    const first = init.diagnostics[0] as StageArtifactDiagnostic | undefined;
     super(
       first
         ? `[${init.code}] ${init.kind} failed at ${first.path}: ${first.message}`
@@ -671,9 +607,7 @@ export async function readAndValidateStageArtifact<K extends StageArtifactKind>(
           path: "$",
           code: "invalid_json",
           message:
-            error instanceof Error
-              ? error.message
-              : `Unable to parse JSON: ${String(error)}`,
+            error instanceof Error ? error.message : `Unable to parse JSON: ${String(error)}`,
         },
       ],
       cause: error,
@@ -683,17 +617,13 @@ export async function readAndValidateStageArtifact<K extends StageArtifactKind>(
   return validateStageArtifact(kind, parsed, artifactPath);
 }
 
-function formatIssuePath(pathItems: Array<string | number>): string {
+function formatIssuePath(pathItems: (string | number)[]): string {
   if (pathItems.length === 0) {
     return "$";
   }
-
-  return pathItems
-    .map((item, index) => {
-      if (typeof item === "number") {
-        return `[${item}]`;
-      }
-      return index === 0 ? `$${item.startsWith("[") ? "" : "."}${item}` : `.${item}`;
-    })
-    .join("");
+  const base = formatPathBase(pathItems);
+  if (typeof pathItems[0] === "string") {
+    return base.startsWith("[") ? `$${base}` : `$.${base}`;
+  }
+  return base;
 }

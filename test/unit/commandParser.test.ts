@@ -15,4 +15,3 @@ describe("command parser", () => {
     expect(() => parseCommandLine('node "unterminated')).toThrow(/unmatched quote/i);
   });
 });
-

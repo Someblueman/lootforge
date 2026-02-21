@@ -1,17 +1,9 @@
 export const PROVIDER_NAMES = ["openai", "nano", "local"] as const;
-export const KNOWN_STYLE_PRESETS = [
-  "pixel-art-16bit",
-  "topdown-painterly-sci-fi",
-] as const;
+export const KNOWN_STYLE_PRESETS = ["pixel-art-16bit", "topdown-painterly-sci-fi"] as const;
 export const POST_PROCESS_ALGORITHMS = ["nearest", "lanczos3"] as const;
-export const TARGET_KINDS = [
-  "sprite",
-  "tile",
-  "background",
-  "effect",
-  "spritesheet",
-] as const;
+export const TARGET_KINDS = ["sprite", "tile", "background", "effect", "spritesheet"] as const;
 export const CONTROL_MODES = ["canny", "depth", "openpose"] as const;
+export const GENERATION_MODES = ["text", "edit-first"] as const;
 
 export type ProviderName = (typeof PROVIDER_NAMES)[number];
 export type ProviderSelection = ProviderName | "auto";
@@ -26,7 +18,7 @@ export type PostProcessAlgorithm = (typeof POST_PROCESS_ALGORITHMS)[number];
 export type NormalizedOutputFormat = "png" | "jpeg" | "webp";
 export type TargetKind = (typeof TARGET_KINDS)[number];
 export type ControlMode = (typeof CONTROL_MODES)[number];
-export type GenerationMode = "text" | "edit-first";
+export type GenerationMode = (typeof GENERATION_MODES)[number];
 export type PaletteMode = "exact" | "max-colors";
 
 export interface ProviderCapabilities {
@@ -41,48 +33,43 @@ export interface ProviderCapabilities {
   readonly minDelayMs: number;
 }
 
-const SUPPORTED_FORMATS: ReadonlySet<NormalizedOutputFormat> = new Set([
-  "png",
-  "jpeg",
-  "webp",
-]);
+const SUPPORTED_FORMATS: ReadonlySet<NormalizedOutputFormat> = new Set(["png", "jpeg", "webp"]);
 
-export const PROVIDER_CAPABILITIES: Record<ProviderName, ProviderCapabilities> =
-  {
-    openai: {
-      name: "openai",
-      defaultOutputFormat: "png",
-      supportedOutputFormats: SUPPORTED_FORMATS,
-      supportsTransparentBackground: true,
-      supportsEdits: true,
-      supportsControlNet: false,
-      maxCandidates: 8,
-      defaultConcurrency: 2,
-      minDelayMs: 250,
-    },
-    nano: {
-      name: "nano",
-      defaultOutputFormat: "png",
-      supportedOutputFormats: SUPPORTED_FORMATS,
-      supportsTransparentBackground: false,
-      supportsEdits: true,
-      supportsControlNet: false,
-      maxCandidates: 4,
-      defaultConcurrency: 2,
-      minDelayMs: 350,
-    },
-    local: {
-      name: "local",
-      defaultOutputFormat: "png",
-      supportedOutputFormats: SUPPORTED_FORMATS,
-      supportsTransparentBackground: true,
-      supportsEdits: true,
-      supportsControlNet: true,
-      maxCandidates: 8,
-      defaultConcurrency: 2,
-      minDelayMs: 100,
-    },
-  };
+export const PROVIDER_CAPABILITIES: Record<ProviderName, ProviderCapabilities> = {
+  openai: {
+    name: "openai",
+    defaultOutputFormat: "png",
+    supportedOutputFormats: SUPPORTED_FORMATS,
+    supportsTransparentBackground: true,
+    supportsEdits: true,
+    supportsControlNet: false,
+    maxCandidates: 8,
+    defaultConcurrency: 2,
+    minDelayMs: 250,
+  },
+  nano: {
+    name: "nano",
+    defaultOutputFormat: "png",
+    supportedOutputFormats: SUPPORTED_FORMATS,
+    supportsTransparentBackground: false,
+    supportsEdits: true,
+    supportsControlNet: false,
+    maxCandidates: 4,
+    defaultConcurrency: 2,
+    minDelayMs: 350,
+  },
+  local: {
+    name: "local",
+    defaultOutputFormat: "png",
+    supportedOutputFormats: SUPPORTED_FORMATS,
+    supportsTransparentBackground: true,
+    supportsEdits: true,
+    supportsControlNet: true,
+    maxCandidates: 8,
+    defaultConcurrency: 2,
+    minDelayMs: 100,
+  },
+};
 
 export interface PromptSpec {
   primary: string;
@@ -116,7 +103,8 @@ export interface CoarseToFinePolicy {
 
 export interface GenerationPolicy {
   size?: string;
-  background?: "transparent" | "opaque" | string;
+  /** Accepts "transparent", "opaque", or any custom value. */
+  background?: string;
   outputFormat?: string;
   quality?: string;
   draftQuality?: string;
@@ -294,7 +282,7 @@ export interface PlannedTarget {
   spritesheet?: {
     sheetTargetId: string;
     isSheet?: boolean;
-    animations?: Array<{
+    animations?: {
       name: string;
       count: number;
       fps?: number;
@@ -303,7 +291,7 @@ export interface PlannedTarget {
         x: number;
         y: number;
       };
-    }>;
+    }[];
     animationName?: string;
     frameIndex?: number;
     frameCount?: number;
@@ -347,7 +335,8 @@ export interface NormalizedGenerationPolicy {
   quality: string;
   draftQuality?: string;
   finalQuality?: string;
-  background: "transparent" | "opaque" | string;
+  /** Accepts "transparent", "opaque", or any custom value. */
+  background: string;
   outputFormat: NormalizedOutputFormat;
   highQuality?: boolean;
   hiresFix?: {
@@ -452,18 +441,18 @@ export interface ProviderRunResult {
     minDraftScore?: number;
     requireDraftAcceptance: boolean;
     draftCandidateCount: number;
-    promoted: Array<{
+    promoted: {
       outputPath: string;
       score: number;
       passedAcceptance: boolean;
       refinedOutputPath?: string;
-    }>;
-    discarded: Array<{
+    }[];
+    discarded: {
       outputPath: string;
       score: number;
       passedAcceptance: boolean;
       reason: string;
-    }>;
+    }[];
     skippedReason?: string;
     warnings?: string[];
   };
@@ -494,7 +483,7 @@ export interface ProviderEditJob {
   inputHash: string;
 }
 
-export interface ProviderEditContext extends ProviderRunContext {}
+export type ProviderEditContext = ProviderRunContext;
 
 export interface GenerationProvider {
   readonly name: ProviderName;
@@ -504,10 +493,7 @@ export interface GenerationProvider {
     ctx: ProviderPrepareContext,
   ): ProviderJob[] | Promise<ProviderJob[]>;
   runJob(job: ProviderJob, ctx: ProviderRunContext): Promise<ProviderRunResult>;
-  runEditJob?(
-    job: ProviderEditJob,
-    ctx: ProviderEditContext,
-  ): Promise<ProviderRunResult>;
+  runEditJob?(job: ProviderEditJob, ctx: ProviderEditContext): Promise<ProviderRunResult>;
   supports(feature: ProviderFeature): boolean;
   normalizeError(error: unknown): ProviderError;
 }

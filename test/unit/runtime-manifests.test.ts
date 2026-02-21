@@ -5,7 +5,7 @@ import {
   parseRuntimeManifestTargetsArg,
   resolveRuntimeManifestTargets,
 } from "../../src/output/runtimeManifests.js";
-import type { PlannedTarget } from "../../src/providers/types.js";
+import { type PlannedTarget } from "../../src/providers/types.js";
 
 const TARGETS: PlannedTarget[] = [
   {
@@ -28,21 +28,12 @@ const TARGETS: PlannedTarget[] = [
 
 describe("runtime manifest output", () => {
   it("always includes phaser baseline target", () => {
-    expect(resolveRuntimeManifestTargets(["pixi", "unity"])).toEqual([
-      "phaser",
-      "pixi",
-      "unity",
-    ]);
+    expect(resolveRuntimeManifestTargets(["pixi", "unity"])).toEqual(["phaser", "pixi", "unity"]);
   });
 
   it("parses runtime list and rejects unknown values", () => {
-    expect(parseRuntimeManifestTargetsArg("pixi,unity,pixi")).toEqual([
-      "pixi",
-      "unity",
-    ]);
-    expect(() => parseRuntimeManifestTargetsArg("pixi,unknown")).toThrow(
-      /Unsupported runtime/i,
-    );
+    expect(parseRuntimeManifestTargetsArg("pixi,unity,pixi")).toEqual(["pixi", "unity"]);
+    expect(() => parseRuntimeManifestTargetsArg("pixi,unknown")).toThrow(/Unsupported runtime/i);
   });
 
   it("builds pixi and unity manifests from the same catalog data", () => {
@@ -74,14 +65,10 @@ describe("runtime manifest output", () => {
       runtimeTargets: ["pixi", "unity"],
     });
 
-    expect(artifacts.map((artifact) => artifact.target)).toEqual([
-      "phaser",
-      "pixi",
-      "unity",
-    ]);
+    expect(artifacts.map((artifact) => artifact.target)).toEqual(["phaser", "pixi", "unity"]);
     const unityArtifact = artifacts.find((artifact) => artifact.target === "unity");
     expect(unityArtifact).toBeDefined();
-    const textures = (unityArtifact?.payload.textures as Array<Record<string, unknown>>) ?? [];
+    const textures = (unityArtifact?.payload.textures as Record<string, unknown>[]) ?? [];
     expect(textures[0]?.pivot).toEqual({ x: 0.25, y: 0.75 });
   });
 });

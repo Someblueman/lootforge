@@ -5,17 +5,17 @@ import path from "node:path";
 import sharp from "sharp";
 import { describe, expect, test } from "vitest";
 
+import { runPlanCommand } from "../../src/cli/commands/plan.ts";
 import {
   readAndValidateStageArtifact,
   STAGE_ARTIFACT_CONTRACT_VERSION,
 } from "../../src/contracts/stageArtifacts.ts";
-import { runPlanCommand } from "../../src/cli/commands/plan.ts";
 import { runEvalPipeline } from "../../src/pipeline/eval.ts";
 import { runGeneratePipeline } from "../../src/pipeline/generate.ts";
 import { runProcessPipeline } from "../../src/pipeline/process.ts";
 import { runReviewPipeline } from "../../src/pipeline/review.ts";
 import { runSelectPipeline } from "../../src/pipeline/select.ts";
-import type { ProviderRegistry } from "../../src/providers/registry.ts";
+import { type ProviderRegistry } from "../../src/providers/registry.ts";
 import {
   createProviderJob,
   type GenerationProvider,
@@ -183,12 +183,7 @@ describe("stage artifact contract smoke", () => {
       "utf8",
     );
 
-    const planResult = await runPlanCommand([
-      "--manifest",
-      manifestPath,
-      "--out",
-      outDir,
-    ]);
+    const planResult = await runPlanCommand(["--manifest", manifestPath, "--out", outDir]);
     const generateResult = await runGeneratePipeline({
       outDir,
       provider: "openai",
@@ -229,10 +224,7 @@ describe("stage artifact contract smoke", () => {
       "acceptance-report",
       processResult.acceptanceReportPath,
     );
-    const evalReport = await readAndValidateStageArtifact(
-      "eval-report",
-      evalResult.reportPath,
-    );
+    const evalReport = await readAndValidateStageArtifact("eval-report", evalResult.reportPath);
     const selectionLock = await readAndValidateStageArtifact(
       "selection-lock",
       selectResult.selectionLockPath,
@@ -245,4 +237,3 @@ describe("stage artifact contract smoke", () => {
     expect(selectionLock.targets[0]?.targetId).toBe("hero");
   });
 });
-

@@ -70,7 +70,7 @@ function parseSize(size: string | undefined): { width: number; height: number } 
 export async function buildCatalog(
   targets: CatalogTarget[],
   imagesDir: string,
-  assetBaseUrl: string = "/assets",
+  assetBaseUrl = "/assets",
 ): Promise<CatalogOutput> {
   const resolvedAssetBaseUrl = resolveAssetBaseUrl(assetBaseUrl);
   const items: CatalogItem[] = [];
@@ -111,11 +111,11 @@ export async function buildCatalog(
               ? { normalUrl: `${resolvedAssetBaseUrl}/images/${base}__normal${ext}` }
               : {}),
             ...(target.auxiliaryMaps.specularFromLuma
-            ? { specularUrl: `${resolvedAssetBaseUrl}/images/${base}__specular${ext}` }
-            : {}),
+              ? { specularUrl: `${resolvedAssetBaseUrl}/images/${base}__specular${ext}` }
+              : {}),
             ...(target.auxiliaryMaps.aoFromLuma
-            ? { aoUrl: `${resolvedAssetBaseUrl}/images/${base}__ao${ext}` }
-            : {}),
+              ? { aoUrl: `${resolvedAssetBaseUrl}/images/${base}__ao${ext}` }
+              : {}),
           }
         : undefined;
 
@@ -125,8 +125,7 @@ export async function buildCatalog(
       atlasGroup: target.atlasGroup ?? null,
       out: normalizedOut,
       url: `${resolvedAssetBaseUrl}/images/${normalizedOut}`,
-      alphaRequired:
-        target.runtimeSpec?.alphaRequired ?? target.acceptance?.alpha === true,
+      alphaRequired: target.runtimeSpec?.alphaRequired ?? target.acceptance?.alpha === true,
       previewWidth: target.runtimeSpec?.previewWidth ?? expectedSize.width,
       previewHeight: target.runtimeSpec?.previewHeight ?? expectedSize.height,
       ...(typeof target.runtimeSpec?.anchorX === "number"
@@ -155,7 +154,6 @@ function resolveAssetBaseUrl(rawAssetBaseUrl: string): string {
   const normalized = trimmed.replace(/\\/g, "/");
   const withLeadingSlash = normalized.startsWith("/") ? normalized : `/${normalized}`;
   const collapsed = withLeadingSlash.replace(/\/{2,}/g, "/");
-  const withoutTrailingSlash =
-    collapsed.endsWith("/") ? collapsed.slice(0, -1) : collapsed;
+  const withoutTrailingSlash = collapsed.endsWith("/") ? collapsed.slice(0, -1) : collapsed;
   return withoutTrailingSlash || "/assets";
 }

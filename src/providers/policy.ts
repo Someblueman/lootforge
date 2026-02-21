@@ -1,19 +1,18 @@
-import type {
-  CoarseToFinePolicy,
-  GenerationMode,
-  GenerationPolicy,
-  NormalizedGenerationPolicy,
-  NormalizedOutputFormat,
-  PlannedTarget,
-  PolicyNormalizationIssue,
-  PostProcessAlgorithm,
-  PostProcessPolicy,
-  ProviderCapabilities,
-  ProviderName,
-  ProviderPolicyNormalizationResult,
-  VlmGatePolicy,
+import {
+  type CoarseToFinePolicy,
+  type GenerationMode,
+  type GenerationPolicy,
+  type NormalizedGenerationPolicy,
+  type NormalizedOutputFormat,
+  type PlannedTarget,
+  type PolicyNormalizationIssue,
+  type PostProcessAlgorithm,
+  type PostProcessPolicy,
+  type ProviderCapabilities,
+  type ProviderName,
+  type ProviderPolicyNormalizationResult,
+  type VlmGatePolicy,
 } from "./types-core.js";
-
 import { PROVIDER_CAPABILITIES, PROVIDER_NAMES } from "./types-core.js";
 
 const DEFAULT_SIZE = "1024x1024";
@@ -24,9 +23,7 @@ const DEFAULT_POST_PROCESS_ALGORITHM: PostProcessAlgorithm = "lanczos3";
 const DEFAULT_CANDIDATE_COUNT = 1;
 const DEFAULT_GENERATION_MODE: GenerationMode = "text";
 
-export function normalizeOutputFormatAlias(
-  value: string | undefined,
-): NormalizedOutputFormat {
+export function normalizeOutputFormatAlias(value: string | undefined): NormalizedOutputFormat {
   const normalized = value?.trim().toLowerCase() ?? "";
   if (normalized === "jpg") return "jpeg";
   if (normalized === "jpeg") return "jpeg";
@@ -34,21 +31,15 @@ export function normalizeOutputFormatAlias(
   return "png";
 }
 
-export function getProviderCapabilities(
-  provider: ProviderName,
-): ProviderCapabilities {
+export function getProviderCapabilities(provider: ProviderName): ProviderCapabilities {
   return PROVIDER_CAPABILITIES[provider];
 }
 
 export function isProviderName(value: unknown): value is ProviderName {
-  return (
-    typeof value === "string" && PROVIDER_NAMES.includes(value as ProviderName)
-  );
+  return typeof value === "string" && PROVIDER_NAMES.includes(value as ProviderName);
 }
 
-export function getTargetGenerationPolicy(
-  target: PlannedTarget,
-): NormalizedGenerationPolicy {
+export function getTargetGenerationPolicy(target: PlannedTarget): NormalizedGenerationPolicy {
   const policy = target.generationPolicy ?? {};
   const normalizedHiresFix = normalizeHiresFixPolicy(policy.hiresFix);
   const candidatesRaw =
@@ -63,26 +54,18 @@ export function getTargetGenerationPolicy(
   const finalQuality = policy.finalQuality?.trim();
 
   return {
-    size: policy.size?.trim() || DEFAULT_SIZE,
-    quality: policy.quality?.trim() || DEFAULT_QUALITY,
+    size: policy.size?.trim() ?? DEFAULT_SIZE,
+    quality: policy.quality?.trim() ?? DEFAULT_QUALITY,
     ...(draftQuality ? { draftQuality } : {}),
     ...(finalQuality ? { finalQuality } : {}),
-    background: policy.background?.trim() || DEFAULT_BACKGROUND,
-    outputFormat: normalizeOutputFormatAlias(
-      policy.outputFormat || DEFAULT_OUTPUT_FORMAT,
-    ),
-    ...(typeof policy.highQuality === "boolean"
-      ? { highQuality: policy.highQuality }
-      : {}),
+    background: policy.background?.trim() ?? DEFAULT_BACKGROUND,
+    outputFormat: normalizeOutputFormatAlias(policy.outputFormat ?? DEFAULT_OUTPUT_FORMAT),
+    ...(typeof policy.highQuality === "boolean" ? { highQuality: policy.highQuality } : {}),
     ...(normalizedHiresFix ? { hiresFix: normalizedHiresFix } : {}),
     candidates: Math.max(1, candidatesRaw),
-    ...(typeof maxRetriesRaw === "number"
-      ? { maxRetries: Math.max(0, maxRetriesRaw) }
-      : {}),
+    ...(typeof maxRetriesRaw === "number" ? { maxRetries: Math.max(0, maxRetriesRaw) } : {}),
     fallbackProviders: Array.isArray(policy.fallbackProviders)
-      ? policy.fallbackProviders.filter((name): name is ProviderName =>
-          isProviderName(name),
-        )
+      ? policy.fallbackProviders.filter((name): name is ProviderName => isProviderName(name))
       : [],
     providerConcurrency:
       typeof policy.providerConcurrency === "number" &&
@@ -116,22 +99,14 @@ function normalizeHiresFixPolicy(
   if (typeof policy.upscale === "number" && Number.isFinite(policy.upscale)) {
     normalized.upscale = Math.max(1.01, Math.min(4, policy.upscale));
   }
-  if (
-    typeof policy.denoiseStrength === "number" &&
-    Number.isFinite(policy.denoiseStrength)
-  ) {
-    normalized.denoiseStrength = Math.max(
-      0,
-      Math.min(1, policy.denoiseStrength),
-    );
+  if (typeof policy.denoiseStrength === "number" && Number.isFinite(policy.denoiseStrength)) {
+    normalized.denoiseStrength = Math.max(0, Math.min(1, policy.denoiseStrength));
   }
 
   return Object.keys(normalized).length > 0 ? normalized : undefined;
 }
 
-function normalizeVlmGatePolicy(
-  policy: VlmGatePolicy | undefined,
-): VlmGatePolicy | undefined {
+function normalizeVlmGatePolicy(policy: VlmGatePolicy | undefined): VlmGatePolicy | undefined {
   if (!policy) {
     return undefined;
   }
@@ -159,13 +134,11 @@ function normalizeCoarseToFinePolicy(
   }
 
   const promoteTopK =
-    typeof policy.promoteTopK === "number" &&
-    Number.isFinite(policy.promoteTopK)
+    typeof policy.promoteTopK === "number" && Number.isFinite(policy.promoteTopK)
       ? Math.max(1, Math.round(policy.promoteTopK))
       : 1;
   const minDraftScore =
-    typeof policy.minDraftScore === "number" &&
-    Number.isFinite(policy.minDraftScore)
+    typeof policy.minDraftScore === "number" && Number.isFinite(policy.minDraftScore)
       ? policy.minDraftScore
       : undefined;
 
@@ -200,7 +173,7 @@ export function normalizeGenerationPolicyForProvider(
     issues.push({
       level: "error",
       code: "unsupported_output_format",
-      message: `${provider} does not support output format \"${policy.outputFormat}\".`,
+      message: `${provider} does not support output format "${policy.outputFormat}".`,
     });
   }
 
@@ -209,15 +182,11 @@ export function normalizeGenerationPolicyForProvider(
     issues.push({
       level: "warning",
       code: "jpg_transparency_normalized",
-      message:
-        "Transparent background requested with JPEG output; outputFormat normalized to png.",
+      message: "Transparent background requested with JPEG output; outputFormat normalized to png.",
     });
   }
 
-  if (
-    policy.background === "transparent" &&
-    !capabilities.supportsTransparentBackground
-  ) {
+  if (policy.background === "transparent" && !capabilities.supportsTransparentBackground) {
     issues.push({
       level: "error",
       code: "transparent_background_unsupported",
@@ -234,10 +203,7 @@ export function normalizeGenerationPolicyForProvider(
     policy.candidates = capabilities.maxCandidates;
   }
 
-  if (
-    policy.coarseToFine &&
-    policy.coarseToFine.promoteTopK > policy.candidates
-  ) {
+  if (policy.coarseToFine && policy.coarseToFine.promoteTopK > policy.candidates) {
     issues.push({
       level: "warning",
       code: "coarse_to_fine_topk_clamped",
@@ -246,16 +212,12 @@ export function normalizeGenerationPolicyForProvider(
     policy.coarseToFine.promoteTopK = policy.candidates;
   }
 
-  policy.fallbackProviders = policy.fallbackProviders.filter(
-    (name) => name !== provider,
-  );
+  policy.fallbackProviders = policy.fallbackProviders.filter((name) => name !== provider);
 
   return { policy, issues };
 }
 
-export function getTargetPostProcessPolicy(
-  target: PlannedTarget,
-): PostProcessPolicy {
+export function getTargetPostProcessPolicy(target: PlannedTarget): PostProcessPolicy {
   const policy = target.postProcess ?? {};
   return {
     resizeTo: policy.resizeTo,

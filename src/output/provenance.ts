@@ -12,11 +12,11 @@ export interface ProvenanceJobRecord {
   outputPath: string;
   bytesWritten?: number;
   skipped?: boolean;
-  candidateOutputs?: Array<{
+  candidateOutputs?: {
     outputPath: string;
     bytesWritten: number;
-  }>;
-  candidateScores?: Array<{
+  }[];
+  candidateScores?: {
     outputPath: string;
     score: number;
     passedAcceptance: boolean;
@@ -36,7 +36,7 @@ export interface ProvenanceJobRecord {
       evaluator: "command" | "http";
     };
     selected?: boolean;
-  }>;
+  }[];
   coarseToFine?: {
     enabled: boolean;
     draftQuality: string;
@@ -45,18 +45,18 @@ export interface ProvenanceJobRecord {
     minDraftScore?: number;
     requireDraftAcceptance: boolean;
     draftCandidateCount: number;
-    promoted: Array<{
+    promoted: {
       outputPath: string;
       score: number;
       passedAcceptance: boolean;
       refinedOutputPath?: string;
-    }>;
-    discarded: Array<{
+    }[];
+    discarded: {
       outputPath: string;
       score: number;
       passedAcceptance: boolean;
       reason: string;
-    }>;
+    }[];
     skippedReason?: string;
     warnings?: string[];
   };
@@ -64,11 +64,11 @@ export interface ProvenanceJobRecord {
   edit?: {
     mode?: "edit" | "iterate";
     instruction?: string;
-    inputs?: Array<{
+    inputs?: {
       path: string;
       role?: "base" | "mask" | "reference";
       fidelity?: "low" | "medium" | "high";
-    }>;
+    }[];
     preserveComposition?: boolean;
   };
   regenerationSource?: {
@@ -87,12 +87,12 @@ export interface RunProvenance {
   finishedAt: string;
   generatedAt: string;
   jobs: ProvenanceJobRecord[];
-  failures?: Array<{
+  failures?: {
     targetId: string;
     provider: string;
     attemptedProviders: string[];
     message: string;
-  }>;
+  }[];
 }
 
 export async function writeRunProvenance(

@@ -1,46 +1,37 @@
 import path from "node:path";
 
-import type {
-  PalettePolicy,
-  PlannedTarget,
-  PromptSpec,
-  ProviderName,
-  TargetKind,
-  TargetScoreWeights,
-} from "../providers/types.js";
-import {
-  buildStructuredPrompt,
-  normalizeGenerationPolicyForProvider,
-} from "../providers/types.js";
-import {
-  normalizeManifestAssetPath,
-  normalizeTargetOutPath,
-} from "../shared/paths.js";
-import type {
-  ManifestConsistencyGroup,
-  ManifestEvaluationProfile,
-  ManifestScoringProfile,
-  ManifestTarget,
-  ManifestV2,
-  PlannedProviderJobSpec,
-} from "./types.js";
 import {
   normalizeSeamHealPolicy,
   normalizeWrapGridPolicy,
   resolveTargetPalettePolicy,
 } from "./normalize-palette.js";
-import {
-  resolvePostProcess,
-  toNormalizedGenerationPolicy,
-} from "./normalize-policy.js";
+import { resolvePostProcess, toNormalizedGenerationPolicy } from "./normalize-policy.js";
 import {
   DEFAULT_STYLE_USE_CASE,
   mergeStyleKitPrompt,
   normalizePromptSpec,
   normalizePromptSpecFromTarget,
 } from "./normalize-prompt.js";
+import {
+  type ManifestConsistencyGroup,
+  type ManifestEvaluationProfile,
+  type ManifestScoringProfile,
+  type ManifestTarget,
+  type ManifestV2,
+  type PlannedProviderJobSpec,
+} from "./types.js";
+import {
+  type PalettePolicy,
+  type PlannedTarget,
+  type PromptSpec,
+  type ProviderName,
+  type TargetKind,
+  type TargetScoreWeights,
+} from "../providers/types.js";
+import { buildStructuredPrompt, normalizeGenerationPolicyForProvider } from "../providers/types.js";
+import { normalizeManifestAssetPath, normalizeTargetOutPath } from "../shared/paths.js";
 
-export const SCORE_WEIGHT_KEYS: Array<keyof TargetScoreWeights> = [
+export const SCORE_WEIGHT_KEYS: (keyof TargetScoreWeights)[] = [
   "readability",
   "fileSize",
   "consistency",
@@ -49,10 +40,7 @@ export const SCORE_WEIGHT_KEYS: Array<keyof TargetScoreWeights> = [
   "ssim",
 ];
 
-export const DEFAULT_KIND_SCORE_WEIGHT_PRESETS: Record<
-  TargetKind,
-  TargetScoreWeights
-> = {
+export const DEFAULT_KIND_SCORE_WEIGHT_PRESETS: Record<TargetKind, TargetScoreWeights> = {
   sprite: {
     readability: 1.15,
     fileSize: 0.85,
@@ -114,10 +102,7 @@ export function normalizeOptionalManifestAssetPath(
   }
 }
 
-export function normalizeManifestAssetPathList(
-  values: string[],
-  label: string,
-): string[] {
+export function normalizeManifestAssetPathList(values: string[], label: string): string[] {
   const normalized: string[] = [];
   for (const [index, value] of values.entries()) {
     const itemLabel = `${label}[${index}]`;
@@ -129,9 +114,7 @@ export function normalizeManifestAssetPathList(
   return normalized;
 }
 
-export function normalizeTargetKindForScoring(
-  kind: string,
-): TargetKind | undefined {
+export function normalizeTargetKindForScoring(kind: string): TargetKind | undefined {
   const normalizedKind = kind.trim().toLowerCase();
   if (
     normalizedKind === "sprite" ||
@@ -170,11 +153,8 @@ export function resolveTargetScoring(params: {
   scoreWeights?: TargetScoreWeights;
 } {
   const kind = normalizeTargetKindForScoring(params.target.kind);
-  const profileId =
-    params.target.scoringProfile ?? params.target.evaluationProfileId;
-  const profile = profileId
-    ? params.scoringProfileById.get(profileId)
-    : undefined;
+  const profileId = params.target.scoringProfile ?? params.target.evaluationProfileId;
+  const profile = profileId ? params.scoringProfileById.get(profileId) : undefined;
   const scoreWeights: TargetScoreWeights = {};
 
   if (kind) {
@@ -230,7 +210,7 @@ export function normalizeTargetForGeneration(params: {
 
   const provider = params.target.provider ?? params.defaultProvider;
   const model = resolveTargetModel(params.manifest, params.target, provider);
-  const atlasGroup = params.target.atlasGroup?.trim() || null;
+  const atlasGroup = params.target.atlasGroup?.trim() ?? null;
   const promptSpec =
     params.promptOverride ??
     mergeStyleKitPrompt({
@@ -244,9 +224,7 @@ export function normalizeTargetForGeneration(params: {
     provider,
     toNormalizedGenerationPolicy(params.target),
   );
-  const policyErrors = normalizedPolicy.issues.filter(
-    (issue) => issue.level === "error",
-  );
+  const policyErrors = normalizedPolicy.issues.filter((issue) => issue.level === "error");
   if (policyErrors.length > 0) {
     throw new Error(
       `Invalid generation policy for target "${params.target.id}": ${policyErrors
@@ -256,21 +234,12 @@ export function normalizeTargetForGeneration(params: {
   }
 
   const acceptance = {
-    ...(params.target.acceptance?.size
-      ? { size: params.target.acceptance.size.trim() }
-      : {}),
-    alpha:
-      params.target.acceptance?.alpha ??
-      params.evalProfile.hardGates?.requireAlpha ??
-      false,
+    ...(params.target.acceptance?.size ? { size: params.target.acceptance.size.trim() } : {}),
+    alpha: params.target.acceptance?.alpha ?? params.evalProfile.hardGates?.requireAlpha ?? false,
     maxFileSizeKB:
-      params.target.acceptance?.maxFileSizeKB ??
-      params.evalProfile.hardGates?.maxFileSizeKB,
+      params.target.acceptance?.maxFileSizeKB ?? params.evalProfile.hardGates?.maxFileSizeKB,
   };
-  const palette = resolveTargetPalettePolicy(
-    params.target,
-    params.styleKitPaletteDefault,
-  );
+  const palette = resolveTargetPalettePolicy(params.target, params.styleKitPaletteDefault);
   const seamHeal = normalizeSeamHealPolicy(params.target, params.evalProfile);
   const wrapGrid = normalizeWrapGridPolicy(params.target, params.evalProfile);
   const styleReferenceImages = normalizeManifestAssetPathList(
@@ -307,24 +276,17 @@ export function normalizeTargetForGeneration(params: {
     evaluationProfileId: params.target.evaluationProfileId,
     ...(scoring.profileId ? { scoringProfile: scoring.profileId } : {}),
     ...(controlImage ? { controlImage } : {}),
-    ...(params.target.controlMode
-      ? { controlMode: params.target.controlMode }
-      : {}),
+    ...(params.target.controlMode ? { controlMode: params.target.controlMode } : {}),
     ...(scoring.scoreWeights ? { scoreWeights: scoring.scoreWeights } : {}),
     tileable: params.target.tileable,
-    seamThreshold:
-      params.target.seamThreshold ??
-      params.evalProfile.hardGates?.seamThreshold,
-    seamStripPx:
-      params.target.seamStripPx ?? params.evalProfile.hardGates?.seamStripPx,
+    seamThreshold: params.target.seamThreshold ?? params.evalProfile.hardGates?.seamThreshold,
+    seamStripPx: params.target.seamStripPx ?? params.evalProfile.hardGates?.seamStripPx,
     alphaHaloRiskMax: params.evalProfile.hardGates?.alphaHaloRiskMax,
     alphaStrayNoiseMax: params.evalProfile.hardGates?.alphaStrayNoiseMax,
     alphaEdgeSharpnessMin: params.evalProfile.hardGates?.alphaEdgeSharpnessMin,
     packTextureBudgetMB: params.evalProfile.hardGates?.packTextureBudgetMB,
-    spritesheetSilhouetteDriftMax:
-      params.evalProfile.hardGates?.spritesheetSilhouetteDriftMax,
-    spritesheetAnchorDriftMax:
-      params.evalProfile.hardGates?.spritesheetAnchorDriftMax,
+    spritesheetSilhouetteDriftMax: params.evalProfile.hardGates?.spritesheetSilhouetteDriftMax,
+    spritesheetAnchorDriftMax: params.evalProfile.hardGates?.spritesheetAnchorDriftMax,
     ...(seamHeal ? { seamHeal } : {}),
     ...(wrapGrid ? { wrapGrid } : {}),
     ...(palette ? { palette } : {}),
@@ -351,9 +313,7 @@ export function normalizeTargetForGeneration(params: {
     generationPolicy: normalizedPolicy.policy,
     postProcess: resolvePostProcess(params.target, palette),
     ...(params.target.edit ? { edit: params.target.edit } : {}),
-    ...(params.target.auxiliaryMaps
-      ? { auxiliaryMaps: params.target.auxiliaryMaps }
-      : {}),
+    ...(params.target.auxiliaryMaps ? { auxiliaryMaps: params.target.auxiliaryMaps } : {}),
     ...(params.spritesheet ? { spritesheet: params.spritesheet } : {}),
     ...(params.generationDisabled ? { generationDisabled: true } : {}),
     ...(params.catalogDisabled ? { catalogDisabled: true } : {}),
@@ -380,8 +340,7 @@ export function expandSpritesheetTarget(params: {
   const outExt = path.extname(normalizedSheetOut) || ".png";
   const outBase = path.basename(normalizedSheetOut, outExt);
   const frameTargets: PlannedTarget[] = [];
-  const animations: NonNullable<PlannedTarget["spritesheet"]>["animations"] =
-    [];
+  const animations: NonNullable<PlannedTarget["spritesheet"]>["animations"] = [];
 
   const entries = Object.entries(params.target.animations ?? {}).sort((a, b) =>
     a[0].localeCompare(b[0]),
@@ -400,7 +359,7 @@ export function expandSpritesheetTarget(params: {
   });
 
   for (const [animationName, animation] of entries) {
-    animations?.push({
+    animations.push({
       name: animationName,
       count: animation.count,
       fps: animation.fps,
@@ -469,7 +428,7 @@ export function expandSpritesheetTarget(params: {
     spritesheet: {
       sheetTargetId: params.target.id,
       isSheet: true,
-      animations: animations ?? [],
+      animations,
     },
   });
 

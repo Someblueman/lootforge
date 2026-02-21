@@ -1,24 +1,16 @@
-import type { PromptSpec } from "../providers/types.js";
-import type {
-  ManifestConsistencyGroup,
-  ManifestTarget,
-  ManifestV2,
-} from "./types.js";
+import { type ManifestConsistencyGroup, type ManifestTarget, type ManifestV2 } from "./types.js";
+import { type PromptSpec } from "../providers/types.js";
 
 export const DEFAULT_STYLE_USE_CASE = "game-asset";
 
-export function normalizePromptSpecFromTarget(
-  target: ManifestTarget,
-): PromptSpec {
+export function normalizePromptSpecFromTarget(target: ManifestTarget): PromptSpec {
   if (target.promptSpec) {
     return normalizePromptSpec(target.promptSpec);
   }
   return normalizePromptSpec(target.prompt);
 }
 
-export function normalizePromptSpec(
-  prompt: ManifestTarget["prompt"],
-): PromptSpec {
+export function normalizePromptSpec(prompt: ManifestTarget["prompt"]): PromptSpec {
   if (typeof prompt === "string") {
     return {
       primary: prompt.trim(),
@@ -29,7 +21,7 @@ export function normalizePromptSpec(
   if (prompt && typeof prompt === "object") {
     return {
       primary: prompt.primary.trim(),
-      useCase: prompt.useCase?.trim() || DEFAULT_STYLE_USE_CASE,
+      useCase: prompt.useCase?.trim() ?? DEFAULT_STYLE_USE_CASE,
       ...(prompt.stylePreset ? { stylePreset: prompt.stylePreset.trim() } : {}),
       ...(prompt.scene ? { scene: prompt.scene.trim() } : {}),
       ...(prompt.subject ? { subject: prompt.subject.trim() } : {}),
@@ -70,9 +62,7 @@ export function mergeStyleKitPrompt(params: {
   return {
     ...params.promptSpec,
     style: [params.promptSpec.style, styleHint].filter(Boolean).join(" "),
-    lighting: [params.promptSpec.lighting, lightingHint]
-      .filter(Boolean)
-      .join(" "),
+    lighting: [params.promptSpec.lighting, lightingHint].filter(Boolean).join(" "),
     constraints: [
       params.promptSpec.constraints,
       `Consistency group: ${params.consistencyGroupId}.`,

@@ -178,7 +178,7 @@ describe("eval adapters", () => {
         '  console.error("missing prompt context");',
         "  process.exit(2);",
         "}",
-        'process.stdout.write(JSON.stringify({ metrics: { alignment: 0.82 }, score: 5 }));',
+        "process.stdout.write(JSON.stringify({ metrics: { alignment: 0.82 }, score: 5 }));",
         "",
       ].join("\n"),
       "utf8",
@@ -193,7 +193,7 @@ describe("eval adapters", () => {
         '  console.error("missing reference images");',
         "  process.exit(3);",
         "}",
-        'process.stdout.write(JSON.stringify({ metrics: { perceptual_distance: 0.2 }, score: -2 }));',
+        "process.stdout.write(JSON.stringify({ metrics: { perceptual_distance: 0.2 }, score: -2 }));",
         "",
       ].join("\n"),
       "utf8",
@@ -290,10 +290,9 @@ describe("eval adapters", () => {
 
     await writeFile(
       clipScriptPath,
-      [
-        'process.stdout.write(JSON.stringify({ metrics: { alignment: 0.9 }, score: 1 }));',
-        "",
-      ].join("\n"),
+      ["process.stdout.write(JSON.stringify({ metrics: { alignment: 0.9 }, score: 1 }));", ""].join(
+        "\n",
+      ),
       "utf8",
     );
 
@@ -301,7 +300,9 @@ describe("eval adapters", () => {
     process.env.LOOTFORGE_CLIP_ADAPTER_CMD = `${process.execPath} ${clipScriptPath}`;
 
     const indexRaw = await readFile(fixture.targetsIndexPath, "utf8");
-    const index = JSON.parse(indexRaw) as { targets?: Array<{ edit?: { inputs?: Array<{ path: string }> } }> };
+    const index = JSON.parse(indexRaw) as {
+      targets?: { edit?: { inputs?: { path: string }[] } }[];
+    };
     if (!index.targets?.[0]?.edit?.inputs?.[0]) {
       throw new Error("fixture target is missing edit input");
     }

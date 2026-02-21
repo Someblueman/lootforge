@@ -1,10 +1,7 @@
 import { readFile } from "node:fs/promises";
 
-import type { ProviderRegistryOptions } from "./registry.js";
-import {
-  toOptionalNonNegativeInteger,
-  toOptionalPositiveInteger,
-} from "./runtime.js";
+import { type ProviderRegistryOptions } from "./registry.js";
+import { toOptionalNonNegativeInteger, toOptionalPositiveInteger } from "./runtime.js";
 
 interface RuntimeProviderConfig {
   model?: unknown;
@@ -82,10 +79,7 @@ export function buildProviderRegistryOptions(
   });
 
   const nano = pickDefinedObject({
-    model: firstDefinedString(
-      env.LOOTFORGE_NANO_MODEL,
-      toNonEmptyString(providers?.nano?.model),
-    ),
+    model: firstDefinedString(env.LOOTFORGE_NANO_MODEL, toNonEmptyString(providers?.nano?.model)),
     apiBase: firstDefinedString(
       env.LOOTFORGE_NANO_ENDPOINT,
       env.GEMINI_API_BASE,
@@ -114,10 +108,7 @@ export function buildProviderRegistryOptions(
   });
 
   const local = pickDefinedObject({
-    model: firstDefinedString(
-      env.LOOTFORGE_LOCAL_MODEL,
-      toNonEmptyString(providers?.local?.model),
-    ),
+    model: firstDefinedString(env.LOOTFORGE_LOCAL_MODEL, toNonEmptyString(providers?.local?.model)),
     baseUrl: firstDefinedString(
       env.LOOTFORGE_LOCAL_ENDPOINT,
       env.LOCAL_DIFFUSION_BASE_URL,
@@ -163,6 +154,7 @@ async function readManifestProviders(
   try {
     const raw = await readFile(manifestPath, "utf8");
     const parsed = JSON.parse(raw) as RuntimeManifestShape;
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
     if (!parsed || typeof parsed !== "object") {
       return undefined;
     }
@@ -220,7 +212,7 @@ function toNumber(value: unknown): number | undefined {
   return value;
 }
 
-function firstDefinedString(...values: Array<string | undefined>): string | undefined {
+function firstDefinedString(...values: (string | undefined)[]): string | undefined {
   for (const value of values) {
     if (typeof value !== "string") {
       continue;
@@ -233,9 +225,7 @@ function firstDefinedString(...values: Array<string | undefined>): string | unde
   return undefined;
 }
 
-function firstDefinedPositiveInteger(
-  ...values: Array<number | undefined>
-): number | undefined {
+function firstDefinedPositiveInteger(...values: (number | undefined)[]): number | undefined {
   for (const value of values) {
     const normalized = toOptionalPositiveInteger(value);
     if (typeof normalized === "number") {
@@ -245,9 +235,7 @@ function firstDefinedPositiveInteger(
   return undefined;
 }
 
-function firstDefinedNonNegativeInteger(
-  ...values: Array<number | undefined>
-): number | undefined {
+function firstDefinedNonNegativeInteger(...values: (number | undefined)[]): number | undefined {
   for (const value of values) {
     const normalized = toOptionalNonNegativeInteger(value);
     if (typeof normalized === "number") {

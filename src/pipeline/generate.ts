@@ -1,3 +1,4 @@
+// eslint-disable-next-line n/no-unsupported-features/node-builtins
 import { access, cp, mkdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
 
@@ -6,25 +7,25 @@ import { writeRunProvenance } from "../output/provenance.js";
 import {
   createProviderRegistry,
   getProvider,
-  ProviderRegistry,
+  type ProviderRegistry,
   resolveTargetProviderRoute,
 } from "../providers/registry.js";
+import { resolveProviderRegistryOptions } from "../providers/runtimeConfig.js";
 import {
-  CandidateScoreRecord,
-  GenerationProvider,
+  type CandidateScoreRecord,
+  type GenerationProvider,
   getTargetGenerationPolicy,
   normalizeGenerationPolicyForProvider,
   nowIso,
   parseProviderSelection,
-  PlannedTarget,
-  ProviderCandidateOutput,
+  type PlannedTarget,
+  type ProviderCandidateOutput,
   ProviderError,
-  ProviderName,
-  ProviderRunResult,
-  ProviderSelection,
+  type ProviderName,
+  type ProviderRunResult,
+  type ProviderSelection,
   sha256Hex,
 } from "../providers/types.js";
-import { resolveProviderRegistryOptions } from "../providers/runtimeConfig.js";
 import {
   normalizeTargetOutPath,
   resolvePathWithinRoot,
@@ -62,11 +63,7 @@ export interface GeneratePipelineResult {
   failures: GenerateJobFailure[];
 }
 
-export type GenerateProgressEventType =
-  | "prepare"
-  | "job_start"
-  | "job_finish"
-  | "job_error";
+export type GenerateProgressEventType = "prepare" | "job_start" | "job_finish" | "job_error";
 
 export interface GenerateProgressEvent {
   type: GenerateProgressEventType;
@@ -129,9 +126,7 @@ export async function runGeneratePipeline(
   const registry =
     options.registry ??
     createProviderRegistry(
-      await resolveProviderRegistryOptions(
-        resolveManifestPathFromIndex(index, targetsIndexPath),
-      ),
+      await resolveProviderRegistryOptions(resolveManifestPathFromIndex(index, targetsIndexPath)),
     );
   const targets = normalizeTargets(index, targetsIndexPath);
   const filteredTargets = filterTargetsByIds(
@@ -140,17 +135,13 @@ export async function runGeneratePipeline(
   );
   const lock = await readSelectionLock(
     path.resolve(
-      options.selectionLockPath ??
-        path.join(layout.outDir, "locks", "selection-lock.json"),
+      options.selectionLockPath ?? path.join(layout.outDir, "locks", "selection-lock.json"),
     ),
   );
-  const lockByTargetId = new Map(
-    (lock.targets ?? []).map((item) => [item.targetId, item]),
-  );
+  const lockByTargetId = new Map((lock.targets ?? []).map((item) => [item.targetId, item]));
   const inputHash = sha256Hex(indexRaw);
   const startedAt = nowIso(options.now);
-  const runId =
-    options.runId ?? sha256Hex(`${inputHash}:${startedAt}`).slice(0, 16);
+  const runId = options.runId ?? sha256Hex(`${inputHash}:${startedAt}`).slice(0, 16);
 
   await mkdir(imagesDir, { recursive: true });
 
@@ -183,115 +174,100 @@ export async function runGeneratePipeline(
   const failures: GenerateJobFailure[] = [];
 
   await Promise.all(
-    Array.from(groupedTasks.entries()).map(
-      async ([providerName, providerTasks]) => {
-        const provider = getProvider(registry, providerName);
-        const providerConcurrency = Math.max(
-          1,
-          ...providerTasks.map(
-            (task) => task.target.generationPolicy?.providerConcurrency ?? 0,
-          ),
-          provider.capabilities.defaultConcurrency,
-        );
+    Array.from(groupedTasks.entries()).map(async ([providerName, providerTasks]) => {
+      const provider = getProvider(registry, providerName);
+      const providerConcurrency = Math.max(
+        1,
+        ...providerTasks.map((task) => task.target.generationPolicy?.providerConcurrency ?? 0),
+        provider.capabilities.defaultConcurrency,
+      );
 
-        const queue = [...providerTasks].sort((left, right) =>
-          left.target.id.localeCompare(right.target.id),
-        );
-        let nextTask = 0;
-        let nextScheduledStartAt = 0;
-        const reserveWaitMs = (task: TargetTask): number => {
-          const minDelayMs = computeProviderDelayMs(
-            task,
-            provider.capabilities.minDelayMs,
-          );
-          const nowMs = Date.now();
-          const scheduledStart = Math.max(nowMs, nextScheduledStartAt);
-          nextScheduledStartAt = scheduledStart + minDelayMs;
-          return Math.max(0, scheduledStart - nowMs);
-        };
+      const queue = [...providerTasks].sort((left, right) =>
+        left.target.id.localeCompare(right.target.id),
+      );
+      let nextTask = 0;
+      let nextScheduledStartAt = 0;
+      const reserveWaitMs = (task: TargetTask): number => {
+        const minDelayMs = computeProviderDelayMs(task, provider.capabilities.minDelayMs);
+        const nowMs = Date.now();
+        const scheduledStart = Math.max(nowMs, nextScheduledStartAt);
+        nextScheduledStartAt = scheduledStart + minDelayMs;
+        return Math.max(0, scheduledStart - nowMs);
+      };
 
-        const workers: Promise<void>[] = [];
-        for (
-          let workerIndex = 0;
-          workerIndex < providerConcurrency;
-          workerIndex += 1
-        ) {
-          workers.push(
-            (async () => {
-              while (nextTask < queue.length) {
-                const currentIndex = nextTask;
-                nextTask += 1;
-                const task = queue[currentIndex];
+      const workers: Promise<void>[] = [];
+      for (let workerIndex = 0; workerIndex < providerConcurrency; workerIndex += 1) {
+        workers.push(
+          (async () => {
+            while (nextTask < queue.length) {
+              const currentIndex = nextTask;
+              nextTask += 1;
+              const task = queue[currentIndex];
 
-                const waitMs = reserveWaitMs(task);
-                if (waitMs > 0) {
-                  await delay(waitMs);
-                }
+              const waitMs = reserveWaitMs(task);
+              if (waitMs > 0) {
+                await delay(waitMs);
+              }
 
-                const progressIndex = task.targetIndex;
+              const progressIndex = task.targetIndex;
+              options.onProgress?.({
+                type: "job_start",
+                totalJobs: tasks.length,
+                jobIndex: progressIndex,
+                targetId: task.target.id,
+                provider: task.primaryProvider,
+                model: task.target.model,
+              });
+
+              try {
+                const result = await runTaskWithFallback({
+                  task,
+                  outDir: layout.outDir,
+                  imagesDir,
+                  now: options.now,
+                  fetchImpl: options.fetchImpl,
+                  registry,
+                  lockByTargetId,
+                  skipLocked,
+                });
+                results.push(result);
+
                 options.onProgress?.({
-                  type: "job_start",
+                  type: "job_finish",
+                  totalJobs: tasks.length,
+                  jobIndex: progressIndex,
+                  targetId: task.target.id,
+                  provider: result.provider,
+                  model: result.model,
+                  bytesWritten: result.bytesWritten,
+                  outputPath: result.outputPath,
+                });
+              } catch (error) {
+                const message = error instanceof Error ? error.message : String(error);
+                failures.push({
+                  targetId: task.target.id,
+                  provider: task.primaryProvider,
+                  attemptedProviders: [task.primaryProvider, ...task.fallbackProviders],
+                  message,
+                });
+
+                options.onProgress?.({
+                  type: "job_error",
                   totalJobs: tasks.length,
                   jobIndex: progressIndex,
                   targetId: task.target.id,
                   provider: task.primaryProvider,
                   model: task.target.model,
+                  message,
                 });
-
-                try {
-                  const result = await runTaskWithFallback({
-                    task,
-                    outDir: layout.outDir,
-                    imagesDir,
-                    now: options.now,
-                    fetchImpl: options.fetchImpl,
-                    registry,
-                    lockByTargetId,
-                    skipLocked,
-                  });
-                  results.push(result);
-
-                  options.onProgress?.({
-                    type: "job_finish",
-                    totalJobs: tasks.length,
-                    jobIndex: progressIndex,
-                    targetId: task.target.id,
-                    provider: result.provider,
-                    model: result.model,
-                    bytesWritten: result.bytesWritten,
-                    outputPath: result.outputPath,
-                  });
-                } catch (error) {
-                  const message =
-                    error instanceof Error ? error.message : String(error);
-                  failures.push({
-                    targetId: task.target.id,
-                    provider: task.primaryProvider,
-                    attemptedProviders: [
-                      task.primaryProvider,
-                      ...task.fallbackProviders,
-                    ],
-                    message,
-                  });
-
-                  options.onProgress?.({
-                    type: "job_error",
-                    totalJobs: tasks.length,
-                    jobIndex: progressIndex,
-                    targetId: task.target.id,
-                    provider: task.primaryProvider,
-                    model: task.target.model,
-                    message,
-                  });
-                }
               }
-            })(),
-          );
-        }
+            }
+          })(),
+        );
+      }
 
-        await Promise.all(workers);
-      },
-    ),
+      await Promise.all(workers);
+    }),
   );
 
   results.sort((left, right) => left.targetId.localeCompare(right.targetId));
@@ -330,10 +306,8 @@ export async function runGeneratePipeline(
     throw new Error(
       `Generation failed for ${failures.length} target(s): ${failures
         .slice(0, 5)
-        .map((failure) => `${failure.targetId}`)
-        .join(
-          ", ",
-        )}. First failure (${firstFailure.targetId}): ${firstFailure.message}`,
+        .map((failure) => failure.targetId)
+        .join(", ")}. First failure (${firstFailure.targetId}): ${firstFailure.message}`,
     );
   }
 
@@ -348,9 +322,7 @@ export async function runGeneratePipeline(
   };
 }
 
-export function parseGenerateProviderFlag(
-  value: string | undefined,
-): ProviderSelection {
+export function parseGenerateProviderFlag(value: string | undefined): ProviderSelection {
   return parseProviderSelection(value);
 }
 
@@ -366,15 +338,13 @@ function parseTargetsIndex(raw: string, filePath: string): TargetsIndexShape {
   }
 }
 
-function normalizeTargets(
-  index: TargetsIndexShape,
-  filePath: string,
-): PlannedTarget[] {
+function normalizeTargets(index: TargetsIndexShape, filePath: string): PlannedTarget[] {
   if (!Array.isArray(index.targets) || index.targets.length === 0) {
     throw new Error(`No targets found in planned index: ${filePath}`);
   }
 
   return index.targets.map((target, targetIndex) => {
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
     if (!target || typeof target !== "object") {
       throw new Error(`Invalid target at index ${targetIndex} in ${filePath}`);
     }
@@ -394,10 +364,8 @@ function normalizeTargets(
         }`,
       );
     }
-    if (typeof target.promptSpec?.primary !== "string") {
-      throw new Error(
-        `targets[${targetIndex}].promptSpec.primary must be a string`,
-      );
+    if (typeof target.promptSpec.primary !== "string") {
+      throw new Error(`targets[${targetIndex}].promptSpec.primary must be a string`);
     }
     return {
       ...target,
@@ -406,10 +374,7 @@ function normalizeTargets(
   });
 }
 
-function filterTargetsByIds(
-  targets: PlannedTarget[],
-  ids?: string[],
-): PlannedTarget[] {
+function filterTargetsByIds(targets: PlannedTarget[], ids?: string[]): PlannedTarget[] {
   if (!ids || ids.length === 0) {
     return targets;
   }
@@ -439,26 +404,14 @@ async function runTaskWithFallback(params: {
   lockByTargetId: Map<string, SelectionLockItem>;
   skipLocked: boolean;
 }): Promise<ProviderRunResult> {
-  const providerChain = [
-    params.task.primaryProvider,
-    ...params.task.fallbackProviders,
-  ];
+  const providerChain = [params.task.primaryProvider, ...params.task.fallbackProviders];
   let lastError: unknown;
 
   for (const providerName of providerChain) {
     const provider = getProvider(params.registry, providerName);
-    const normalizedPolicy = resolveProviderGenerationPolicy(
-      params.task.target,
-      providerName,
-    );
-    const draftTarget = materializeDraftTarget(
-      params.task.target,
-      normalizedPolicy,
-    );
-    if (
-      targetRequiresEditSupport(params.task.target) &&
-      !provider.supports("image-edits")
-    ) {
+    const normalizedPolicy = resolveProviderGenerationPolicy(params.task.target, providerName);
+    const draftTarget = materializeDraftTarget(params.task.target, normalizedPolicy);
+    if (targetRequiresEditSupport(params.task.target) && !provider.supports("image-edits")) {
       lastError = new Error(
         `Provider "${providerName}" does not support edit-first generation for target "${params.task.target.id}".`,
       );
@@ -479,11 +432,7 @@ async function runTaskWithFallback(params: {
 
     const job = preparedJobs[0];
     const lockEntry = params.lockByTargetId.get(params.task.target.id);
-    if (
-      params.skipLocked &&
-      lockEntry?.approved &&
-      lockEntry.inputHash === job.inputHash
-    ) {
+    if (params.skipLocked && lockEntry?.approved && lockEntry.inputHash === job.inputHash) {
       let lockedPath: string;
       try {
         lockedPath = resolvePathWithinRoot(
@@ -516,9 +465,7 @@ async function runTaskWithFallback(params: {
           generationMode: params.task.target.generationMode,
           edit: params.task.target.edit,
           regenerationSource: params.task.target.regenerationSource,
-          warnings: [
-            `Skipped generation for ${job.targetId}; approved lock matched input hash.`,
-          ],
+          warnings: [`Skipped generation for ${job.targetId}; approved lock matched input hash.`],
         };
       }
     }
@@ -600,24 +547,16 @@ async function runTaskWithFallback(params: {
     : new Error(`Generation failed for target ${params.task.target.id}`);
 }
 
-function resolveProviderGenerationPolicy(
-  target: PlannedTarget,
-  providerName: ProviderName,
-) {
-  return normalizeGenerationPolicyForProvider(
-    providerName,
-    getTargetGenerationPolicy(target),
-  ).policy;
+function resolveProviderGenerationPolicy(target: PlannedTarget, providerName: ProviderName) {
+  return normalizeGenerationPolicyForProvider(providerName, getTargetGenerationPolicy(target))
+    .policy;
 }
 
 function materializeDraftTarget(
   target: PlannedTarget,
   normalizedPolicy: ReturnType<typeof resolveProviderGenerationPolicy>,
 ): PlannedTarget {
-  if (
-    !normalizedPolicy.coarseToFine?.enabled ||
-    !normalizedPolicy.draftQuality
-  ) {
+  if (!normalizedPolicy.coarseToFine?.enabled || !normalizedPolicy.draftQuality) {
     return target;
   }
 
@@ -636,8 +575,7 @@ async function scoreProviderRunCandidates(params: {
   outDir: string;
 }): Promise<ScoredCandidateSet> {
   const candidateOutputs =
-    params.runResult.candidateOutputs &&
-    params.runResult.candidateOutputs.length > 0
+    params.runResult.candidateOutputs && params.runResult.candidateOutputs.length > 0
       ? params.runResult.candidateOutputs
       : [
           {
@@ -669,9 +607,7 @@ async function runCoarseToFineRefinement(params: {
     now?: () => Date;
     fetchImpl?: typeof fetch;
   };
-  policy: NonNullable<
-    ReturnType<typeof resolveProviderGenerationPolicy>["coarseToFine"]
-  >;
+  policy: NonNullable<ReturnType<typeof resolveProviderGenerationPolicy>["coarseToFine"]>;
   normalizedPolicy: ReturnType<typeof resolveProviderGenerationPolicy>;
   draftCandidates: ScoredCandidateSet;
 }): Promise<{
@@ -680,23 +616,21 @@ async function runCoarseToFineRefinement(params: {
   scores: CandidateScoreRecord[];
   coarseToFine: NonNullable<ProviderRunResult["coarseToFine"]>;
 }> {
-  const draftQuality =
-    params.normalizedPolicy.draftQuality ?? params.normalizedPolicy.quality;
-  const finalQuality =
-    params.normalizedPolicy.finalQuality ?? params.normalizedPolicy.quality;
+  const draftQuality = params.normalizedPolicy.draftQuality ?? params.normalizedPolicy.quality;
+  const finalQuality = params.normalizedPolicy.finalQuality ?? params.normalizedPolicy.quality;
 
-  const promotedRows: Array<{
+  const promotedRows: {
     outputPath: string;
     score: number;
     passedAcceptance: boolean;
     refinedOutputPath?: string;
-  }> = [];
-  const discardedRows: Array<{
+  }[] = [];
+  const discardedRows: {
     outputPath: string;
     score: number;
     passedAcceptance: boolean;
     reason: string;
-  }> = [];
+  }[] = [];
   const warnings: string[] = [];
   const promotedSet = new Set<string>();
 
@@ -792,9 +726,7 @@ async function runCoarseToFineRefinement(params: {
   }
 
   if (params.task.target.generationMode === "edit-first") {
-    warnings.push(
-      "Coarse-to-fine refinement is skipped for edit-first targets.",
-    );
+    warnings.push("Coarse-to-fine refinement is skipped for edit-first targets.");
     return {
       bestPath: params.draftCandidates.bestPath,
       candidateOutputs: params.draftCandidates.candidateOutputs,
@@ -876,10 +808,7 @@ async function runCoarseToFineRefinement(params: {
 
   return {
     bestPath: finalRefineSelection.bestPath,
-    candidateOutputs: [
-      ...params.draftCandidates.candidateOutputs,
-      ...refinedOutputs,
-    ],
+    candidateOutputs: [...params.draftCandidates.candidateOutputs, ...refinedOutputs],
     scores: [...draftScoresDecorated, ...refineScoresDecorated],
     coarseToFine: {
       ...coarseSummaryBase,
@@ -897,10 +826,7 @@ function createRefineTarget(params: {
   finalQuality: string;
   refineIndex: number;
 }): PlannedTarget {
-  const relativeSource = toPortableRelativePath(
-    params.outDir,
-    params.sourceOutputPath,
-  );
+  const relativeSource = toPortableRelativePath(params.outDir, params.sourceOutputPath);
   return {
     ...params.target,
     out: withRefineSuffix(params.target.out, params.refineIndex),
@@ -938,10 +864,7 @@ function toPortableRelativePath(rootDir: string, filePath: string): string {
   return relative.split(path.sep).join("/");
 }
 
-async function copyIfDifferent(
-  sourcePath: string,
-  destinationPath: string,
-): Promise<void> {
+async function copyIfDifferent(sourcePath: string, destinationPath: string): Promise<void> {
   if (sourcePath === destinationPath) {
     return;
   }
@@ -959,10 +882,7 @@ function targetRequiresEditSupport(target: PlannedTarget): boolean {
   return (target.edit?.inputs?.length ?? 0) > 0;
 }
 
-function computeProviderDelayMs(
-  task: TargetTask,
-  fallbackDelay: number,
-): number {
+function computeProviderDelayMs(task: TargetTask, fallbackDelay: number): number {
   const requestedRateLimit = task.target.generationPolicy?.rateLimitPerMinute;
   if (
     typeof requestedRateLimit === "number" &&
@@ -1001,10 +921,9 @@ async function readSelectionLock(filePath: string): Promise<SelectionLockFile> {
   try {
     const raw = await readFile(filePath, "utf8");
     const parsed = JSON.parse(raw) as SelectionLockFile;
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
     if (!parsed || typeof parsed !== "object") {
-      throw new Error(
-        `selection lock file content is not a JSON object (${filePath}).`,
-      );
+      throw new Error(`selection lock file content is not a JSON object (${filePath}).`);
     }
     return parsed;
   } catch (error) {
@@ -1021,9 +940,7 @@ async function readSelectionLock(filePath: string): Promise<SelectionLockFile> {
 
 function isNoSuchFileError(error: unknown): error is { code: string } {
   return (
-    Boolean(error) &&
-    typeof error === "object" &&
-    (error as { code?: unknown }).code === "ENOENT"
+    Boolean(error) && typeof error === "object" && (error as { code?: unknown }).code === "ENOENT"
   );
 }
 

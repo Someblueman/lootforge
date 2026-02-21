@@ -1,22 +1,14 @@
 import { DEFAULT_LOCAL_MODEL } from "../providers/localDiffusion.js";
 import { DEFAULT_NANO_MODEL } from "../providers/nano.js";
 import { DEFAULT_OPENAI_MODEL } from "../providers/openai.js";
-import {
-  createProviderRegistry,
-  ProviderRegistryOptions,
-} from "../providers/registry.js";
+import { createProviderRegistry, type ProviderRegistryOptions } from "../providers/registry.js";
 import { buildProviderRegistryOptions } from "../providers/runtimeConfig.js";
-import type { ProviderCapabilities, ProviderName } from "../providers/types.js";
+import { type ProviderCapabilities, type ProviderName } from "../providers/types.js";
 
 const PROVIDER_CAPABILITY_CONTRACT_VERSION = "v1";
 const PROVIDER_CAPABILITY_ENDPOINT = "/v1/providers/capabilities";
 
-type CapabilitySupportMode =
-  | "native"
-  | "post-process"
-  | "edit-input"
-  | "scaffold-only"
-  | "none";
+type CapabilitySupportMode = "native" | "post-process" | "edit-input" | "scaffold-only" | "none";
 
 export interface CapabilityDirectiveSupport {
   supported: boolean;
@@ -135,10 +127,7 @@ function withModelOverride(
   };
 }
 
-function resolveEffectiveModel(
-  provider: ProviderName,
-  options: ProviderRegistryOptions,
-): string {
+function resolveEffectiveModel(provider: ProviderName, options: ProviderRegistryOptions): string {
   if (provider === "openai") {
     return options.openai?.model ?? DEFAULT_OPENAI_MODEL;
   }

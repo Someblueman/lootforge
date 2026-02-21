@@ -22,12 +22,14 @@
 Requirements: `node >=22`, `npm >=10`
 
 Install:
+
 ```bash
 npm install --cache .npm-cache
 npm run build
 ```
 
 Run a local validation pass (no provider API keys required):
+
 ```bash
 node bin/lootforge.js init --out .
 node bin/lootforge.js plan --manifest assets/imagegen/manifest.json --out assets/imagegen
@@ -40,6 +42,7 @@ Most image generators stop at `prompt -> image`.
 LootForge is designed for `prompt -> image -> game runtime artifact`.
 
 Key outcomes:
+
 - Consistent output structure
 - Deterministic job metadata and provenance
 - Inspectable validation and quality reports
@@ -195,30 +198,32 @@ For full option coverage, run `lootforge <command> --help`.
 
 ### Command Summary
 
-| Command | Primary purpose | Main artifacts |
-| --- | --- | --- |
-| `init` | Scaffold manifest + workspace folders | `manifest.json`, `raw/`, `processed/`, `jobs/` |
-| `plan` | Validate manifest and emit provider job plans | `targets-index.json`, provider JSONL files |
-| `validate` | Run manifest and optional image acceptance checks | `validation-report.json`, optional acceptance report |
-| `generate` | Generate candidate images using selected provider(s) | Provider raw outputs + provenance |
-| `regenerate` | Re-run approved targets via edit-first lock flow | Updated generated assets + lock-linked provenance |
-| `process` | Apply post-processing and image acceptance | Processed catalog + acceptance report |
-| `atlas` | Build atlas artifacts and reproducibility config | Atlas manifest and optional sheet assets |
-| `eval` | Compute quality scoring and adapter telemetry | `eval-report.json` |
-| `review` | Render review artifact from eval outputs | `review/review.html` |
-| `select` | Materialize approved selections into lockfile | `locks/selection-lock.json` |
-| `package` | Assemble runtime-ready distributable packs | `dist/packs/*` + final zip |
-| `serve` | Start local HTTP service mode for tool/command execution | `v1` JSON endpoints |
+| Command      | Primary purpose                                          | Main artifacts                                       |
+| ------------ | -------------------------------------------------------- | ---------------------------------------------------- |
+| `init`       | Scaffold manifest + workspace folders                    | `manifest.json`, `raw/`, `processed/`, `jobs/`       |
+| `plan`       | Validate manifest and emit provider job plans            | `targets-index.json`, provider JSONL files           |
+| `validate`   | Run manifest and optional image acceptance checks        | `validation-report.json`, optional acceptance report |
+| `generate`   | Generate candidate images using selected provider(s)     | Provider raw outputs + provenance                    |
+| `regenerate` | Re-run approved targets via edit-first lock flow         | Updated generated assets + lock-linked provenance    |
+| `process`    | Apply post-processing and image acceptance               | Processed catalog + acceptance report                |
+| `atlas`      | Build atlas artifacts and reproducibility config         | Atlas manifest and optional sheet assets             |
+| `eval`       | Compute quality scoring and adapter telemetry            | `eval-report.json`                                   |
+| `review`     | Render review artifact from eval outputs                 | `review/review.html`                                 |
+| `select`     | Materialize approved selections into lockfile            | `locks/selection-lock.json`                          |
+| `package`    | Assemble runtime-ready distributable packs               | `dist/packs/*` + final zip                           |
+| `serve`      | Start local HTTP service mode for tool/command execution | `v1` JSON endpoints                                  |
 
 ### `lootforge init`
 
 Scaffolds a starter workspace:
+
 - `assets/imagegen/manifest.json`
 - `assets/imagegen/raw/`
 - `assets/imagegen/processed/`
 - `assets/imagegen/jobs/`
 
 Example:
+
 ```bash
 lootforge init --out .
 ```
@@ -226,12 +231,14 @@ lootforge init --out .
 ### `lootforge plan`
 
 Validates the manifest and writes planned jobs:
+
 - `<out>/jobs/targets-index.json`
 - `<out>/jobs/openai.jsonl`
 - `<out>/jobs/nano.jsonl`
 - `<out>/jobs/local.jsonl`
 
 Example:
+
 ```bash
 lootforge plan --manifest assets/imagegen/manifest.json --out assets/imagegen
 ```
@@ -239,16 +246,19 @@ lootforge plan --manifest assets/imagegen/manifest.json --out assets/imagegen
 ### `lootforge validate`
 
 Outputs:
+
 - `<out>/checks/validation-report.json`
 - Optional: `<out>/checks/image-acceptance-report.json`
   - acceptance report may include top-level `packInvariants` summary when pack-level checks emit issues/metrics
 
 Key flags:
+
 - `--strict true|false` (default: `true`)
 - `--check-images true|false` (default: `false`)
 - `--images-dir <path>` optional override for acceptance checks
 
 Example:
+
 ```bash
 lootforge validate --manifest assets/imagegen/manifest.json --out assets/imagegen --strict true --check-images true
 ```
@@ -258,12 +268,14 @@ lootforge validate --manifest assets/imagegen/manifest.json --out assets/imagege
 Runs provider generation from planned targets index.
 
 Key flags:
+
 - `--out <dir>`
 - `--index <path>` optional (default `<out>/jobs/targets-index.json`)
 - `--provider openai|nano|local|auto`
 - `--ids a,b,c` optional subset
 
 Example:
+
 ```bash
 lootforge generate --out assets/imagegen --provider nano --ids enemy-1,ui-icon-attack
 ```
@@ -273,6 +285,7 @@ lootforge generate --out assets/imagegen --provider nano --ids enemy-1,ui-icon-a
 Re-runs selected targets from selection-lock state, with dedicated edit-first flow support.
 
 Key flags:
+
 - `--out <dir>`
 - `--index <path>` optional (default `<out>/jobs/targets-index.json`)
 - `--lock <path>` optional (default `<out>/locks/selection-lock.json`)
@@ -283,11 +296,13 @@ Key flags:
 - `--provider openai|nano|local|auto`
 
 Behavior:
+
 - Uses selection lock approved outputs as edit-base input (`role=base`) for each regenerated target.
 - Preserves lock provenance in `provenance/run.json` (`regenerationSource` metadata) for traceability.
 - For safety, selection-lock output paths must resolve inside the active `--out` root.
 
 Example:
+
 ```bash
 lootforge regenerate --out assets/imagegen --edit true --ids player-idle
 ```
@@ -295,6 +310,7 @@ lootforge regenerate --out assets/imagegen --edit true --ids player-idle
 ### `lootforge process`
 
 Reads raw outputs, applies post-processing and acceptance checks, and writes:
+
 - `<out>/assets/imagegen/processed/images/*` (or `<out>/processed/images/*` when `out` is already `assets/imagegen`)
 - Compatibility mirror: `<out>/assets/images/*`
 - `<out>/assets/imagegen/processed/catalog.json`
@@ -302,6 +318,7 @@ Reads raw outputs, applies post-processing and acceptance checks, and writes:
   - includes optional `packInvariants` summary (`errors`, `warnings`, `issues`, `metrics`)
 
 Example:
+
 ```bash
 lootforge process --out assets/imagegen --strict true
 ```
@@ -309,10 +326,12 @@ lootforge process --out assets/imagegen --strict true
 ### `lootforge atlas`
 
 Reads generated images and atlas groups, then writes:
+
 - `<out>/assets/atlases/manifest.json`
 - Optional atlas sheets/json when TexturePacker is available
 
 Example:
+
 ```bash
 lootforge atlas --out assets/imagegen
 ```
@@ -320,16 +339,20 @@ lootforge atlas --out assets/imagegen
 ### `lootforge package`
 
 Assembles shareable outputs under:
+
 - `<out>/dist/packs/<pack-id>/...`
 - `<out>/dist/packs/game-asset-pack-<pack-id>.zip`
 
 Key flags:
+
 - `--runtimes <list>` optional comma-separated runtime exports (`phaser,pixi,unity`)
 
 Notes:
+
 - Phaser manifest output is always emitted as baseline compatibility.
 
 Example:
+
 ```bash
 lootforge package --out assets/imagegen --runtimes pixi,unity
 ```
@@ -339,11 +362,13 @@ lootforge package --out assets/imagegen --runtimes pixi,unity
 Starts a local HTTP service wrapper for command execution (no auth/credit layer in core).
 
 Key flags:
+
 - `--host <host>` optional (default `127.0.0.1`)
 - `--port <port>` optional (default `8744`)
 - `--out <dir>` optional default output root used when request payload omits `out`
 
 Core endpoints:
+
 - `GET /v1/health`
 - `GET /v1/tools`
 - `GET /v1/contracts/generation-request`
@@ -352,6 +377,7 @@ Core endpoints:
 - `POST /v1/generation/requests` (canonical request -> `plan` + `generate` mapping)
 
 Example:
+
 ```bash
 lootforge serve --host 127.0.0.1 --port 8744 --out assets/imagegen
 ```
@@ -361,6 +387,7 @@ Service request/response contract details: `docs/SERVICE_MODE.md`
 ### `lootforge eval`
 
 Runs hard/soft quality scoring and writes:
+
 - `<out>/checks/eval-report.json`
 - `eval-report.json` includes adapter health telemetry:
   - `adapterHealth.configured`: enabled adapters with command/URL configured
@@ -380,6 +407,7 @@ Runs hard/soft quality scoring and writes:
   - texture budget metrics by evaluation profile
 
 Optional CLIP/LPIPS/SSIM adapter execution:
+
 - Enable adapters with:
   - `LOOTFORGE_ENABLE_CLIP_ADAPTER=1`
   - `LOOTFORGE_ENABLE_LPIPS_ADAPTER=1`
@@ -407,6 +435,7 @@ Optional CLIP/LPIPS/SSIM adapter execution:
   - candidates below threshold are rejected before final candidate selection
 
 Example:
+
 ```bash
 lootforge eval --out assets/imagegen --strict true
 ```
@@ -414,10 +443,12 @@ lootforge eval --out assets/imagegen --strict true
 ### `lootforge review`
 
 Builds a review artifact from eval data:
+
 - `<out>/review/review.html`
 - Includes per-target score breakdown details (candidate reasons/metrics, VLM gate traces, and adapter components/metrics/warnings).
 
 Example:
+
 ```bash
 lootforge review --out assets/imagegen
 ```
@@ -425,9 +456,11 @@ lootforge review --out assets/imagegen
 ### `lootforge select`
 
 Builds lockfile selections from provenance + eval:
+
 - `<out>/locks/selection-lock.json`
 
 Example:
+
 ```bash
 lootforge select --out assets/imagegen
 ```
@@ -435,6 +468,7 @@ lootforge select --out assets/imagegen
 ## Manifest (`version: "next"`)
 
 Top-level fields:
+
 - `version`: must be `next`
 - `pack`: `{ id, version, license, author }` (required)
 - `providers`: `{ default, openai?, nano?, local? }` (required)
@@ -450,10 +484,12 @@ Top-level fields:
 - `targets[]` (required)
 
 `styleKits[].palettePath` behavior:
+
 - When `target.palette` is unset, LootForge auto-loads colors from the style-kit palette file and applies them as the default exact palette policy.
 - An explicit `target.palette` always takes precedence over style-kit defaults.
 
 Per target:
+
 - `id`, `kind`, `out`, `atlasGroup?`, `styleKitId`, `consistencyGroup`, `evaluationProfileId`
 - `generationMode`: `text|edit-first`
 - `edit-first` mode requires a provider with `image-edits` support (`openai`, `local`, and `nano` when using an image-edit-capable Gemini model)
@@ -565,6 +601,7 @@ Minimal example:
 See also: `docs/manifest-schema.md`
 
 Provider runtime precedence (`generate` / `regenerate`):
+
 - target-level `generationPolicy.maxRetries` overrides provider retry defaults
 - provider runtime defaults load from manifest `providers.<name>` config
 - environment overrides can replace provider runtime defaults without manifest edits
@@ -573,6 +610,7 @@ Provider runtime precedence (`generate` / `regenerate`):
 ## Output Contract
 
 `lootforge package` emits:
+
 - `dist/packs/<pack-id>/assets/images/*`
 - `dist/packs/<pack-id>/assets/atlases/*`
 - `dist/packs/<pack-id>/manifest/asset-pack.json`
@@ -590,6 +628,7 @@ Provider runtime precedence (`generate` / `regenerate`):
 - `dist/packs/game-asset-pack-<pack-id>.zip`
 
 Stage outputs during generation flow:
+
 - `raw/` stage: generated provider outputs
 - `processed/` stage: deterministic post-processed outputs + catalog
 - compatibility mirror under `assets/images/`
@@ -598,10 +637,12 @@ Stage outputs during generation flow:
 ## Environment Variables
 
 Provider keys:
+
 - `OPENAI_API_KEY`: required for OpenAI generation
 - `GEMINI_API_KEY`: required for Nano generation
 
 Provider runtime overrides (env wins over manifest provider config):
+
 - OpenAI:
   - `LOOTFORGE_OPENAI_ENDPOINT` (or `OPENAI_IMAGES_ENDPOINT`)
   - `LOOTFORGE_OPENAI_EDITS_ENDPOINT` (or `OPENAI_EDITS_ENDPOINT`)
@@ -623,25 +664,30 @@ Provider runtime overrides (env wins over manifest provider config):
   - `LOOTFORGE_LOCAL_DEFAULT_CONCURRENCY` (or `LOCAL_DIFFUSION_DEFAULT_CONCURRENCY`)
 
 Eval adapter toggles:
+
 - `LOOTFORGE_ENABLE_CLIP_ADAPTER`: enable CLIP adapter execution in `lootforge eval`
 - `LOOTFORGE_ENABLE_LPIPS_ADAPTER`: enable LPIPS adapter execution in `lootforge eval`
 - `LOOTFORGE_ENABLE_SSIM_ADAPTER`: enable SSIM adapter execution in `lootforge eval`
 
 Eval adapter transports:
+
 - `LOOTFORGE_CLIP_ADAPTER_CMD` or `LOOTFORGE_CLIP_ADAPTER_URL`
 - `LOOTFORGE_LPIPS_ADAPTER_CMD` or `LOOTFORGE_LPIPS_ADAPTER_URL`
 - `LOOTFORGE_SSIM_ADAPTER_CMD` or `LOOTFORGE_SSIM_ADAPTER_URL`
 
 Eval adapter timeout controls:
+
 - `LOOTFORGE_ADAPTER_TIMEOUT_MS`: global timeout (ms)
 - `LOOTFORGE_<NAME>_ADAPTER_TIMEOUT_MS`: per-adapter timeout override (ms)
 
 VLM gate transport:
+
 - `LOOTFORGE_VLM_GATE_CMD`: command transport for VLM candidate gate scoring
 - `LOOTFORGE_VLM_GATE_URL`: HTTP transport for VLM candidate gate scoring
 - `LOOTFORGE_VLM_GATE_TIMEOUT_MS`: timeout override for VLM gate requests (ms)
 
 Service mode:
+
 - `LOOTFORGE_SERVICE_HOST`: default host for `lootforge serve`
 - `LOOTFORGE_SERVICE_PORT`: default port for `lootforge serve`
 - `LOOTFORGE_SERVICE_OUT`: default output root injected when service payload omits `out`
@@ -651,6 +697,7 @@ No network keys are required for `init`, `plan`, `validate`, `atlas`, or `packag
 ## Development
 
 Local verification commands:
+
 - `npm run typecheck`
 - `npm run build`
 - `npm test`
@@ -659,6 +706,7 @@ Local verification commands:
 - `npm run test:coverage:critical`
 
 `0.3.0` release-train branch policy:
+
 - Keep `main` release-only until `0.3.0` is ready to cut.
 - Use `release/0.3` as the integration branch for ongoing work.
 - Branch feature work from `release/0.3` and PR back into `release/0.3`.
@@ -669,6 +717,7 @@ Local verification commands:
 `0.2.0` (`Emberforge`) is the public beta foundation release.
 
 Release roadmap:
+
 - `0.2.0` (`Emberforge`): public beta foundation (edit/regenerate workflow, score transparency, tile/palette reliability)
 - `0.3.0` (`Tempered Steel`): control and consistency upgrades (group-level drift scoring, provider edit parity)
 - `0.4.0` (`Anvilheart`): local production path (ControlNet contracts + LoRA/provenance maturity)

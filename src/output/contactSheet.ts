@@ -79,10 +79,10 @@ function buildLabelOverlaySvg(width: number, height: number, text: string): Buff
   const escaped = escapeXml(text);
   return Buffer.from(
     [
-      `<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"${width}\" height=\"${height}\">`,
-      `<rect x=\"0\" y=\"0\" width=\"${width}\" height=\"${height}\" fill=\"#111\" />`,
-      `<text x=\"${Math.round(width / 2)}\" y=\"${Math.round(height * 0.72)}\"`,
-      ` text-anchor=\"middle\" font-family=\"monospace\" font-size=\"12\" fill=\"#ddd\">${escaped}</text>`,
+      `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">`,
+      `<rect x="0" y="0" width="${width}" height="${height}" fill="#111" />`,
+      `<text x="${Math.round(width / 2)}" y="${Math.round(height * 0.72)}"`,
+      ` text-anchor="middle" font-family="monospace" font-size="12" fill="#ddd">${escaped}</text>`,
       "</svg>",
     ].join(""),
   );
@@ -101,10 +101,7 @@ export async function writeContactSheetPng(
 
   await mkdir(path.dirname(outputPath), { recursive: true });
 
-  const filenames = sortFilenames(
-    await listImageFilenames(imagesDir),
-    options.orderedFilenames,
-  );
+  const filenames = sortFilenames(await listImageFilenames(imagesDir), options.orderedFilenames);
 
   if (filenames.length === 0) {
     await writeFile(outputPath, Buffer.from(EMPTY_PNG_BASE64, "base64"));

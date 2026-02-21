@@ -1,8 +1,12 @@
+// eslint-disable-next-line n/no-unsupported-features/node-builtins
 import { access, cp, mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-import { assertImageAcceptanceReport, runImageAcceptanceChecks } from "../checks/imageAcceptance.js";
 import { runAtlasPipeline } from "./atlas.js";
+import {
+  assertImageAcceptanceReport,
+  runImageAcceptanceChecks,
+} from "../checks/imageAcceptance.js";
 import { buildAssetPackManifest } from "../output/assetPackManifest.js";
 import { buildCatalog } from "../output/catalog.js";
 import { writeContactSheetPng } from "../output/contactSheet.js";
@@ -11,7 +15,7 @@ import {
   type RuntimeManifestTarget,
 } from "../output/runtimeManifests.js";
 import { createZipArchive } from "../output/zip.js";
-import type { PlannedTarget } from "../providers/types.js";
+import { type PlannedTarget } from "../providers/types.js";
 import { writeJsonFile } from "../shared/fs.js";
 import { resolveStagePathLayout } from "../shared/paths.js";
 
@@ -35,19 +39,19 @@ interface TargetsIndex {
 
 interface EvalReport {
   hardErrors?: number;
-  targets?: Array<{
+  targets?: {
     targetId: string;
     passedHardGates: boolean;
-  }>;
+  }[];
 }
 
 interface SelectionLockFile {
-  targets?: Array<{
+  targets?: {
     targetId: string;
     approved: boolean;
     inputHash: string;
     selectedOutputPath: string;
-  }>;
+  }[];
 }
 
 export interface PackagePipelineOptions {
@@ -77,9 +81,9 @@ async function exists(filePath: string): Promise<boolean> {
   }
 }
 
-function parseJson<T>(raw: string, filePath: string): T {
+function parseJson(raw: string, filePath: string): unknown {
   try {
-    return JSON.parse(raw) as T;
+    return JSON.parse(raw) as unknown;
   } catch (error) {
     throw new Error(
       `Failed to parse JSON in ${filePath}: ${
@@ -90,7 +94,10 @@ function parseJson<T>(raw: string, filePath: string): T {
 }
 
 function sanitizePackId(id: string): string {
-  const clean = id.trim().toLowerCase().replace(/[^a-z0-9_-]+/g, "-");
+  const clean = id
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, "-");
   return clean || "asset-pack";
 }
 
@@ -102,7 +109,7 @@ async function copyDirIfExists(src: string, dest: string): Promise<void> {
 
 async function loadTargets(targetsIndexPath: string): Promise<PlannedTarget[]> {
   const raw = await readFile(targetsIndexPath, "utf8");
-  const parsed = parseJson<TargetsIndex>(raw, targetsIndexPath);
+  const parsed = parseJson(raw, targetsIndexPath) as TargetsIndex;
   if (!Array.isArray(parsed.targets)) return [];
   return parsed.targets;
 }
@@ -118,14 +125,14 @@ export async function runPackagePipeline(
   const strict = options.strict ?? true;
 
   const manifestRaw = await readFile(manifestPath, "utf8");
-  const manifest = parseJson<ManifestV2>(manifestRaw, manifestPath);
-  const packId = sanitizePackId(manifest.pack?.id ?? "asset-pack");
+  const manifest = parseJson(manifestRaw, manifestPath) as ManifestV2;
+  const packId = sanitizePackId(manifest.pack.id || "asset-pack");
   const assetBaseUrl = options.assetBaseUrl ?? "/assets";
 
   const processedImagesDir = layout.processedImagesDir;
   if (!(await exists(processedImagesDir))) {
     throw new Error(
-      `Processed images were not found at ${processedImagesDir}. Run \"lootforge process\" before packaging.`,
+      `Processed images were not found at ${processedImagesDir}. Run "lootforge process" before packaging.`,
     );
   }
 
@@ -163,13 +170,9 @@ export async function runPackagePipeline(
     "utf8",
   );
 
-  await writeContactSheetPng(
-    processedImagesDir,
-    path.join(packReviewDir, "contact-sheet.png"),
-    {
-      orderedFilenames: catalog.items.map((item) => path.basename(item.out)),
-    },
-  );
+  await writeContactSheetPng(processedImagesDir, path.join(packReviewDir, "contact-sheet.png"), {
+    orderedFilenames: catalog.items.map((item) => path.basename(item.out)),
+  });
 
   const acceptanceReport = await runImageAcceptanceChecks({
     targets,
@@ -185,25 +188,20 @@ export async function runPackagePipeline(
   const selectionLockPath = path.join(layout.outDir, "locks", "selection-lock.json");
   if (strict) {
     if (!(await exists(evalReportPath))) {
-      throw new Error(
-        `Strict packaging requires ${evalReportPath}. Run \"lootforge eval\" first.`,
-      );
+      throw new Error(`Strict packaging requires ${evalReportPath}. Run "lootforge eval" first.`);
     }
     if (!(await exists(selectionLockPath))) {
       throw new Error(
-        `Strict packaging requires ${selectionLockPath}. Run \"lootforge select\" first.`,
+        `Strict packaging requires ${selectionLockPath}. Run "lootforge select" first.`,
       );
     }
   }
 
   const evalReport = (await exists(evalReportPath))
-    ? parseJson<EvalReport>(await readFile(evalReportPath, "utf8"), evalReportPath)
+    ? (parseJson(await readFile(evalReportPath, "utf8"), evalReportPath) as EvalReport)
     : undefined;
   const selectionLock = (await exists(selectionLockPath))
-    ? parseJson<SelectionLockFile>(
-        await readFile(selectionLockPath, "utf8"),
-        selectionLockPath,
-      )
+    ? (parseJson(await readFile(selectionLockPath, "utf8"), selectionLockPath) as SelectionLockFile)
     : undefined;
 
   if (strict && evalReport && (evalReport.hardErrors ?? 0) > 0) {
@@ -231,21 +229,17 @@ export async function runPackagePipeline(
 
   const assetPackManifest = buildAssetPackManifest({
     pack: {
-      id: manifest.pack?.id ?? packId,
-      version: manifest.pack?.version ?? "0.1.0",
-      license: manifest.pack?.license ?? "UNLICENSED",
-      author: manifest.pack?.author ?? "unknown",
+      id: manifest.pack.id || packId,
+      version: manifest.pack.version || "0.1.0",
+      license: manifest.pack.license || "UNLICENSED",
+      author: manifest.pack.author || "unknown",
     },
     providerDefault: manifest.providers?.default ?? "openai",
     catalogItems: catalog.items,
     atlasBundles: atlasResult.manifest.atlasBundles,
   });
   const assetPackManifestPath = path.join(packManifestDir, "asset-pack.json");
-  await writeFile(
-    assetPackManifestPath,
-    `${JSON.stringify(assetPackManifest, null, 2)}\n`,
-    "utf8",
-  );
+  await writeFile(assetPackManifestPath, `${JSON.stringify(assetPackManifest, null, 2)}\n`, "utf8");
 
   const runtimeManifestArtifacts = buildRuntimeManifestArtifacts({
     packId,
@@ -287,11 +281,9 @@ export async function runPackagePipeline(
     );
   }
 
-  await cp(
-    acceptanceReportPath,
-    path.join(packChecksDir, "image-acceptance-report.json"),
-    { force: true },
-  );
+  await cp(acceptanceReportPath, path.join(packChecksDir, "image-acceptance-report.json"), {
+    force: true,
+  });
   if (await exists(evalReportPath)) {
     await cp(evalReportPath, path.join(packChecksDir, "eval-report.json"), {
       force: true,

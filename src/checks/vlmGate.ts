@@ -1,9 +1,9 @@
 import { spawn } from "node:child_process";
 
-import { buildStructuredPrompt } from "../providers/types.js";
-import type { CandidateVlmScore, PlannedTarget } from "../providers/types.js";
-import { parseTimeoutMs } from "../providers/runtime.js";
 import { parseCommandLine } from "./commandParser.js";
+import { parseTimeoutMs } from "../providers/runtime.js";
+import { buildStructuredPrompt } from "../providers/types.js";
+import { type CandidateVlmScore, type PlannedTarget } from "../providers/types.js";
 import { resolvePathWithinRoot } from "../shared/paths.js";
 import { isRecord } from "../shared/typeGuards.js";
 
@@ -97,9 +97,7 @@ function resolveVlmGatePolicy(
       ? Math.max(0, Math.min(DEFAULT_VLM_GATE_MAX_SCORE, policy.threshold))
       : DEFAULT_VLM_GATE_THRESHOLD;
   const rubric =
-    typeof policy.rubric === "string" && policy.rubric.trim()
-      ? policy.rubric.trim()
-      : undefined;
+    typeof policy.rubric === "string" && policy.rubric.trim() ? policy.rubric.trim() : undefined;
 
   return {
     threshold,
@@ -111,8 +109,7 @@ function resolveVlmGateConfig(targetId: string): VlmGateConfig {
   const command = process.env[VLM_GATE_COMMAND_ENV]?.trim();
   const url = process.env[VLM_GATE_URL_ENV]?.trim();
   const timeoutMs =
-    parseTimeoutMs(process.env[VLM_GATE_TIMEOUT_ENV]) ??
-    DEFAULT_VLM_GATE_TIMEOUT_MS;
+    parseTimeoutMs(process.env[VLM_GATE_TIMEOUT_ENV]) ?? DEFAULT_VLM_GATE_TIMEOUT_MS;
 
   if (command) {
     return {
@@ -208,9 +205,7 @@ async function runVlmGateCommand(
       }
       if (code !== 0) {
         reject(
-          new Error(
-            `command exited with code ${code}. stderr: ${errorOutput.trim() || "(empty)"}`,
-          ),
+          new Error(`command exited with code ${code}. stderr: ${errorOutput.trim() || "(empty)"}`),
         );
         return;
       }
@@ -237,7 +232,9 @@ async function runVlmGateHttp(
   }
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), config.timeoutMs);
+  const timeout = setTimeout(() => {
+    controller.abort();
+  }, config.timeoutMs);
 
   try {
     const response = await fetch(config.url, {
@@ -258,9 +255,7 @@ async function runVlmGateHttp(
     return parseVlmGateResponse(await response.text());
   } catch (error) {
     if (error instanceof Error && error.name === "AbortError") {
-      throw new Error(
-        `HTTP gate request timed out after ${config.timeoutMs}ms.`,
-      );
+      throw new Error(`HTTP gate request timed out after ${config.timeoutMs}ms.`);
     }
     throw error;
   } finally {
@@ -298,9 +293,7 @@ function parseVlmGateResponse(rawOutput: string): VlmGateResponse {
   }
 
   const reason =
-    typeof parsed.reason === "string" && parsed.reason.trim()
-      ? parsed.reason.trim()
-      : undefined;
+    typeof parsed.reason === "string" && parsed.reason.trim() ? parsed.reason.trim() : undefined;
 
   return {
     score,

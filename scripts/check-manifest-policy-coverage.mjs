@@ -39,15 +39,17 @@ function parseArgs(argv) {
 }
 
 function printHelp() {
-  console.log([
-    "Usage: node scripts/check-manifest-policy-coverage.mjs [options]",
-    "",
-    "Options:",
-    "  --source <path>     Markdown coverage index (default docs/MANIFEST_POLICY_COVERAGE.md)",
-    "  --report <path>     JSON report path (default coverage/manifest-policy-coverage.json)",
-    "  --repo-root <path>  Repository root for implementation/test path checks (default cwd)",
-    "  -h, --help          Show this help message",
-  ].join("\n"));
+  console.log(
+    [
+      "Usage: node scripts/check-manifest-policy-coverage.mjs [options]",
+      "",
+      "Options:",
+      "  --source <path>     Markdown coverage index (default docs/MANIFEST_POLICY_COVERAGE.md)",
+      "  --report <path>     JSON report path (default coverage/manifest-policy-coverage.json)",
+      "  --repo-root <path>  Repository root for implementation/test path checks (default cwd)",
+      "  -h, --help          Show this help message",
+    ].join("\n"),
+  );
 }
 
 function parsePathList(cellValue) {

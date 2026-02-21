@@ -1,9 +1,9 @@
 import { spawn } from "node:child_process";
 
-import { buildStructuredPrompt } from "../providers/types.js";
-import type { PlannedTarget } from "../providers/types.js";
-import { parseTimeoutMs } from "../providers/runtime.js";
 import { parseCommandLine } from "./commandParser.js";
+import { parseTimeoutMs } from "../providers/runtime.js";
+import { buildStructuredPrompt } from "../providers/types.js";
+import { type PlannedTarget } from "../providers/types.js";
 import { resolvePathWithinRoot } from "../shared/paths.js";
 import { isRecord } from "../shared/typeGuards.js";
 
@@ -70,7 +70,7 @@ export function getEnabledSoftAdapterNames(): SoftAdapterName[] {
 export function getEnabledSoftAdapterStatuses(): SoftAdapterEnabledStatus[] {
   return getEnabledSoftAdapterConfigs().map((config) => ({
     name: config.name,
-    configured: Boolean(config.command || config.url),
+    configured: Boolean(config.command ?? config.url),
     mode: config.command ? "command" : config.url ? "http" : "unconfigured",
     timeoutMs: config.timeoutMs,
   }));
@@ -92,9 +92,7 @@ export async function runEnabledSoftAdapters(
   }
 
   const payload = buildSoftAdapterPayload(input);
-  const adapterMetrics: Partial<
-    Record<SoftAdapterName, Record<string, number>>
-  > = {};
+  const adapterMetrics: Partial<Record<SoftAdapterName, Record<string, number>>> = {};
   const adapterScores: Partial<Record<SoftAdapterName, number>> = {};
   const succeededAdapters: SoftAdapterName[] = [];
   const failedAdapters: SoftAdapterName[] = [];
@@ -124,20 +122,14 @@ export async function runEnabledSoftAdapters(
   for (const result of adapterResults) {
     if (result.ok) {
       adapterMetrics[result.config.name] = result.response.metrics;
-      if (
-        typeof result.response.score === "number" &&
-        Number.isFinite(result.response.score)
-      ) {
+      if (typeof result.response.score === "number" && Number.isFinite(result.response.score)) {
         adapterScores[result.config.name] = result.response.score;
       }
       succeededAdapters.push(result.config.name);
       continue;
     }
 
-    const message =
-      result.error instanceof Error
-        ? result.error.message
-        : String(result.error);
+    const message = result.error instanceof Error ? result.error.message : String(result.error);
     warnings.push(`${result.config.name}: ${message}`);
     failedAdapters.push(result.config.name);
   }
@@ -170,9 +162,7 @@ function getEnabledSoftAdapterConfigs(): SoftAdapterConfig[] {
       configs.push({
         name,
         timeoutMs:
-          parseTimeoutMs(
-            process.env[`LOOTFORGE_${upper}_ADAPTER_TIMEOUT_MS`],
-          ) ??
+          parseTimeoutMs(process.env[`LOOTFORGE_${upper}_ADAPTER_TIMEOUT_MS`]) ??
           parseTimeoutMs(process.env[GENERIC_ADAPTER_TIMEOUT_ENV]) ??
           DEFAULT_ADAPTER_TIMEOUT_MS,
       });
@@ -193,9 +183,7 @@ function getEnabledSoftAdapterConfigs(): SoftAdapterConfig[] {
   return configs;
 }
 
-function buildSoftAdapterPayload(
-  input: SoftAdapterRunInput,
-): SoftAdapterPayload {
+function buildSoftAdapterPayload(input: SoftAdapterRunInput): SoftAdapterPayload {
   return {
     adapter: "clip",
     imagePath: input.imagePath,
@@ -263,9 +251,7 @@ async function runAdapterCommand(
       }
       if (code !== 0) {
         reject(
-          new Error(
-            `command exited with code ${code}. stderr: ${errorOutput.trim() || "(empty)"}`,
-          ),
+          new Error(`command exited with code ${code}. stderr: ${errorOutput.trim() || "(empty)"}`),
         );
         return;
       }
@@ -298,7 +284,9 @@ async function runAdapterHttp(
     adapter: config.name,
   };
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), config.timeoutMs);
+  const timeout = setTimeout(() => {
+    controller.abort();
+  }, config.timeoutMs);
 
   try {
     const response = await fetch(config.url, {
@@ -319,9 +307,7 @@ async function runAdapterHttp(
     return parseSoftAdapterResponse(config.name, await response.text());
   } catch (error) {
     if (error instanceof Error && error.name === "AbortError") {
-      throw new Error(
-        `HTTP adapter request timed out after ${config.timeoutMs}ms.`,
-      );
+      throw new Error(`HTTP adapter request timed out after ${config.timeoutMs}ms.`);
     }
     throw error;
   } finally {
@@ -329,10 +315,7 @@ async function runAdapterHttp(
   }
 }
 
-function parseSoftAdapterResponse(
-  name: SoftAdapterName,
-  rawOutput: string,
-): SoftAdapterResponse {
+function parseSoftAdapterResponse(name: SoftAdapterName, rawOutput: string): SoftAdapterResponse {
   const trimmed = rawOutput.trim();
   if (!trimmed) {
     throw new Error("adapter produced empty stdout.");
@@ -343,9 +326,7 @@ function parseSoftAdapterResponse(
     parsed = JSON.parse(trimmed);
   } catch (error) {
     throw new Error(
-      `adapter stdout is not valid JSON: ${
-        error instanceof Error ? error.message : String(error)
-      }`,
+      `adapter stdout is not valid JSON: ${error instanceof Error ? error.message : String(error)}`,
     );
   }
 
@@ -363,11 +344,7 @@ function parseSoftAdapterResponse(
 
   for (const [key, value] of Object.entries(metricsSource)) {
     if (key === "score") {
-      if (
-        score === undefined &&
-        typeof value === "number" &&
-        Number.isFinite(value)
-      ) {
+      if (score === undefined && typeof value === "number" && Number.isFinite(value)) {
         score = value;
       }
       continue;
@@ -387,10 +364,7 @@ function parseSoftAdapterResponse(
   };
 }
 
-function resolveReferenceImages(
-  target: PlannedTarget,
-  outDir: string,
-): string[] {
+function resolveReferenceImages(target: PlannedTarget, outDir: string): string[] {
   const inputs = target.edit?.inputs ?? [];
   const resolved = new Set<string>();
 

@@ -2,12 +2,12 @@ import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import {
-  GenerateProgressEvent,
+  type GenerateProgressEvent,
   parseGenerateProviderFlag,
   runGeneratePipeline,
 } from "../../pipeline/generate.js";
-import type { ProviderRegistry } from "../../providers/registry.js";
-import type { PlannedTarget, ProviderSelection } from "../../providers/types.js";
+import { type ProviderRegistry } from "../../providers/registry.js";
+import { type PlannedTarget, type ProviderSelection } from "../../providers/types.js";
 import { CliError } from "../../shared/errors.js";
 import { resolvePathWithinRoot, resolveStagePathLayout } from "../../shared/paths.js";
 
@@ -63,7 +63,7 @@ export function parseRegenerateCommandArgs(argv: string[]): RegenerateCommandArg
   const idsFlag = readArgValue(argv, "ids");
   const editFlag = readArgValue(argv, "edit");
   const preserveCompositionFlag = readArgValue(argv, "preserve-composition");
-  const instruction = readArgValue(argv, "instruction")?.trim() || undefined;
+  const instruction = readArgValue(argv, "instruction")?.trim() ?? undefined;
 
   return {
     outDir: path.resolve(outFlag ?? process.cwd()),
@@ -168,10 +168,10 @@ async function readTargetsIndex(targetsIndexPath: string): Promise<TargetsIndexS
   }
 
   if (!Array.isArray(parsed.targets)) {
-    throw new CliError(
-      `No targets found in planned index: ${targetsIndexPath}`,
-      { code: "missing_targets", exitCode: 1 },
-    );
+    throw new CliError(`No targets found in planned index: ${targetsIndexPath}`, {
+      code: "missing_targets",
+      exitCode: 1,
+    });
   }
 
   return parsed;
@@ -219,9 +219,7 @@ async function prepareRegenerateTargets(params: {
     .map((target) => target.targetId);
 
   const requestedIds =
-    params.ids.length > 0
-      ? Array.from(new Set(params.ids))
-      : Array.from(new Set(approvedLockIds));
+    params.ids.length > 0 ? Array.from(new Set(params.ids)) : Array.from(new Set(approvedLockIds));
   if (requestedIds.length === 0) {
     throw new CliError(
       "No regeneration targets resolved. Pass --ids or approve targets via lootforge select.",
@@ -235,16 +233,16 @@ async function prepareRegenerateTargets(params: {
   for (const targetId of requestedIds) {
     const target = targetsById.get(targetId);
     if (!target) {
-      throw new CliError(
-        `Target "${targetId}" was not found in targets index.`,
-        { code: "regenerate_missing_target", exitCode: 1 },
-      );
+      throw new CliError(`Target "${targetId}" was not found in targets index.`, {
+        code: "regenerate_missing_target",
+        exitCode: 1,
+      });
     }
     if (target.generationDisabled) {
-      throw new CliError(
-        `Target "${targetId}" is generationDisabled and cannot be regenerated.`,
-        { code: "regenerate_disabled_target", exitCode: 1 },
-      );
+      throw new CliError(`Target "${targetId}" is generationDisabled and cannot be regenerated.`, {
+        code: "regenerate_disabled_target",
+        exitCode: 1,
+      });
     }
 
     const lock = lockByTargetId.get(targetId);
@@ -345,7 +343,8 @@ function toEditFirstRegenerateTarget(params: {
     (input, index, list) =>
       list.findIndex(
         (candidate) =>
-          candidate.path === input.path && (candidate.role ?? "reference") === (input.role ?? "reference"),
+          candidate.path === input.path &&
+          (candidate.role ?? "reference") === (input.role ?? "reference"),
       ) === index,
   );
 
@@ -377,12 +376,10 @@ function writeGenerateProgressLog(event: GenerateProgressEvent): void {
     return;
   }
 
-  const printableIndex =
-    typeof event.jobIndex === "number" ? event.jobIndex + 1 : undefined;
+  const printableIndex = typeof event.jobIndex === "number" ? event.jobIndex + 1 : undefined;
   const total = event.totalJobs;
-  const slot =
-    typeof printableIndex === "number" ? `[${printableIndex}/${total}] ` : "";
-  const target = event.targetId ? `${event.targetId}` : "unknown-target";
+  const slot = typeof printableIndex === "number" ? `[${printableIndex}/${total}] ` : "";
+  const target = event.targetId ?? "unknown-target";
 
   if (event.type === "job_start") {
     process.stdout.write(
@@ -426,8 +423,8 @@ function parseBooleanArg(value: string, flag: string): boolean {
   if (["false", "0", "no", "n"].includes(normalized)) {
     return false;
   }
-  throw new CliError(
-    `Invalid boolean value "${value}" for ${flag}. Use true or false.`,
-    { code: "invalid_boolean_flag", exitCode: 1 },
-  );
+  throw new CliError(`Invalid boolean value "${value}" for ${flag}. Use true or false.`, {
+    code: "invalid_boolean_flag",
+    exitCode: 1,
+  });
 }

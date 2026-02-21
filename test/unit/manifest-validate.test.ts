@@ -4,8 +4,8 @@ import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
+import { type ManifestV2 } from "../../src/manifest/types.ts";
 import { createPlanArtifacts, validateManifestSource } from "../../src/manifest/validate.ts";
-import type { ManifestV2 } from "../../src/manifest/types.ts";
 
 const BASE_MANIFEST: ManifestV2 = {
   version: "next",
@@ -261,14 +261,9 @@ describe("manifest normalization", () => {
     await mkdir(styleDir, { recursive: true });
     await writeFile(
       path.join(styleDir, "palette.txt"),
-      [
-        "#112233",
-        "44AA55",
-        "255, 0, 170",
-        "GIMP Palette",
-        "Name: ignored",
-        "Columns: 4",
-      ].join("\n"),
+      ["#112233", "44AA55", "255, 0, 170", "GIMP Palette", "Name: ignored", "Columns: 4"].join(
+        "\n",
+      ),
       "utf8",
     );
 
@@ -554,9 +549,9 @@ describe("manifest normalization", () => {
     });
 
     expect(validation.report.errors).toBeGreaterThan(0);
-    expect(
-      validation.report.issues.some((issue) => issue.code === "wrap_grid_size_mismatch"),
-    ).toBe(true);
+    expect(validation.report.issues.some((issue) => issue.code === "wrap_grid_size_mismatch")).toBe(
+      true,
+    );
   });
 
   it("rejects unsafe target output paths that escape the output root", () => {
@@ -577,9 +572,9 @@ describe("manifest normalization", () => {
     });
 
     expect(validation.report.errors).toBeGreaterThan(0);
-    expect(
-      validation.report.issues.some((issue) => issue.code === "invalid_target_out_path"),
-    ).toBe(true);
+    expect(validation.report.issues.some((issue) => issue.code === "invalid_target_out_path")).toBe(
+      true,
+    );
   });
 
   it("treats normalized case-insensitive output path collisions as duplicates", () => {
@@ -606,9 +601,9 @@ describe("manifest normalization", () => {
     });
 
     expect(validation.report.errors).toBeGreaterThan(0);
-    expect(
-      validation.report.issues.some((issue) => issue.code === "duplicate_target_out"),
-    ).toBe(true);
+    expect(validation.report.issues.some((issue) => issue.code === "duplicate_target_out")).toBe(
+      true,
+    );
   });
 
   it("rejects targets that reference missing scoring profiles", () => {
@@ -637,9 +632,9 @@ describe("manifest normalization", () => {
     });
 
     expect(validation.report.errors).toBeGreaterThan(0);
-    expect(
-      validation.report.issues.some((issue) => issue.code === "missing_scoring_profile"),
-    ).toBe(true);
+    expect(validation.report.issues.some((issue) => issue.code === "missing_scoring_profile")).toBe(
+      true,
+    );
   });
 
   it("rejects duplicate scoring profile ids", () => {
@@ -793,7 +788,9 @@ describe("manifest normalization", () => {
       withoutModeValidation.report.issues.some((issue) => issue.path === "targets[0].controlMode"),
     ).toBe(true);
     expect(
-      withoutImageValidation.report.issues.some((issue) => issue.path === "targets[0].controlImage"),
+      withoutImageValidation.report.issues.some(
+        (issue) => issue.path === "targets[0].controlImage",
+      ),
     ).toBe(true);
   });
 
@@ -815,9 +812,9 @@ describe("manifest normalization", () => {
     });
 
     expect(validation.report.errors).toBeGreaterThan(0);
-    expect(
-      validation.report.issues.some((issue) => issue.path === "styleKits[0].loraPath"),
-    ).toBe(true);
+    expect(validation.report.issues.some((issue) => issue.path === "styleKits[0].loraPath")).toBe(
+      true,
+    );
   });
 
   it("reports unsafe control-image asset paths", () => {
@@ -842,8 +839,7 @@ describe("manifest normalization", () => {
     expect(
       validation.report.issues.some(
         (issue) =>
-          issue.code === "invalid_manifest_asset_path" &&
-          issue.path === "targets[0].controlImage",
+          issue.code === "invalid_manifest_asset_path" && issue.path === "targets[0].controlImage",
       ),
     ).toBe(true);
   });
@@ -855,9 +851,9 @@ describe("manifest normalization", () => {
       data: BASE_MANIFEST,
     });
 
-    expect(
-      validation.report.issues.some((issue) => issue.code === "missing_manifest_asset"),
-    ).toBe(true);
+    expect(validation.report.issues.some((issue) => issue.code === "missing_manifest_asset")).toBe(
+      true,
+    );
   });
 
   it("expands spritesheet targets into frame jobs plus assemble target", () => {

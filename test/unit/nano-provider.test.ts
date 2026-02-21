@@ -5,7 +5,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { NanoProvider } from "../../src/providers/nano.ts";
-import type { PlannedTarget, ProviderJob } from "../../src/providers/types.ts";
+import { type PlannedTarget, type ProviderJob } from "../../src/providers/types.ts";
 
 function createTarget(overrides: Partial<PlannedTarget> = {}): PlannedTarget {
   return {
@@ -65,7 +65,7 @@ describe("nano provider", () => {
       apiBase: "https://example.test/v1beta/models",
     });
 
-    const calls: Array<{ url: string; init: RequestInit | undefined }> = [];
+    const calls: { url: string; init: RequestInit | undefined }[] = [];
     const fetchImpl: typeof fetch = async (input, init) => {
       calls.push({ url: String(input), init });
       return new Response(
@@ -122,7 +122,7 @@ describe("nano provider", () => {
       apiBase: "https://example.test/v1beta/models",
     });
 
-    const calls: Array<{ url: string; init: RequestInit | undefined }> = [];
+    const calls: { url: string; init: RequestInit | undefined }[] = [];
     const fetchImpl: typeof fetch = async (input, init) => {
       calls.push({ url: String(input), init });
       return new Response(
@@ -167,7 +167,7 @@ describe("nano provider", () => {
     expect(calls).toHaveLength(1);
 
     const body = JSON.parse(String(calls[0].init?.body)) as {
-      contents: Array<{ parts: Array<{ text?: string; inlineData?: { data?: string } }> }>;
+      contents: { parts: { text?: string; inlineData?: { data?: string } }[] }[];
     };
 
     const parts = body.contents[0]?.parts ?? [];

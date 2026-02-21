@@ -1,4 +1,4 @@
-import { CatalogItem } from "./catalog.js";
+import { type CatalogItem } from "./catalog.js";
 
 export interface AtlasBundle {
   id: string;
@@ -19,9 +19,7 @@ export interface AssetPackManifestInput {
   atlasBundles: AtlasBundle[];
 }
 
-export function buildAssetPackManifest(
-  input: AssetPackManifestInput,
-): Record<string, unknown> {
+export function buildAssetPackManifest(input: AssetPackManifestInput): Record<string, unknown> {
   return {
     generatedAt: new Date().toISOString(),
     pack: input.pack,

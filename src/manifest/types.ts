@@ -1,19 +1,19 @@
-import type {
-  AuxiliaryMapPolicy,
-  ControlMode,
-  GenerationMode,
-  GenerationPolicy,
-  PalettePolicy,
-  PlannedTarget,
-  PlannedTargetsIndex,
-  PostProcessPolicy,
-  PromptSpec,
-  ProviderName,
-  SeamHealPolicy,
-  TargetKind,
-  TargetScoreWeights,
-  TargetEditSpec,
-  WrapGridPolicy,
+import {
+  type AuxiliaryMapPolicy,
+  type ControlMode,
+  type GenerationMode,
+  type GenerationPolicy,
+  type PalettePolicy,
+  type PlannedTarget,
+  type PlannedTargetsIndex,
+  type PostProcessPolicy,
+  type PromptSpec,
+  type ProviderName,
+  type SeamHealPolicy,
+  type TargetKind,
+  type TargetScoreWeights,
+  type TargetEditSpec,
+  type WrapGridPolicy,
 } from "../providers/types.js";
 
 export type ManifestVersion = "next";
@@ -125,11 +125,11 @@ export interface ManifestPostProcessOperations {
     size: number;
     color?: string;
   };
-  resizeVariants?: Array<{
+  resizeVariants?: {
     name: string;
     size: string;
     algorithm?: string;
-  }>;
+  }[];
   pixelPerfect?: {
     enabled?: boolean;
     scale?: number;

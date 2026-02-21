@@ -1,7 +1,7 @@
 import path from "node:path";
 
-import { CliError } from "../../shared/errors.js";
 import { SERVICE_API_VERSION, startLootForgeService } from "../../service/server.js";
+import { CliError } from "../../shared/errors.js";
 
 const DEFAULT_SERVICE_HOST = "127.0.0.1";
 const DEFAULT_SERVICE_PORT = 8744;
@@ -96,12 +96,17 @@ function registerShutdownHandlers(close: () => Promise<void>): void {
       })
       .finally(() => {
         process.stdout.write(`lootforge service stopped (${signal}).\n`);
+        // eslint-disable-next-line n/no-process-exit
         process.exit(0);
       });
   };
 
-  process.once("SIGINT", () => shutdown("SIGINT"));
-  process.once("SIGTERM", () => shutdown("SIGTERM"));
+  process.once("SIGINT", () => {
+    shutdown("SIGINT");
+  });
+  process.once("SIGTERM", () => {
+    shutdown("SIGTERM");
+  });
 }
 
 function readArgValue(argv: string[], name: string): string | undefined {

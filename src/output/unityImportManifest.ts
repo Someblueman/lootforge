@@ -1,6 +1,6 @@
-import type { PlannedTarget } from "../providers/types.js";
-import { AtlasBundle } from "./assetPackManifest.js";
-import { CatalogItem } from "./catalog.js";
+import { type AtlasBundle } from "./assetPackManifest.js";
+import { type CatalogItem } from "./catalog.js";
+import { type PlannedTarget } from "../providers/types.js";
 
 export interface UnityImportManifestInput {
   packId: string;
@@ -36,9 +36,7 @@ function mapRuntimeHintsByTargetId(targets: PlannedTarget[]): Map<string, Target
   return hints;
 }
 
-export function buildUnityImportManifest(
-  input: UnityImportManifestInput,
-): Record<string, unknown> {
+export function buildUnityImportManifest(input: UnityImportManifestInput): Record<string, unknown> {
   const targetHints = mapRuntimeHintsByTargetId(input.targets);
 
   return {

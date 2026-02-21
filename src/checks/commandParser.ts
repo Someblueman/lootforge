@@ -16,7 +16,7 @@ export function parseCommandLine(commandLine: string): ParsedCommand {
 }
 
 function tokenizeCommandLine(commandLine: string): string[] {
-  if (!commandLine || !commandLine.trim()) {
+  if (!commandLine.trim()) {
     throw new Error("Command must be a non-empty string.");
   }
 
@@ -28,7 +28,7 @@ function tokenizeCommandLine(commandLine: string): string[] {
   let tokenStarted = false;
 
   while (i < commandLine.length) {
-    const char = commandLine[i]!;
+    const char = commandLine[i];
 
     if (inSingleQuote) {
       if (char === "'") {
@@ -49,14 +49,11 @@ function tokenizeCommandLine(commandLine: string): string[] {
         i += 1;
         continue;
       }
-      if (char === "\\") {
-        const next = commandLine[i + 1];
-        if (next !== undefined) {
-          token += next;
-          tokenStarted = true;
-          i += 2;
-          continue;
-        }
+      if (char === "\\" && i + 1 < commandLine.length) {
+        token += commandLine[i + 1];
+        tokenStarted = true;
+        i += 2;
+        continue;
       }
       token += char;
       tokenStarted = true;
@@ -79,9 +76,8 @@ function tokenizeCommandLine(commandLine: string): string[] {
     }
 
     if (char === "\\") {
-      const next = commandLine[i + 1];
-      if (next !== undefined) {
-        token += next;
+      if (i + 1 < commandLine.length) {
+        token += commandLine[i + 1];
         tokenStarted = true;
         i += 2;
       } else {

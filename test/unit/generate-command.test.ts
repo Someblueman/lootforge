@@ -2,10 +2,7 @@ import path from "node:path";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import {
-  parseGenerateCommandArgs,
-  runGenerateCommand,
-} from "../../src/cli/commands/generate.ts";
+import { parseGenerateCommandArgs, runGenerateCommand } from "../../src/cli/commands/generate.ts";
 import * as generatePipelineModule from "../../src/pipeline/generate.ts";
 
 describe("generate command", () => {
@@ -63,19 +60,17 @@ describe("generate command", () => {
   });
 
   it("throws for invalid --skip-locked boolean values", () => {
-    expect(() =>
-      parseGenerateCommandArgs(["--skip-locked", "not-a-bool"]),
-    ).toThrow(/Invalid boolean value/i);
+    expect(() => parseGenerateCommandArgs(["--skip-locked", "not-a-bool"])).toThrow(
+      /Invalid boolean value/i,
+    );
   });
 
   it("maps runGenerateCommand output and writes progress logs", async () => {
     const writes: string[] = [];
-    const writeSpy = vi
-      .spyOn(process.stdout, "write")
-      .mockImplementation((chunk: unknown) => {
-        writes.push(String(chunk));
-        return true;
-      });
+    const writeSpy = vi.spyOn(process.stdout, "write").mockImplementation((chunk: unknown) => {
+      writes.push(String(chunk));
+      return true;
+    });
 
     const runSpy = vi
       .spyOn(generatePipelineModule, "runGeneratePipeline")

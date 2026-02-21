@@ -204,9 +204,12 @@ describe("process -> atlas -> package integration", () => {
     });
 
     const reportRaw = await readFile(result.acceptanceReportPath, "utf8");
-    const report = JSON.parse(reportRaw) as { errors: number; items: Array<{ metrics?: { seamScore?: number } }> };
+    const report = JSON.parse(reportRaw) as {
+      errors: number;
+      items: { metrics?: { seamScore?: number } }[];
+    };
     expect(report.errors).toBe(0);
-    expect((report.items[0]?.metrics?.seamScore ?? Number.POSITIVE_INFINITY)).toBeLessThanOrEqual(8);
+    expect(report.items[0]?.metrics?.seamScore ?? Number.POSITIVE_INFINITY).toBeLessThanOrEqual(8);
   });
 
   test("applies alpha-safe exact-palette quantization for strict pixel outputs", async () => {
@@ -258,7 +261,9 @@ describe("process -> atlas -> package integration", () => {
       200,
       255, // should quantize to #0000ff
     ]);
-    await sharp(raw, { raw: { width: 2, height: 1, channels: 4 } }).png().toFile(rawImagePath);
+    await sharp(raw, { raw: { width: 2, height: 1, channels: 4 } })
+      .png()
+      .toFile(rawImagePath);
 
     await runProcessPipeline({
       outDir,
@@ -267,8 +272,18 @@ describe("process -> atlas -> package integration", () => {
       mirrorLegacyImages: false,
     });
 
-    const processedPath = path.join(outDir, "assets", "imagegen", "processed", "images", "hero.png");
-    const decoded = await sharp(processedPath).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+    const processedPath = path.join(
+      outDir,
+      "assets",
+      "imagegen",
+      "processed",
+      "images",
+      "hero.png",
+    );
+    const decoded = await sharp(processedPath)
+      .ensureAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
     const data = decoded.data;
 
     expect(data[0]).toBe(0);
@@ -351,16 +366,24 @@ describe("process -> atlas -> package integration", () => {
 
     expect(result.variantCount).toBe(2);
     expect(
-      await exists(path.join(outDir, "assets", "imagegen", "processed", "images", "hero__half.png")),
+      await exists(
+        path.join(outDir, "assets", "imagegen", "processed", "images", "hero__half.png"),
+      ),
     ).toBe(true);
     expect(
-      await exists(path.join(outDir, "assets", "imagegen", "processed", "images", "hero__tiny.png")),
+      await exists(
+        path.join(outDir, "assets", "imagegen", "processed", "images", "hero__tiny.png"),
+      ),
     ).toBe(true);
     expect(
-      await exists(path.join(outDir, "assets", "imagegen", "processed", "images", "hero__normal.png")),
+      await exists(
+        path.join(outDir, "assets", "imagegen", "processed", "images", "hero__normal.png"),
+      ),
     ).toBe(true);
     expect(
-      await exists(path.join(outDir, "assets", "imagegen", "processed", "images", "hero__specular.png")),
+      await exists(
+        path.join(outDir, "assets", "imagegen", "processed", "images", "hero__specular.png"),
+      ),
     ).toBe(true);
     expect(
       await exists(path.join(outDir, "assets", "imagegen", "processed", "images", "hero__ao.png")),

@@ -1,11 +1,11 @@
 import path from "node:path";
 
 import {
-  GenerateProgressEvent,
+  type GenerateProgressEvent,
   parseGenerateProviderFlag,
   runGeneratePipeline,
 } from "../../pipeline/generate.js";
-import { ProviderSelection } from "../../providers/types.js";
+import { type ProviderSelection } from "../../providers/types.js";
 
 export interface GenerateCommandArgs {
   manifestPath?: string;
@@ -37,7 +37,7 @@ export function parseGenerateCommandArgs(argv: string[]): GenerateCommandArgs {
 
   return {
     manifestPath,
-    outDir: path.resolve(outFlag || defaultOutDir),
+    outDir: path.resolve(outFlag ?? defaultOutDir),
     targetsIndexPath: indexFlag ? path.resolve(indexFlag) : undefined,
     provider: parseGenerateProviderFlag(providerFlag),
     selectionLockPath: lockFlag ? path.resolve(lockFlag) : undefined,
@@ -51,9 +51,7 @@ export function parseGenerateCommandArgs(argv: string[]): GenerateCommandArgs {
   };
 }
 
-export async function runGenerateCommand(
-  argv: string[],
-): Promise<GenerateCommandResult> {
+export async function runGenerateCommand(argv: string[]): Promise<GenerateCommandResult> {
   const args = parseGenerateCommandArgs(argv);
   const pipelineResult = await runGeneratePipeline({
     outDir: args.outDir,
@@ -79,12 +77,10 @@ function writeGenerateProgressLog(event: GenerateProgressEvent): void {
     return;
   }
 
-  const printableIndex =
-    typeof event.jobIndex === "number" ? event.jobIndex + 1 : undefined;
+  const printableIndex = typeof event.jobIndex === "number" ? event.jobIndex + 1 : undefined;
   const total = event.totalJobs;
-  const slot =
-    typeof printableIndex === "number" ? `[${printableIndex}/${total}] ` : "";
-  const target = event.targetId ? `${event.targetId}` : "unknown-target";
+  const slot = typeof printableIndex === "number" ? `[${printableIndex}/${total}] ` : "";
+  const target = event.targetId ?? "unknown-target";
 
   if (event.type === "job_start") {
     process.stdout.write(
@@ -128,5 +124,5 @@ function parseBooleanArg(value: string): boolean {
   if (["false", "0", "no", "n"].includes(normalized)) {
     return false;
   }
-  throw new Error(`Invalid boolean value \"${value}\" for --skip-locked. Use true or false.`);
+  throw new Error(`Invalid boolean value "${value}" for --skip-locked. Use true or false.`);
 }

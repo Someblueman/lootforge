@@ -32,7 +32,14 @@ describe("spritesheet processing", () => {
         acceptance: { size: "32x32", alpha: true },
         runtimeSpec: { alphaRequired: true },
         catalogDisabled: true,
-        spritesheet: { sheetTargetId: "hero", animationName: "walk", frameIndex: 0, frameCount: 2, fps: 10, loop: true },
+        spritesheet: {
+          sheetTargetId: "hero",
+          animationName: "walk",
+          frameIndex: 0,
+          frameCount: 2,
+          fps: 10,
+          loop: true,
+        },
       },
       {
         id: "hero.walk.1",
@@ -43,7 +50,14 @@ describe("spritesheet processing", () => {
         acceptance: { size: "32x32", alpha: true },
         runtimeSpec: { alphaRequired: true },
         catalogDisabled: true,
-        spritesheet: { sheetTargetId: "hero", animationName: "walk", frameIndex: 1, frameCount: 2, fps: 10, loop: true },
+        spritesheet: {
+          sheetTargetId: "hero",
+          animationName: "walk",
+          frameIndex: 1,
+          frameCount: 2,
+          fps: 10,
+          loop: true,
+        },
       },
     ];
 
@@ -79,9 +93,7 @@ describe("spritesheet processing", () => {
           height: 20,
           channels: 4,
           background:
-            frameIndex === 0
-              ? { r: 255, g: 0, b: 0, alpha: 1 }
-              : { r: 0, g: 255, b: 0, alpha: 1 },
+            frameIndex === 0 ? { r: 255, g: 0, b: 0, alpha: 1 } : { r: 0, g: 255, b: 0, alpha: 1 },
         },
       })
         .png()

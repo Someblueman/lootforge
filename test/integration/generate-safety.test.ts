@@ -5,8 +5,8 @@ import path from "node:path";
 import sharp from "sharp";
 import { describe, expect, test } from "vitest";
 
-import { type ProviderRegistry } from "../../src/providers/registry.js";
 import { runGeneratePipeline } from "../../src/pipeline/generate.js";
+import { type ProviderRegistry } from "../../src/providers/registry.js";
 import {
   createProviderJob,
   type GenerationProvider,
@@ -54,7 +54,9 @@ function createStubProvider(startTimes: number[]): GenerationProvider {
 
 function createTestProvider(params: {
   name: ProviderName;
-  capabilities?: Partial<Pick<GenerationProvider["capabilities"], "minDelayMs" | "defaultConcurrency">>;
+  capabilities?: Partial<
+    Pick<GenerationProvider["capabilities"], "minDelayMs" | "defaultConcurrency">
+  >;
   runJob: (job: ProviderJob) => Promise<ProviderRunResult>;
   supports?: (feature: ProviderFeature) => boolean;
 }): GenerationProvider {
@@ -67,10 +69,7 @@ function createTestProvider(params: {
       defaultConcurrency:
         params.capabilities?.defaultConcurrency ?? baseCapabilities.defaultConcurrency,
     },
-    prepareJobs(
-      targets: PlannedTarget[],
-      ctx: ProviderPrepareContext,
-    ): ProviderJob[] {
+    prepareJobs(targets: PlannedTarget[], ctx: ProviderPrepareContext): ProviderJob[] {
       return targets.map((target) =>
         createProviderJob({
           provider: params.name,
@@ -159,9 +158,7 @@ describe("generate pipeline safety", () => {
 
     expect(startTimes.length).toBe(3);
     const orderedStarts = [...startTimes].sort((left, right) => left - right);
-    const deltas = orderedStarts
-      .slice(1)
-      .map((time, index) => time - orderedStarts[index]!);
+    const deltas = orderedStarts.slice(1).map((time, index) => time - orderedStarts[index]!);
     expect(Math.min(...deltas)).toBeGreaterThanOrEqual(180);
   });
 
@@ -651,11 +648,7 @@ describe("generate pipeline safety", () => {
       },
     };
 
-    await writeFile(
-      indexPath,
-      `${JSON.stringify({ targets: [target] }, null, 2)}\n`,
-      "utf8",
-    );
+    await writeFile(indexPath, `${JSON.stringify({ targets: [target] }, null, 2)}\n`, "utf8");
 
     const opaqueCandidate = await sharp({
       create: {
@@ -759,7 +752,9 @@ describe("generate pipeline safety", () => {
       true,
     );
     expect(
-      result.jobs[0]?.coarseToFine?.discarded.some((row) => row.reason === "draft_failed_acceptance"),
+      result.jobs[0]?.coarseToFine?.discarded.some(
+        (row) => row.reason === "draft_failed_acceptance",
+      ),
     ).toBe(true);
     expect(
       result.jobs[0]?.candidateScores?.some(
@@ -788,11 +783,7 @@ describe("generate pipeline safety", () => {
       },
     };
 
-    await writeFile(
-      indexPath,
-      `${JSON.stringify({ targets: [target] }, null, 2)}\n`,
-      "utf8",
-    );
+    await writeFile(indexPath, `${JSON.stringify({ targets: [target] }, null, 2)}\n`, "utf8");
 
     let nanoRunCalls = 0;
     const unsupportedNanoProvider: GenerationProvider = {

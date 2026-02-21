@@ -511,6 +511,8 @@ Per target:
 - `generationPolicy.agenticRetry?`: optional self-healing edit-first loop controls (`enabled`, `maxRetries`)
 - `generationPolicy.draftQuality` / `generationPolicy.finalQuality`: optional quality split used by coarse-pass and refinement-pass generation
   - when coarse-to-fine is enabled, draft/intermediate promotion ranking uses local image metrics only; full VLM/soft-adapter scoring runs on final promoted refine candidates
+  - benchmark helper: `npm run benchmark:coarse-to-fine -- --baseline <baseline-run.json> --coarse <coarse-run.json>`
+    - outputs stage-weighted cost-per-approved comparisons from provenance runs
 - directed-synthesis scaffolding:
   - `controlImage?` with `controlMode?` (`canny|depth|openpose`) must be provided together
   - `generationPolicy.highQuality?`

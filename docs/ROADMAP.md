@@ -318,12 +318,12 @@ Completed 2026-02-20 in this release track:
   - added optional `generationPolicy.agenticRetry` controls (`enabled`, `maxRetries`) to drive bounded edit-first self-healing loops,
   - auto-generated critique instructions from hard-fail signals (`vlm_gate_below_threshold`, alpha-boundary violations) and retried from selected candidate outputs,
   - persisted attempt-level trigger/delta summaries in run provenance via `agenticRetry` records.
+- Complete coarse-to-fine benchmark evidence and cost analysis tooling:
+  - added stage-weighted run-cost benchmarking utilities and a comparison script (`npm run benchmark:coarse-to-fine`),
+  - added integration benchmark coverage showing reduced cost-per-approved at equivalent acceptance for coarse-to-fine promotion flows,
+  - retained promotion/discarded candidate provenance records as benchmark input artifacts.
 
 Remaining queued items:
-
-- Add coarse-to-fine candidate promotion controls:
-  - run lower-cost candidate generation/scoring first,
-  - promote top-K candidates into high-fidelity refinement passes only when quality gates justify extra compute.
 
 #### 2D Investigation Follow-ups (Visual QA + Policy)
 

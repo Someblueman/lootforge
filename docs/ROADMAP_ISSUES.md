@@ -42,17 +42,12 @@ Recent completion (2026-02-21):
   - added optional `generationPolicy.agenticRetry` controls (`enabled`, `maxRetries`) to trigger edit-first self-healing loops from failed candidates,
   - generated critique instructions directly from VLM and edge-boundary hard-fail reasons and ran bounded edit-first regeneration attempts,
   - recorded attempt-level before/after deltas and trigger reasons in provenance (`agenticRetry`) for deterministic auditability.
+- Implemented coarse-to-fine benchmark evidence tooling:
+  - added stage-weighted cost model utilities for run-level cost-per-approved analysis,
+  - added integration benchmark coverage proving reduced cost-per-approved at equivalent acceptance using coarse-to-fine promotion,
+  - added `npm run benchmark:coarse-to-fine` script to compare baseline/coarse provenance runs.
 
 ## P0 (Immediate: `0.3.0`)
-
-### 1) Coarse-to-Fine Candidate Promotion
-
-- **Release target:** `0.3.0` to `0.4.0` bridge
-- **Why now:** Improve quality-per-cost by refining only promising candidates.
-- **Acceptance criteria:**
-  - Pipeline supports low-cost first pass and top-K promotion into high-fidelity refinement.
-  - Promotion decisions and discarded candidates are recorded in provenance.
-  - Benchmarks show reduced provider cost per approved asset for equivalent acceptance rate.
 
 ### 5) 2D Visual QA + Policy Follow-up Pack
 

@@ -446,11 +446,23 @@ const stageArtifactSchemas = {
       ),
     }),
     adapterWarnings: z.array(nonEmptyString),
+    consistencyGroupSummary: z
+      .array(
+        z.object({
+          consistencyGroup: nonEmptyString,
+          targetCount: z.number().int().min(0),
+          evaluatedTargetCount: z.number().int().min(0),
+          outlierTargetIds: z.array(nonEmptyString),
+          metricMedians: z.record(z.number()),
+        }),
+      )
+      .optional(),
     packInvariants: packInvariantSummarySchema.optional(),
     targets: z.array(
       z.object({
         targetId: nonEmptyString,
         out: nonEmptyString,
+        consistencyGroup: nonEmptyString.optional(),
         passedHardGates: z.boolean(),
         hardGateErrors: z.array(nonEmptyString),
         hardGateWarnings: z.array(nonEmptyString),
@@ -488,6 +500,15 @@ const stageArtifactSchemas = {
         adapterScore: z.number().optional(),
         adapterScoreComponents: z.record(z.number()).optional(),
         adapterWarnings: z.array(nonEmptyString).optional(),
+        consistencyGroupOutlier: z
+          .object({
+            score: z.number(),
+            threshold: z.number(),
+            penalty: z.number().int().min(0),
+            reasons: z.array(nonEmptyString),
+            metricDeltas: z.record(z.number()),
+          })
+          .optional(),
         finalScore: z.number(),
       }),
     ),

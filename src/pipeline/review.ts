@@ -38,6 +38,7 @@ interface EvalReportShape {
   targets?: {
     targetId: string;
     out: string;
+    consistencyGroup?: string;
     passedHardGates: boolean;
     hardGateErrors?: string[];
     hardGateWarnings?: string[];
@@ -69,6 +70,13 @@ interface EvalReportShape {
     adapterScore?: number;
     adapterScoreComponents?: Record<string, number>;
     adapterWarnings?: string[];
+    consistencyGroupOutlier?: {
+      score: number;
+      threshold: number;
+      penalty: number;
+      reasons: string[];
+      metricDeltas: Record<string, number>;
+    };
   }[];
 }
 
@@ -122,6 +130,7 @@ function renderReviewHtml(params: {
   targets: {
     targetId: string;
     out: string;
+    consistencyGroup?: string;
     passedHardGates: boolean;
     hardGateErrors?: string[];
     hardGateWarnings?: string[];
@@ -153,6 +162,13 @@ function renderReviewHtml(params: {
     adapterScore?: number;
     adapterScoreComponents?: Record<string, number>;
     adapterWarnings?: string[];
+    consistencyGroupOutlier?: {
+      score: number;
+      threshold: number;
+      penalty: number;
+      reasons: string[];
+      metricDeltas: Record<string, number>;
+    };
   }[];
 }): string {
   const rows = params.targets
@@ -420,6 +436,14 @@ function renderScoreDetails(target: {
   adapterMetrics?: Record<string, number>;
   adapterScoreComponents?: Record<string, number>;
   adapterWarnings?: string[];
+  consistencyGroup?: string;
+  consistencyGroupOutlier?: {
+    score: number;
+    threshold: number;
+    penalty: number;
+    reasons: string[];
+    metricDeltas: Record<string, number>;
+  };
 }): string {
   const sections: string[] = [];
 
@@ -444,6 +468,21 @@ function renderScoreDetails(target: {
     sections.push(
       `<div class="score-headline"><strong>VLM gate:</strong> ${escapeHtml(
         formatVlmSummary(target.candidateVlm),
+      )}</div>`,
+    );
+  }
+  if (target.consistencyGroupOutlier) {
+    sections.push(
+      `<div class="score-headline"><strong>Group outlier:</strong> ${formatScore(
+        target.consistencyGroupOutlier.score,
+      )} (threshold ${formatScore(target.consistencyGroupOutlier.threshold)}, penalty ${formatScore(
+        target.consistencyGroupOutlier.penalty,
+      )})${target.consistencyGroup ? ` · group=${escapeHtml(target.consistencyGroup)}` : ""}</div>`,
+    );
+  } else if (target.consistencyGroup) {
+    sections.push(
+      `<div class="score-headline"><strong>Consistency group:</strong> ${escapeHtml(
+        target.consistencyGroup,
       )}</div>`,
     );
   }
@@ -488,6 +527,20 @@ function renderScoreDetails(target: {
       "Adapter warnings",
       renderList(target.adapterWarnings),
       (target.adapterWarnings ?? []).length,
+    ),
+  );
+  sections.push(
+    renderDetailsBlock(
+      "Group outlier reasons",
+      renderList(target.consistencyGroupOutlier?.reasons),
+      (target.consistencyGroupOutlier?.reasons ?? []).length,
+    ),
+  );
+  sections.push(
+    renderDetailsBlock(
+      "Group outlier deltas",
+      renderObject(target.consistencyGroupOutlier?.metricDeltas),
+      Object.keys(target.consistencyGroupOutlier?.metricDeltas ?? {}).length,
     ),
   );
 

@@ -30,6 +30,10 @@ Recent completion (2026-02-21):
   - added manifest `targetTemplates[]` contract with target-level `templateId`, `dependsOn`, and `styleReferenceFrom`,
   - enforced deterministic dependency-aware execution stages with unresolved/cycle validation,
   - recorded effective style-reference lineage in run provenance for each generated target.
+- Implemented consistency-group drift/outlier scoring with deterministic ranking influence:
+  - added group-level CLIP/LPIPS outlier scoring across sibling targets with robust median/MAD-style normalization,
+  - emitted per-target diagnostics (`score`, `penalty`, reasons, metric deltas) in eval/review artifacts,
+  - applied deterministic outlier penalties to final ranking scores and emitted aggregate group summaries.
 
 ## P0 (Immediate: `0.3.0`)
 
@@ -41,15 +45,6 @@ Recent completion (2026-02-21):
   - Pipeline supports low-cost first pass and top-K promotion into high-fidelity refinement.
   - Promotion decisions and discarded candidates are recorded in provenance.
   - Benchmarks show reduced provider cost per approved asset for equivalent acceptance rate.
-
-### 2) Consistency-Group Drift/Outlier Scoring
-
-- **Release target:** `0.3.0`
-- **Why now:** `0.3.0` focuses on consistency quality beyond single-image heuristics.
-- **Acceptance criteria:**
-  - Group-level drift/outlier scoring exists using CLIP/LPIPS across sibling targets.
-  - Outlier diagnostics are emitted with clear reasons and metric values in eval/review.
-  - Group consistency signals can influence final ranking deterministically.
 
 ### 3) Aggregate Group-Level Warnings + Ranking Influence Controls
 

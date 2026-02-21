@@ -64,6 +64,12 @@ export interface ManifestConsistencyGroup {
   referenceImages: string[];
 }
 
+export interface ManifestTargetTemplate {
+  id: string;
+  dependsOn?: string[];
+  styleReferenceFrom?: string[];
+}
+
 export interface ManifestEvaluationProfile {
   id: string;
   hardGates?: {
@@ -184,6 +190,9 @@ export interface ManifestTarget {
   id: string;
   kind: string;
   out: string;
+  templateId?: string;
+  dependsOn?: string[];
+  styleReferenceFrom?: string[];
   atlasGroup?: string;
   styleKitId: string;
   consistencyGroup: string;
@@ -216,6 +225,7 @@ export interface ManifestV2 {
   pack: ManifestPack;
   providers: ManifestProviders;
   styleKits: ManifestStyleKit[];
+  targetTemplates?: ManifestTargetTemplate[];
   consistencyGroups?: ManifestConsistencyGroup[];
   evaluationProfiles: ManifestEvaluationProfile[];
   scoringProfiles?: ManifestScoringProfile[];

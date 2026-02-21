@@ -60,6 +60,12 @@ export interface ProvenanceJobRecord {
     skippedReason?: string;
     warnings?: string[];
   };
+  styleReferenceLineage?: {
+    source: "style-kit" | "target-output";
+    reference: string;
+    sourceTargetId?: string;
+    resolvedPath?: string;
+  }[];
   generationMode?: "text" | "edit-first";
   edit?: {
     mode?: "edit" | "iterate";

@@ -35,6 +35,10 @@ Manifest policy coverage gate:
   - `description?`
   - `styleKitId?`
   - `referenceImages[]`
+- `targetTemplates[]` (optional)
+  - `id`
+  - `dependsOn[]?` (target-id dependency policy)
+  - `styleReferenceFrom[]?` (target-id style-reference chain policy)
 - `evaluationProfiles[]` (required, at least one)
   - `id`
   - `hardGates?`: `{ requireAlpha?, maxFileSizeKB?, seamThreshold?, seamStripPx?, paletteComplianceMin?, alphaHaloRiskMax?, alphaStrayNoiseMax?, alphaEdgeSharpnessMin?, packTextureBudgetMB?, spritesheetSilhouetteDriftMax?, spritesheetAnchorDriftMax? }`
@@ -65,6 +69,10 @@ Required on every target:
 
 Optional quality controls:
 
+- `templateId?`: references `targetTemplates[].id` for reusable orchestration policy
+- `dependsOn?`: target-id dependencies used for deterministic execution staging
+- `styleReferenceFrom?`: target-id style-reference lineage for chaining generated assets
+  - when omitted, style-reference lineage defaults to `dependsOn`
 - `palette`: `{ mode: exact|max-colors, colors?, maxColors?, dither?, strict? }`
   - `strict` is supported only in `mode: "exact"` and enforces 100% visible-pixel palette compliance.
 - `scoringProfile?`: profile id from `scoringProfiles[]` (falls back to `evaluationProfileId` lookup)

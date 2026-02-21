@@ -12,6 +12,7 @@ import {
 import {
   type ManifestConsistencyGroup,
   type ManifestTarget,
+  type ManifestTargetTemplate,
   type ManifestV2,
   type ValidationIssue,
 } from "./types.js";
@@ -105,9 +106,26 @@ export function collectSemanticIssues(
   });
 
   const consistencyGroups = manifest.consistencyGroups ?? [];
+  const targetTemplates = manifest.targetTemplates ?? [];
+  const targetTemplateIds = new Set<string>();
+  const targetTemplateById = new Map<string, ManifestTargetTemplate>();
   const consistencyGroupIds = new Set<string>();
   const consistencyGroupById = new Map<string, ManifestConsistencyGroup>();
   const seenConsistencyGroups = new Set<string>();
+
+  targetTemplates.forEach((template, index) => {
+    if (targetTemplateIds.has(template.id)) {
+      issues.push({
+        level: "error",
+        code: "duplicate_target_template_id",
+        path: `targetTemplates[${index}].id`,
+        message: `Duplicate target template id "${template.id}".`,
+      });
+      return;
+    }
+    targetTemplateIds.add(template.id);
+    targetTemplateById.set(template.id, template);
+  });
 
   consistencyGroups.forEach((group, index) => {
     if (consistencyGroupIds.has(group.id)) {
@@ -209,6 +227,15 @@ export function collectSemanticIssues(
       } else {
         seenOutPaths.add(outDedupeKey);
       }
+    }
+
+    if (target.templateId && !targetTemplateIds.has(target.templateId)) {
+      issues.push({
+        level: "error",
+        code: "missing_target_template",
+        path: `targets[${index}].templateId`,
+        message: `Unknown target template "${target.templateId}".`,
+      });
     }
 
     if (!styleKitIds.has(target.styleKitId)) {
@@ -446,6 +473,51 @@ export function collectSemanticIssues(
     }
   });
 
+  manifest.targets.forEach((target, index) => {
+    const template = target.templateId ? targetTemplateById.get(target.templateId) : undefined;
+    const dependsOn = mergeTargetReferenceLists(template?.dependsOn, target.dependsOn);
+    const explicitStyleReferenceFrom = mergeTargetReferenceLists(
+      template?.styleReferenceFrom,
+      target.styleReferenceFrom,
+    );
+
+    for (const dependencyId of dependsOn) {
+      if (!seenTargetIds.has(dependencyId)) {
+        issues.push({
+          level: "error",
+          code: "missing_dependency_target",
+          path: `targets[${index}].dependsOn`,
+          message: `Target "${target.id}" depends on unknown target "${dependencyId}".`,
+        });
+      } else if (dependencyId === target.id) {
+        issues.push({
+          level: "error",
+          code: "self_dependency",
+          path: `targets[${index}].dependsOn`,
+          message: `Target "${target.id}" cannot depend on itself.`,
+        });
+      }
+    }
+
+    for (const sourceTargetId of explicitStyleReferenceFrom) {
+      if (!seenTargetIds.has(sourceTargetId)) {
+        issues.push({
+          level: "error",
+          code: "missing_style_reference_target",
+          path: `targets[${index}].styleReferenceFrom`,
+          message: `Target "${target.id}" chains style references from unknown target "${sourceTargetId}".`,
+        });
+      } else if (sourceTargetId === target.id) {
+        issues.push({
+          level: "error",
+          code: "self_style_reference",
+          path: `targets[${index}].styleReferenceFrom`,
+          message: `Target "${target.id}" cannot chain style references from itself.`,
+        });
+      }
+    }
+  });
+
   for (const [index, group] of consistencyGroups.entries()) {
     if (!seenConsistencyGroups.has(group.id)) {
       issues.push({
@@ -500,6 +572,27 @@ function resolveWrapGridValidationSize(
     target.postProcess?.resizeTo,
     target.acceptance?.size ?? target.generationPolicy?.size,
   );
+}
+
+function mergeTargetReferenceLists(primary?: string[], secondary?: string[]): string[] {
+  const merged = [...normalizeTargetReferenceList(primary), ...normalizeTargetReferenceList(secondary)];
+  const deduped: string[] = [];
+  const seen = new Set<string>();
+  for (const targetId of merged) {
+    if (seen.has(targetId)) {
+      continue;
+    }
+    seen.add(targetId);
+    deduped.push(targetId);
+  }
+  return deduped;
+}
+
+function normalizeTargetReferenceList(values?: string[]): string[] {
+  if (!Array.isArray(values)) {
+    return [];
+  }
+  return values.map((value) => value.trim()).filter(Boolean);
 }
 
 export function toSchemaValidationIssue(issue: ZodIssue): ValidationIssue {

@@ -17,6 +17,7 @@ import {
   type ManifestEvaluationProfile,
   type ManifestScoringProfile,
   type ManifestTarget,
+  type ManifestTargetTemplate,
   type ManifestV2,
   type PlannedProviderJobSpec,
 } from "./types.js";
@@ -182,6 +183,7 @@ export function resolveTargetScoring(params: {
 export function normalizeTargetForGeneration(params: {
   manifest: ManifestV2;
   target: ManifestTarget;
+  template?: ManifestTargetTemplate;
   defaultProvider: ProviderName;
   styleKit: ManifestV2["styleKits"][number];
   styleKitPaletteDefault?: PalettePolicy;
@@ -259,11 +261,24 @@ export function normalizeTargetForGeneration(params: {
     evalProfile: params.evalProfile,
     scoringProfileById: params.scoringProfileById,
   });
+  const dependsOn = mergeOrchestrationTargetRefs(
+    params.template?.dependsOn,
+    params.target.dependsOn,
+  );
+  const explicitStyleReferenceFrom = mergeOrchestrationTargetRefs(
+    params.template?.styleReferenceFrom,
+    params.target.styleReferenceFrom,
+  );
+  const styleReferenceFrom =
+    explicitStyleReferenceFrom.length > 0 ? explicitStyleReferenceFrom : dependsOn;
 
   const normalized: PlannedTarget = {
     id,
     kind: params.target.kind.trim(),
     out,
+    ...(params.target.templateId ? { templateId: params.target.templateId } : {}),
+    ...(dependsOn.length > 0 ? { dependsOn } : {}),
+    ...(styleReferenceFrom.length > 0 ? { styleReferenceFrom } : {}),
     atlasGroup,
     styleKitId: params.target.styleKitId,
     ...(styleReferenceImages.length > 0 ? { styleReferenceImages } : {}),
@@ -329,6 +344,7 @@ export function normalizeTargetForGeneration(params: {
 export function expandSpritesheetTarget(params: {
   manifest: ManifestV2;
   target: ManifestTarget;
+  template?: ManifestTargetTemplate;
   defaultProvider: ProviderName;
   styleKit: ManifestV2["styleKits"][number];
   styleKitPaletteDefault?: PalettePolicy;
@@ -390,6 +406,7 @@ export function expandSpritesheetTarget(params: {
         normalizeTargetForGeneration({
           manifest: params.manifest,
           target: params.target,
+          template: params.template,
           defaultProvider: params.defaultProvider,
           styleKit: params.styleKit,
           styleKitPaletteDefault: params.styleKitPaletteDefault,
@@ -417,6 +434,7 @@ export function expandSpritesheetTarget(params: {
   const sheetTarget = normalizeTargetForGeneration({
     manifest: params.manifest,
     target: params.target,
+    template: params.template,
     defaultProvider: params.defaultProvider,
     styleKit: params.styleKit,
     styleKitPaletteDefault: params.styleKitPaletteDefault,
@@ -433,6 +451,33 @@ export function expandSpritesheetTarget(params: {
   });
 
   return [...frameTargets, sheetTarget];
+}
+
+function mergeOrchestrationTargetRefs(
+  templateRefs?: string[],
+  targetRefs?: string[],
+): string[] {
+  const merged = [
+    ...normalizeOrchestrationTargetRefs(templateRefs),
+    ...normalizeOrchestrationTargetRefs(targetRefs),
+  ];
+  const deduped: string[] = [];
+  const seen = new Set<string>();
+  for (const targetId of merged) {
+    if (seen.has(targetId)) {
+      continue;
+    }
+    seen.add(targetId);
+    deduped.push(targetId);
+  }
+  return deduped;
+}
+
+function normalizeOrchestrationTargetRefs(refs?: string[]): string[] {
+  if (!Array.isArray(refs)) {
+    return [];
+  }
+  return refs.map((targetId) => targetId.trim()).filter(Boolean);
 }
 
 export function resolveTargetModel(

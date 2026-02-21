@@ -24,6 +24,13 @@ Recent completion (2026-02-20):
   - added runtime introspection endpoint (`GET /v1/providers/capabilities`) with provider/model query support,
   - exposed explicit provider-gating signals for `pixel`, `highRes`, and `references`.
 
+Recent completion (2026-02-21):
+
+- Implemented template-driven pack orchestration and dependency-aware style-reference chaining:
+  - added manifest `targetTemplates[]` contract with target-level `templateId`, `dependsOn`, and `styleReferenceFrom`,
+  - enforced deterministic dependency-aware execution stages with unresolved/cycle validation,
+  - recorded effective style-reference lineage in run provenance for each generated target.
+
 ## P0 (Immediate: `0.3.0`)
 
 ### 1) Coarse-to-Fine Candidate Promotion
@@ -35,16 +42,7 @@ Recent completion (2026-02-20):
   - Promotion decisions and discarded candidates are recorded in provenance.
   - Benchmarks show reduced provider cost per approved asset for equivalent acceptance rate.
 
-### 2) Template-Driven Pack Orchestration + Dependency-Aware Style Chaining
-
-- **Release target:** `0.3.0`
-- **Why now:** Pack-level coherence depends on deterministic dependency order and explicit style-reference lineage.
-- **Acceptance criteria:**
-  - Template contract can declare dependency-aware target orchestration and style-reference chaining.
-  - Planner execution is deterministic, validates dependency cycles, and fails on unresolved references.
-  - Provenance records effective style-reference lineage per generated target.
-
-### 3) Consistency-Group Drift/Outlier Scoring
+### 2) Consistency-Group Drift/Outlier Scoring
 
 - **Release target:** `0.3.0`
 - **Why now:** `0.3.0` focuses on consistency quality beyond single-image heuristics.
@@ -53,7 +51,7 @@ Recent completion (2026-02-20):
   - Outlier diagnostics are emitted with clear reasons and metric values in eval/review.
   - Group consistency signals can influence final ranking deterministically.
 
-### 4) Aggregate Group-Level Warnings + Ranking Influence Controls
+### 3) Aggregate Group-Level Warnings + Ranking Influence Controls
 
 - **Release target:** `0.3.0`
 - **Why now:** Teams need pack-level visibility and tunable influence of coherence signals.
@@ -62,7 +60,7 @@ Recent completion (2026-02-20):
   - Manifest/evaluation profiles can configure group-warning thresholds and ranking influence weights.
   - Selection outputs trace how group-level signals affected candidate decisions.
 
-### 5) Agentic Auto-Correction (Self-Healing Pipeline)
+### 4) Agentic Auto-Correction (Self-Healing Pipeline)
 
 - **Release target:** `0.3.0` to `0.4.0` bridge
 - **Why now:** Reduce human review load by actively reacting to VLM and edge-boundary failures.
@@ -71,7 +69,7 @@ Recent completion (2026-02-20):
   - Generative loops have a configurable max retry limit.
   - Provenance accurately captures auto-correction attempts and their deltas.
 
-### 6) 2D Visual QA + Policy Follow-up Pack
+### 5) 2D Visual QA + Policy Follow-up Pack
 
 - **Release target:** `0.3.0` stretch / `0.4.0` bridge
 - **Why now:** Remaining visual QA gaps are still a source of production-quality drift.

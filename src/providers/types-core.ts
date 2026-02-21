@@ -253,6 +253,9 @@ export interface PlannedTarget {
   id: string;
   kind?: string;
   out: string;
+  templateId?: string;
+  dependsOn?: string[];
+  styleReferenceFrom?: string[];
   atlasGroup?: string | null;
   styleKitId?: string;
   styleReferenceImages?: string[];
@@ -456,6 +459,12 @@ export interface ProviderRunResult {
     skippedReason?: string;
     warnings?: string[];
   };
+  styleReferenceLineage?: {
+    source: "style-kit" | "target-output";
+    reference: string;
+    sourceTargetId?: string;
+    resolvedPath?: string;
+  }[];
   generationMode?: GenerationMode;
   edit?: TargetEditSpec;
   regenerationSource?: RegenerationSource;

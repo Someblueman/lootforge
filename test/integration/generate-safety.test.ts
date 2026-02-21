@@ -470,7 +470,7 @@ describe("generate pipeline safety", () => {
               promptSpec: { primary: "hero" },
               generationPolicy: {
                 outputFormat: "png",
-                background: "transparent",
+                background: "opaque",
               },
             },
           ],
@@ -935,6 +935,205 @@ describe("generate pipeline safety", () => {
         process.env.LOOTFORGE_VLM_GATE_URL = previousVlmUrl;
       }
     }
+  });
+
+  test("enforces dependency-aware execution ordering across providers", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "lootforge-generate-dependency-order-"));
+    const outDir = path.join(root, "out");
+    const indexPath = path.join(outDir, "jobs", "targets-index.json");
+    await mkdir(path.dirname(indexPath), { recursive: true });
+
+    await writeFile(
+      indexPath,
+      `${JSON.stringify(
+        {
+          targets: [
+            {
+              id: "base",
+              out: "base.png",
+              provider: "openai",
+              promptSpec: { primary: "base" },
+              generationPolicy: {
+                outputFormat: "png",
+                background: "opaque",
+              },
+            },
+            {
+              id: "mid",
+              out: "mid.png",
+              provider: "nano",
+              dependsOn: ["base"],
+              promptSpec: { primary: "mid" },
+              generationPolicy: {
+                outputFormat: "png",
+                background: "opaque",
+              },
+            },
+            {
+              id: "leaf",
+              out: "leaf.png",
+              provider: "local",
+              dependsOn: ["mid"],
+              promptSpec: { primary: "leaf" },
+              generationPolicy: {
+                outputFormat: "png",
+                background: "transparent",
+              },
+            },
+          ],
+        },
+        null,
+        2,
+      )}\n`,
+      "utf8",
+    );
+
+    const events: string[] = [];
+    const makeProvider = (name: ProviderName): GenerationProvider =>
+      createTestProvider({
+        name,
+        runJob: async (job) => {
+          events.push(`start:${job.targetId}`);
+          await mkdir(path.dirname(job.outPath), { recursive: true });
+          await writeFile(job.outPath, TINY_PNG);
+          await new Promise((resolve) => setTimeout(resolve, 20));
+          events.push(`finish:${job.targetId}`);
+          return {
+            jobId: job.id,
+            provider: name,
+            model: job.model,
+            targetId: job.targetId,
+            outputPath: job.outPath,
+            bytesWritten: TINY_PNG.byteLength,
+            inputHash: job.inputHash,
+            startedAt: new Date().toISOString(),
+            finishedAt: new Date().toISOString(),
+          };
+        },
+      });
+
+    await runGeneratePipeline({
+      outDir,
+      provider: "auto",
+      skipLocked: false,
+      registry: {
+        openai: makeProvider("openai"),
+        nano: makeProvider("nano"),
+        local: makeProvider("local"),
+      },
+    });
+
+    const finishBase = events.indexOf("finish:base");
+    const startMid = events.indexOf("start:mid");
+    const finishMid = events.indexOf("finish:mid");
+    const startLeaf = events.indexOf("start:leaf");
+
+    expect(finishBase).toBeGreaterThanOrEqual(0);
+    expect(startMid).toBeGreaterThan(finishBase);
+    expect(finishMid).toBeGreaterThanOrEqual(0);
+    expect(startLeaf).toBeGreaterThan(finishMid);
+  });
+
+  test("records effective style-reference lineage in run provenance", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "lootforge-generate-style-lineage-"));
+    const outDir = path.join(root, "out");
+    const indexPath = path.join(outDir, "jobs", "targets-index.json");
+    await mkdir(path.dirname(indexPath), { recursive: true });
+
+    await writeFile(
+      indexPath,
+      `${JSON.stringify(
+        {
+          targets: [
+            {
+              id: "base",
+              out: "base.png",
+              provider: "openai",
+              promptSpec: { primary: "base" },
+              generationPolicy: {
+                outputFormat: "png",
+                background: "transparent",
+              },
+            },
+            {
+              id: "variant",
+              out: "variant.png",
+              provider: "openai",
+              dependsOn: ["base"],
+              styleReferenceFrom: ["base"],
+              styleReferenceImages: ["style/default/reference.png"],
+              promptSpec: { primary: "variant" },
+              generationPolicy: {
+                outputFormat: "png",
+                background: "transparent",
+              },
+            },
+          ],
+        },
+        null,
+        2,
+      )}\n`,
+      "utf8",
+    );
+
+    const openaiProvider = createTestProvider({
+      name: "openai",
+      runJob: async (job) => {
+        await mkdir(path.dirname(job.outPath), { recursive: true });
+        await writeFile(job.outPath, TINY_PNG);
+        return {
+          jobId: job.id,
+          provider: "openai",
+          model: job.model,
+          targetId: job.targetId,
+          outputPath: job.outPath,
+          bytesWritten: TINY_PNG.byteLength,
+          inputHash: job.inputHash,
+          startedAt: new Date().toISOString(),
+          finishedAt: new Date().toISOString(),
+        };
+      },
+    });
+
+    const result = await runGeneratePipeline({
+      outDir,
+      provider: "openai",
+      skipLocked: false,
+      registry: {
+        openai: openaiProvider,
+        nano: openaiProvider,
+        local: openaiProvider,
+      },
+    });
+
+    const variantJob = result.jobs.find((job) => job.targetId === "variant");
+    expect(variantJob?.styleReferenceLineage?.some((entry) => entry.source === "style-kit")).toBe(
+      true,
+    );
+    expect(
+      variantJob?.styleReferenceLineage?.some(
+        (entry) =>
+          entry.source === "target-output" &&
+          entry.sourceTargetId === "base" &&
+          entry.resolvedPath?.endsWith(`${path.sep}raw${path.sep}base.png`) === true,
+      ),
+    ).toBe(true);
+
+    const provenance = JSON.parse(await readFile(result.provenancePath, "utf8")) as {
+      jobs?: {
+        targetId: string;
+        styleReferenceLineage?: {
+          source: string;
+          sourceTargetId?: string;
+        }[];
+      }[];
+    };
+    const provenanceVariant = provenance.jobs?.find((job) => job.targetId === "variant");
+    expect(
+      provenanceVariant?.styleReferenceLineage?.some(
+        (entry) => entry.source === "target-output" && entry.sourceTargetId === "base",
+      ),
+    ).toBe(true);
   });
 
   test("fails fast when selected provider does not support edit-first generation", async () => {

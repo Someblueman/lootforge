@@ -159,121 +159,126 @@ export async function runGeneratePipeline(
       fallbackProviders: route.fallbacks,
     } as TargetTask;
   });
+  const taskById = new Map(tasks.map((task) => [task.target.id, task]));
+  const executionStages = buildTaskExecutionStages(tasks);
 
   options.onProgress?.({
     type: "prepare",
     totalJobs: tasks.length,
   });
 
-  const groupedTasks = new Map<ProviderName, TargetTask[]>();
-  for (const task of tasks) {
-    const existing = groupedTasks.get(task.primaryProvider);
-    if (existing) {
-      existing.push(task);
-    } else {
-      groupedTasks.set(task.primaryProvider, [task]);
-    }
-  }
-
   const results: ProviderRunResult[] = [];
   const failures: GenerateJobFailure[] = [];
 
-  await Promise.all(
-    Array.from(groupedTasks.entries()).map(async ([providerName, providerTasks]) => {
-      const provider = getProvider(registry, providerName);
-      const providerConcurrency = Math.max(
-        1,
-        ...providerTasks.map((task) => task.target.generationPolicy?.providerConcurrency ?? 0),
-        provider.capabilities.defaultConcurrency,
-      );
+  for (const stageTasks of executionStages) {
+    const groupedTasks = new Map<ProviderName, TargetTask[]>();
+    for (const task of stageTasks) {
+      const existing = groupedTasks.get(task.primaryProvider);
+      if (existing) {
+        existing.push(task);
+      } else {
+        groupedTasks.set(task.primaryProvider, [task]);
+      }
+    }
 
-      const queue = [...providerTasks].sort((left, right) =>
-        left.target.id.localeCompare(right.target.id),
-      );
-      let nextTask = 0;
-      let nextScheduledStartAt = 0;
-      const reserveWaitMs = (task: TargetTask): number => {
-        const minDelayMs = computeProviderDelayMs(task, provider.capabilities.minDelayMs);
-        const nowMs = Date.now();
-        const scheduledStart = Math.max(nowMs, nextScheduledStartAt);
-        nextScheduledStartAt = scheduledStart + minDelayMs;
-        return Math.max(0, scheduledStart - nowMs);
-      };
+    await Promise.all(
+      Array.from(groupedTasks.entries()).map(async ([providerName, providerTasks]) => {
+        const provider = getProvider(registry, providerName);
+        const providerConcurrency = Math.max(
+          1,
+          ...providerTasks.map((task) => task.target.generationPolicy?.providerConcurrency ?? 0),
+          provider.capabilities.defaultConcurrency,
+        );
 
-      const workers: Promise<void>[] = [];
-      for (let workerIndex = 0; workerIndex < providerConcurrency; workerIndex += 1) {
-        workers.push(
-          (async () => {
-            while (nextTask < queue.length) {
-              const currentIndex = nextTask;
-              nextTask += 1;
-              const task = queue[currentIndex];
+        const queue = [...providerTasks].sort((left, right) =>
+          left.target.id.localeCompare(right.target.id),
+        );
+        let nextTask = 0;
+        let nextScheduledStartAt = 0;
+        const reserveWaitMs = (task: TargetTask): number => {
+          const minDelayMs = computeProviderDelayMs(task, provider.capabilities.minDelayMs);
+          const nowMs = Date.now();
+          const scheduledStart = Math.max(nowMs, nextScheduledStartAt);
+          nextScheduledStartAt = scheduledStart + minDelayMs;
+          return Math.max(0, scheduledStart - nowMs);
+        };
 
-              const waitMs = reserveWaitMs(task);
-              if (waitMs > 0) {
-                await delay(waitMs);
-              }
+        const workers: Promise<void>[] = [];
+        for (let workerIndex = 0; workerIndex < providerConcurrency; workerIndex += 1) {
+          workers.push(
+            (async () => {
+              while (nextTask < queue.length) {
+                const currentIndex = nextTask;
+                nextTask += 1;
+                const task = queue[currentIndex];
 
-              const progressIndex = task.targetIndex;
-              options.onProgress?.({
-                type: "job_start",
-                totalJobs: tasks.length,
-                jobIndex: progressIndex,
-                targetId: task.target.id,
-                provider: task.primaryProvider,
-                model: task.target.model,
-              });
+                const waitMs = reserveWaitMs(task);
+                if (waitMs > 0) {
+                  await delay(waitMs);
+                }
 
-              try {
-                const result = await runTaskWithFallback({
-                  task,
-                  outDir: layout.outDir,
-                  imagesDir,
-                  now: options.now,
-                  fetchImpl: options.fetchImpl,
-                  registry,
-                  lockByTargetId,
-                  skipLocked,
-                });
-                results.push(result);
-
+                const progressIndex = task.targetIndex;
                 options.onProgress?.({
-                  type: "job_finish",
-                  totalJobs: tasks.length,
-                  jobIndex: progressIndex,
-                  targetId: task.target.id,
-                  provider: result.provider,
-                  model: result.model,
-                  bytesWritten: result.bytesWritten,
-                  outputPath: result.outputPath,
-                });
-              } catch (error) {
-                const message = error instanceof Error ? error.message : String(error);
-                failures.push({
-                  targetId: task.target.id,
-                  provider: task.primaryProvider,
-                  attemptedProviders: [task.primaryProvider, ...task.fallbackProviders],
-                  message,
-                });
-
-                options.onProgress?.({
-                  type: "job_error",
+                  type: "job_start",
                   totalJobs: tasks.length,
                   jobIndex: progressIndex,
                   targetId: task.target.id,
                   provider: task.primaryProvider,
                   model: task.target.model,
-                  message,
                 });
-              }
-            }
-          })(),
-        );
-      }
 
-      await Promise.all(workers);
-    }),
-  );
+                try {
+                  const result = await runTaskWithFallback({
+                    task,
+                    outDir: layout.outDir,
+                    imagesDir,
+                    now: options.now,
+                    fetchImpl: options.fetchImpl,
+                    registry,
+                    lockByTargetId,
+                    skipLocked,
+                    taskById,
+                  });
+                  results.push(result);
+
+                  options.onProgress?.({
+                    type: "job_finish",
+                    totalJobs: tasks.length,
+                    jobIndex: progressIndex,
+                    targetId: task.target.id,
+                    provider: result.provider,
+                    model: result.model,
+                    bytesWritten: result.bytesWritten,
+                    outputPath: result.outputPath,
+                  });
+                } catch (error) {
+                  const message = error instanceof Error ? error.message : String(error);
+                  failures.push({
+                    targetId: task.target.id,
+                    provider: task.primaryProvider,
+                    attemptedProviders: [task.primaryProvider, ...task.fallbackProviders],
+                    message,
+                  });
+
+                  options.onProgress?.({
+                    type: "job_error",
+                    totalJobs: tasks.length,
+                    jobIndex: progressIndex,
+                    targetId: task.target.id,
+                    provider: task.primaryProvider,
+                    model: task.target.model,
+                    message,
+                  });
+                }
+              }
+            })(),
+          );
+        }
+
+        await Promise.all(workers);
+      }),
+    );
+  }
 
   results.sort((left, right) => left.targetId.localeCompare(right.targetId));
   failures.sort((left, right) => left.targetId.localeCompare(right.targetId));
@@ -299,6 +304,7 @@ export async function runGeneratePipeline(
       candidateOutputs: result.candidateOutputs,
       candidateScores: result.candidateScores,
       coarseToFine: result.coarseToFine,
+      styleReferenceLineage: result.styleReferenceLineage,
       generationMode: result.generationMode,
       edit: result.edit,
       regenerationSource: result.regenerationSource,
@@ -399,6 +405,74 @@ function filterTargetsByIds(targets: PlannedTarget[], ids?: string[]): PlannedTa
   return filtered;
 }
 
+function buildTaskExecutionStages(tasks: TargetTask[]): TargetTask[][] {
+  const tasksById = new Map(tasks.map((task) => [task.target.id, task]));
+  const inDegree = new Map<string, number>();
+  const adjacency = new Map<string, string[]>();
+
+  for (const task of tasks) {
+    inDegree.set(task.target.id, 0);
+    adjacency.set(task.target.id, []);
+  }
+
+  for (const task of tasks) {
+    const dependencies = dedupeTargetIdList(task.target.dependsOn ?? []);
+    for (const dependencyId of dependencies) {
+      if (dependencyId === task.target.id) {
+        throw new Error(`Target "${task.target.id}" cannot depend on itself.`);
+      }
+      if (!tasksById.has(dependencyId)) {
+        throw new Error(
+          `Target "${task.target.id}" depends on "${dependencyId}", but that target is not in the current generation set.`,
+        );
+      }
+      adjacency.get(dependencyId)?.push(task.target.id);
+      inDegree.set(task.target.id, (inDegree.get(task.target.id) ?? 0) + 1);
+    }
+  }
+
+  let currentStage = tasks
+    .map((task) => task.target.id)
+    .filter((targetId) => (inDegree.get(targetId) ?? 0) === 0)
+    .sort((left, right) => left.localeCompare(right));
+  const stages: TargetTask[][] = [];
+  let visited = 0;
+
+  while (currentStage.length > 0) {
+    const stageTasks = currentStage
+      .map((targetId) => tasksById.get(targetId))
+      .filter((task): task is TargetTask => Boolean(task));
+    stages.push(stageTasks);
+    visited += stageTasks.length;
+
+    const nextStageCandidates = new Set<string>();
+    for (const targetId of currentStage) {
+      const dependents = adjacency.get(targetId) ?? [];
+      for (const dependentId of dependents) {
+        const nextDegree = (inDegree.get(dependentId) ?? 0) - 1;
+        inDegree.set(dependentId, nextDegree);
+        if (nextDegree === 0) {
+          nextStageCandidates.add(dependentId);
+        }
+      }
+    }
+
+    currentStage = Array.from(nextStageCandidates).sort((left, right) =>
+      left.localeCompare(right),
+    );
+  }
+
+  if (visited !== tasks.length) {
+    const blockedTargets = tasks
+      .map((task) => task.target.id)
+      .filter((targetId) => (inDegree.get(targetId) ?? 0) > 0)
+      .sort((left, right) => left.localeCompare(right));
+    throw new Error(`Dependency cycle detected in generation targets: ${blockedTargets.join(", ")}.`);
+  }
+
+  return stages;
+}
+
 async function runTaskWithFallback(params: {
   task: TargetTask;
   outDir: string;
@@ -408,6 +482,7 @@ async function runTaskWithFallback(params: {
   registry: ProviderRegistry;
   lockByTargetId: Map<string, SelectionLockItem>;
   skipLocked: boolean;
+  taskById: Map<string, TargetTask>;
 }): Promise<ProviderRunResult> {
   const providerChain = [params.task.primaryProvider, ...params.task.fallbackProviders];
   let lastError: unknown;
@@ -436,6 +511,11 @@ async function runTaskWithFallback(params: {
     }
 
     const job = preparedJobs[0];
+    const styleReferenceLineage = resolveStyleReferenceLineage({
+      task: params.task,
+      taskById: params.taskById,
+      imagesDir: params.imagesDir,
+    });
     const lockEntry = params.lockByTargetId.get(params.task.target.id);
     if (params.skipLocked && lockEntry?.approved && lockEntry.inputHash === job.inputHash) {
       let lockedPath: string;
@@ -471,6 +551,7 @@ async function runTaskWithFallback(params: {
           edit: params.task.target.edit,
           regenerationSource: params.task.target.regenerationSource,
           warnings: [`Skipped generation for ${job.targetId}; approved lock matched input hash.`],
+          ...(styleReferenceLineage ? { styleReferenceLineage } : {}),
         };
       }
     }
@@ -522,6 +603,7 @@ async function runTaskWithFallback(params: {
             candidateOutputs: coarseToFineResult.candidateOutputs,
             candidateScores: coarseToFineResult.scores,
             coarseToFine: coarseToFineResult.coarseToFine,
+            ...(styleReferenceLineage ? { styleReferenceLineage } : {}),
             generationMode: params.task.target.generationMode,
             edit: params.task.target.edit,
             regenerationSource: params.task.target.regenerationSource,
@@ -535,11 +617,12 @@ async function runTaskWithFallback(params: {
           provider: providerName,
           outputPath: job.outPath,
           bytesWritten: fileStat.size,
-          candidateOutputs: draftCandidates.candidateOutputs,
-          candidateScores: draftCandidates.scores,
-          generationMode: params.task.target.generationMode,
-          edit: params.task.target.edit,
-          regenerationSource: params.task.target.regenerationSource,
+            candidateOutputs: draftCandidates.candidateOutputs,
+            candidateScores: draftCandidates.scores,
+            ...(styleReferenceLineage ? { styleReferenceLineage } : {}),
+            generationMode: params.task.target.generationMode,
+            edit: params.task.target.edit,
+            regenerationSource: params.task.target.regenerationSource,
         };
       } catch (error) {
         lastError = provider.normalizeError(error);
@@ -907,6 +990,55 @@ function computeProviderDelayMs(task: TargetTask, fallbackDelay: number): number
   }
 
   return fallbackDelay;
+}
+
+function resolveStyleReferenceLineage(params: {
+  task: TargetTask;
+  taskById: Map<string, TargetTask>;
+  imagesDir: string;
+}): ProviderRunResult["styleReferenceLineage"] | undefined {
+  const lineage: NonNullable<ProviderRunResult["styleReferenceLineage"]> = [];
+
+  for (const styleReferenceImage of params.task.target.styleReferenceImages ?? []) {
+    lineage.push({
+      source: "style-kit",
+      reference: styleReferenceImage,
+    });
+  }
+
+  for (const sourceTargetId of params.task.target.styleReferenceFrom ?? []) {
+    const sourceTask = params.taskById.get(sourceTargetId);
+    if (!sourceTask) {
+      throw new Error(
+        `Target "${params.task.target.id}" chains style references from "${sourceTargetId}", but that target is not in the current generation set.`,
+      );
+    }
+    const sourceOutputPath = path.resolve(
+      params.imagesDir,
+      sourceTask.target.out.split("/").join(path.sep),
+    );
+    lineage.push({
+      source: "target-output",
+      reference: sourceTask.target.out,
+      sourceTargetId,
+      resolvedPath: sourceOutputPath,
+    });
+  }
+
+  return lineage.length > 0 ? lineage : undefined;
+}
+
+function dedupeTargetIdList(targetIds: string[]): string[] {
+  const deduped: string[] = [];
+  const seen = new Set<string>();
+  for (const targetId of targetIds) {
+    if (seen.has(targetId)) {
+      continue;
+    }
+    seen.add(targetId);
+    deduped.push(targetId);
+  }
+  return deduped;
 }
 
 function resolveManifestPathFromIndex(

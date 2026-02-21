@@ -1,6 +1,6 @@
 # LootForge Public Release Roadmap
 
-Last updated: 2026-02-20
+Last updated: 2026-02-21
 
 ## Goal
 
@@ -306,13 +306,16 @@ Completed 2026-02-20 in this release track:
   - added `GET /v1/contracts/provider-capabilities` and `GET /v1/providers/capabilities` for wrapper capability discovery and runtime feature gating,
   - added provider/model query support for introspection (`provider`, `model`) with model-aware Nano edit capability differentiation,
   - added explicit directive-gating capability signals (`pixel`, `highRes`, `references`) with support modes and diagnostics.
+- Add template-driven pack orchestration layer with dependency-aware style-reference chaining:
+  - added manifest `targetTemplates[]` with target-level `templateId`, `dependsOn`, and `styleReferenceFrom`,
+  - added deterministic dependency-aware generate staging with unresolved/cycle validation,
+  - added per-job provenance `styleReferenceLineage` records for effective style-reference inputs.
 
 Remaining queued items:
 
 - Add coarse-to-fine candidate promotion controls:
   - run lower-cost candidate generation/scoring first,
   - promote top-K candidates into high-fidelity refinement passes only when quality gates justify extra compute.
-- Add template-driven pack orchestration layer with dependency-aware style-reference chaining across generated assets.
 - Add consistency-group drift/outlier scoring using CLIP/LPIPS signals.
 - Add aggregate group-level review/eval warnings and ranking influence controls.
 

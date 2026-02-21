@@ -40,6 +40,7 @@ export const PromptSpecSchema = z.object({
 export const ManifestGenerationModeSchema = GenerationModeSchema;
 export const ManifestControlModeSchema = ControlModeSchema;
 export const ManifestTargetKindSchema = z.enum(TARGET_KINDS);
+export const ManifestTargetReferenceListSchema = z.array(nonEmptyString);
 
 export const ManifestVlmGateSchema = VlmGateSchema;
 
@@ -196,6 +197,9 @@ export const ManifestTargetSchema = z
     id: nonEmptyString,
     kind: nonEmptyString,
     out: nonEmptyString,
+    templateId: nonEmptyString.optional(),
+    dependsOn: ManifestTargetReferenceListSchema.optional(),
+    styleReferenceFrom: ManifestTargetReferenceListSchema.optional(),
     atlasGroup: nonEmptyString.optional(),
     styleKitId: nonEmptyString,
     consistencyGroup: nonEmptyString,
@@ -312,6 +316,12 @@ export const ManifestConsistencyGroupSchema = z.object({
   referenceImages: z.array(nonEmptyString).default([]),
 });
 
+export const ManifestTargetTemplateSchema = z.object({
+  id: nonEmptyString,
+  dependsOn: ManifestTargetReferenceListSchema.optional(),
+  styleReferenceFrom: ManifestTargetReferenceListSchema.optional(),
+});
+
 export const ManifestScoreWeightsSchema = ScoreWeightsSchema;
 
 export const ManifestEvaluationProfileSchema = z.object({
@@ -366,6 +376,7 @@ export const ManifestV2Schema = z.object({
   pack: ManifestPackSchema,
   providers: ManifestProvidersSchema,
   styleKits: z.array(ManifestStyleKitSchema).min(1),
+  targetTemplates: z.array(ManifestTargetTemplateSchema).optional(),
   consistencyGroups: z.array(ManifestConsistencyGroupSchema).optional(),
   evaluationProfiles: z.array(ManifestEvaluationProfileSchema).min(1),
   scoringProfiles: z.array(ManifestScoringProfileSchema).optional(),

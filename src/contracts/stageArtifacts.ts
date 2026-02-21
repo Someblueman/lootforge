@@ -129,6 +129,9 @@ const plannedTargetSchema = z.object({
   id: nonEmptyString,
   kind: nonEmptyString.optional(),
   out: nonEmptyString,
+  templateId: nonEmptyString.optional(),
+  dependsOn: z.array(nonEmptyString).optional(),
+  styleReferenceFrom: z.array(nonEmptyString).optional(),
   atlasGroup: z.union([nonEmptyString, z.null()]).optional(),
   styleKitId: nonEmptyString.optional(),
   styleReferenceImages: z.array(nonEmptyString).optional(),
@@ -336,6 +339,16 @@ const stageArtifactSchemas = {
             skippedReason: nonEmptyString.optional(),
             warnings: z.array(nonEmptyString).optional(),
           })
+          .optional(),
+        styleReferenceLineage: z
+          .array(
+            z.object({
+              source: z.enum(["style-kit", "target-output"]),
+              reference: nonEmptyString,
+              sourceTargetId: nonEmptyString.optional(),
+              resolvedPath: nonEmptyString.optional(),
+            }),
+          )
           .optional(),
         generationMode: GenerationModeSchema.optional(),
         edit: EditSchema.optional(),

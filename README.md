@@ -491,6 +491,10 @@ Top-level fields:
 Per target:
 
 - `id`, `kind`, `out`, `atlasGroup?`, `styleKitId`, `consistencyGroup`, `evaluationProfileId`
+- `templateId?`: optional lookup into top-level `targetTemplates[]` for reusable orchestration policy
+- `dependsOn?`: optional target-id list used to enforce dependency-aware generate ordering
+- `styleReferenceFrom?`: optional target-id list for style-reference chaining from previously generated targets
+  - when omitted, `dependsOn` is used as the default style-reference chain
 - `generationMode`: `text|edit-first`
 - `edit-first` mode requires a provider with `image-edits` support (`openai`, `local`, and `nano` when using an image-edit-capable Gemini model)
 - `edit.inputs[].path`: when used, must resolve inside the active `--out` root at runtime (`generate`, `eval`, and `regenerate`)

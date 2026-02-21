@@ -255,6 +255,85 @@ describe("manifest normalization", () => {
     expect(artifacts.targets[0].generationPolicy?.finalQuality).toBe("high");
   });
 
+  it("applies target template orchestration and defaults styleReferenceFrom from dependsOn", () => {
+    const manifest: ManifestV2 = {
+      ...BASE_MANIFEST,
+      targetTemplates: [
+        {
+          id: "variant-chain",
+          dependsOn: ["hero-base"],
+        },
+      ],
+      targets: [
+        {
+          ...BASE_MANIFEST.targets[0],
+          id: "hero-base",
+          out: "hero-base.png",
+        },
+        {
+          ...BASE_MANIFEST.targets[0],
+          id: "hero-variant",
+          out: "hero-variant.png",
+          templateId: "variant-chain",
+          dependsOn: ["hero-lighting"],
+        },
+        {
+          ...BASE_MANIFEST.targets[0],
+          id: "hero-lighting",
+          out: "hero-lighting.png",
+        },
+      ],
+    };
+
+    const artifacts = createPlanArtifacts(manifest, "/tmp/manifest.json");
+    const variant = artifacts.targets.find((target) => target.id === "hero-variant");
+    expect(variant?.templateId).toBe("variant-chain");
+    expect(variant?.dependsOn).toEqual(["hero-base", "hero-lighting"]);
+    expect(variant?.styleReferenceFrom).toEqual(["hero-base", "hero-lighting"]);
+  });
+
+  it("rejects missing dependency targets in orchestration planning", () => {
+    const manifest: ManifestV2 = {
+      ...BASE_MANIFEST,
+      targets: [
+        {
+          ...BASE_MANIFEST.targets[0],
+          id: "hero-variant",
+          out: "hero-variant.png",
+          dependsOn: ["missing-target"],
+        },
+      ],
+    };
+
+    expect(() => createPlanArtifacts(manifest, "/tmp/manifest.json")).toThrow(
+      /depends on missing planned target/i,
+    );
+  });
+
+  it("rejects dependency cycles in orchestration planning", () => {
+    const manifest: ManifestV2 = {
+      ...BASE_MANIFEST,
+      targets: [
+        {
+          ...BASE_MANIFEST.targets[0],
+          id: "hero-a",
+          out: "hero-a.png",
+          dependsOn: ["hero-b"],
+        },
+        {
+          ...BASE_MANIFEST.targets[0],
+          id: "hero-b",
+          out: "hero-b.png",
+          dependsOn: ["hero-a"],
+        },
+      ],
+    };
+
+    expect(() => createPlanArtifacts(manifest, "/tmp/manifest.json")).toThrow(
+      /dependency cycle detected/i,
+    );
+  });
+
   it("defaults target palette from style-kit palette files when target palette is unset", async () => {
     const tempRoot = await mkdtemp(path.join(os.tmpdir(), "lootforge-style-kit-palette-"));
     const styleDir = path.join(tempRoot, "style", "default");
@@ -666,6 +745,35 @@ describe("manifest normalization", () => {
     expect(
       validation.report.issues.some((issue) => issue.code === "duplicate_scoring_profile_id"),
     ).toBe(true);
+  });
+
+  it("rejects targets that reference missing target templates", () => {
+    const manifest: ManifestV2 = {
+      ...BASE_MANIFEST,
+      targetTemplates: [
+        {
+          id: "existing-template",
+          dependsOn: ["hero"],
+        },
+      ],
+      targets: [
+        {
+          ...BASE_MANIFEST.targets[0],
+          templateId: "missing-template",
+        },
+      ],
+    };
+
+    const validation = validateManifestSource({
+      manifestPath: "/tmp/manifest.json",
+      raw: JSON.stringify(manifest),
+      data: manifest,
+    });
+
+    expect(validation.report.errors).toBeGreaterThan(0);
+    expect(validation.report.issues.some((issue) => issue.code === "missing_target_template")).toBe(
+      true,
+    );
   });
 
   it("rejects unknown consistency groups when consistency groups are declared", () => {

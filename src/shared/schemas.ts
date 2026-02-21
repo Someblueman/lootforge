@@ -1,10 +1,6 @@
 import { z } from "zod";
 
-import {
-  CONTROL_MODES,
-  GENERATION_MODES,
-  PROVIDER_NAMES,
-} from "../providers/types-core.js";
+import { CONTROL_MODES, GENERATION_MODES, PROVIDER_NAMES } from "../providers/types-core.js";
 
 // ---------- Primitives ----------
 

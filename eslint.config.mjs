@@ -1,9 +1,9 @@
 import eslint from "@eslint/js";
 import prettier from "eslint-config-prettier";
 import importPlugin from "eslint-plugin-import-x";
+import { createTypeScriptImportResolver } from "eslint-import-resolver-typescript";
 import nodePlugin from "eslint-plugin-n";
 import tseslint from "typescript-eslint";
-import { createTypeScriptImportResolver } from "eslint-import-resolver-typescript";
 
 export default tseslint.config(
   // Global ignores
@@ -49,7 +49,7 @@ export default tseslint.config(
     },
   },
 
-  // TypeScript-specific rules
+  // TypeScript-specific rules (all files)
   {
     rules: {
       "@typescript-eslint/consistent-type-imports": [
@@ -59,7 +59,8 @@ export default tseslint.config(
           fixStyle: "inline-type-imports",
         },
       ],
-      "@typescript-eslint/no-import-type-side-effects": "error",
+      // no-import-type-side-effects intentionally omitted; consistent-type-imports
+      // with inline-type-imports handles the same concern without conflicting.
       "@typescript-eslint/no-unused-vars": [
         "error",
         {
@@ -67,8 +68,35 @@ export default tseslint.config(
           varsIgnorePattern: "^_",
         },
       ],
+    },
+  },
+
+  // Type-checked rules (src only -- tests don't have tsconfig coverage)
+  {
+    files: ["src/**/*.ts"],
+    rules: {
+      // Allow numbers in template literals (safe and common in this codebase)
+      "@typescript-eslint/restrict-template-expressions": [
+        "error",
+        { allowNumber: true, allowNever: true },
+      ],
       // return-await in try-catch for correct stack traces
       "@typescript-eslint/return-await": ["error", "in-try-catch"],
+    },
+  },
+
+  // Disable type-checked rules for test files (not in tsconfig.json)
+  // Must come AFTER all other configs so it properly overrides
+  {
+    files: ["test/**/*.ts"],
+    ...tseslint.configs.disableTypeChecked,
+    rules: {
+      ...tseslint.configs.disableTypeChecked.rules,
+      "n/no-unpublished-import": "off",
+      // Relax strict rules that conflict with common test patterns
+      "@typescript-eslint/no-non-null-assertion": "off",
+      "@typescript-eslint/no-dynamic-delete": "off",
+      "@typescript-eslint/no-empty-function": "off",
     },
   },
 

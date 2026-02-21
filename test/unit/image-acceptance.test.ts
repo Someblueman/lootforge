@@ -9,7 +9,7 @@ import {
   runImageAcceptanceChecks,
   evaluateImageAcceptance,
 } from "../../src/checks/imageAcceptance.js";
-import type { PlannedTarget } from "../../src/providers/types.js";
+import { type PlannedTarget } from "../../src/providers/types.js";
 
 function makeTarget(overrides: Partial<PlannedTarget> = {}): PlannedTarget {
   return {
@@ -33,11 +33,7 @@ function makeTarget(overrides: Partial<PlannedTarget> = {}): PlannedTarget {
   };
 }
 
-async function writeWrapGridSample(
-  filePath: string,
-  width: number,
-  height: number,
-): Promise<void> {
+async function writeWrapGridSample(filePath: string, width: number, height: number): Promise<void> {
   const channels = 4;
   const raw = Buffer.alloc(width * height * channels, 0);
   for (let y = 0; y < height; y += 1) {
@@ -306,9 +302,7 @@ describe("image acceptance", () => {
     expect(item.metrics?.alphaEdgeSharpness).toBeLessThan(1);
     expect(item.issues.some((issue) => issue.code === "alpha_halo_risk_exceeded")).toBe(true);
     expect(item.issues.some((issue) => issue.code === "alpha_stray_noise_exceeded")).toBe(true);
-    expect(item.issues.some((issue) => issue.code === "alpha_edge_sharpness_too_low")).toBe(
-      true,
-    );
+    expect(item.issues.some((issue) => issue.code === "alpha_edge_sharpness_too_low")).toBe(true);
   });
 
   it("reports duplicate runtime output collisions at pack level", async () => {
@@ -338,12 +332,12 @@ describe("image acceptance", () => {
     expect(
       report.packInvariants?.issues.some((issue) => issue.code === "pack_duplicate_runtime_out"),
     ).toBe(true);
-    expect(report.items[0]?.issues.some((issue) => issue.code === "pack_duplicate_runtime_out")).toBe(
-      true,
-    );
-    expect(report.items[1]?.issues.some((issue) => issue.code === "pack_duplicate_runtime_out")).toBe(
-      true,
-    );
+    expect(
+      report.items[0]?.issues.some((issue) => issue.code === "pack_duplicate_runtime_out"),
+    ).toBe(true);
+    expect(
+      report.items[1]?.issues.some((issue) => issue.code === "pack_duplicate_runtime_out"),
+    ).toBe(true);
   });
 
   it("reports spritesheet atlas-group mismatches", async () => {
@@ -351,7 +345,10 @@ describe("image acceptance", () => {
     await mkdir(path.join(tempDir, "__frames"), { recursive: true });
 
     await writeSpriteFrameSample({ filePath: path.join(tempDir, "__frames", "hero_walk_00.png") });
-    await writeSpriteFrameSample({ filePath: path.join(tempDir, "__frames", "hero_walk_01.png"), offsetX: 2 });
+    await writeSpriteFrameSample({
+      filePath: path.join(tempDir, "__frames", "hero_walk_01.png"),
+      offsetX: 2,
+    });
     await writeSpriteFrameSample({ filePath: path.join(tempDir, "hero-sheet.png") });
 
     const report = await runImageAcceptanceChecks({
@@ -397,7 +394,9 @@ describe("image acceptance", () => {
     });
 
     expect(
-      report.packInvariants?.issues.some((issue) => issue.code === "spritesheet_atlas_group_mismatch"),
+      report.packInvariants?.issues.some(
+        (issue) => issue.code === "spritesheet_atlas_group_mismatch",
+      ),
     ).toBe(true);
     expect(
       report.items[0]?.issues.some((issue) => issue.code === "spritesheet_atlas_group_mismatch"),
@@ -429,7 +428,9 @@ describe("image acceptance", () => {
     });
 
     expect(
-      report.packInvariants?.issues.some((issue) => issue.code === "spritesheet_missing_sheet_target"),
+      report.packInvariants?.issues.some(
+        (issue) => issue.code === "spritesheet_missing_sheet_target",
+      ),
     ).toBe(true);
     expect(
       report.items[0]?.issues.some((issue) => issue.code === "spritesheet_missing_sheet_target"),
@@ -509,16 +510,19 @@ describe("image acceptance", () => {
       ),
     ).toBe(true);
     expect(
-      report.packInvariants?.issues.some((issue) => issue.code === "spritesheet_anchor_drift_exceeded"),
+      report.packInvariants?.issues.some(
+        (issue) => issue.code === "spritesheet_anchor_drift_exceeded",
+      ),
     ).toBe(true);
     expect(
       report.packInvariants?.issues.some((issue) => issue.code === "pack_texture_budget_exceeded"),
     ).toBe(true);
     expect(
-      report.packInvariants?.metrics?.spritesheetContinuityByAnimation?.["hero.sheet:walk"]?.comparisons,
+      report.packInvariants?.metrics?.spritesheetContinuityByAnimation?.["hero.sheet:walk"]
+        ?.comparisons,
     ).toBe(1);
-    expect(report.items[0]?.issues.some((issue) => issue.code === "pack_texture_budget_exceeded")).toBe(
-      true,
-    );
+    expect(
+      report.items[0]?.issues.some((issue) => issue.code === "pack_texture_budget_exceeded"),
+    ).toBe(true);
   });
 });

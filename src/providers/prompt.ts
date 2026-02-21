@@ -1,4 +1,4 @@
-import type { KnownStylePreset, PromptSpec } from "./types-core.js";
+import { type KnownStylePreset, type PromptSpec } from "./types-core.js";
 
 const DEFAULT_PROMPT_USE_CASE = "stylized-concept";
 
@@ -18,18 +18,18 @@ const STYLE_PRESET_LINES: Record<KnownStylePreset, string[]> = {
 
 export function normalizePromptSpec(spec: PromptSpec): PromptSpec {
   return {
-    primary: spec.primary?.trim() ?? "",
-    useCase: spec.useCase?.trim() || DEFAULT_PROMPT_USE_CASE,
-    stylePreset: spec.stylePreset?.trim() || "",
-    scene: spec.scene?.trim() || "",
-    subject: spec.subject?.trim() || "",
-    style: spec.style?.trim() || "",
-    composition: spec.composition?.trim() || "",
-    lighting: spec.lighting?.trim() || "",
-    palette: spec.palette?.trim() || "",
-    materials: spec.materials?.trim() || "",
-    constraints: spec.constraints?.trim() || "",
-    negative: spec.negative?.trim() || "",
+    primary: spec.primary.trim(),
+    useCase: spec.useCase?.trim() ?? DEFAULT_PROMPT_USE_CASE,
+    stylePreset: spec.stylePreset?.trim() ?? "",
+    scene: spec.scene?.trim() ?? "",
+    subject: spec.subject?.trim() ?? "",
+    style: spec.style?.trim() ?? "",
+    composition: spec.composition?.trim() ?? "",
+    lighting: spec.lighting?.trim() ?? "",
+    palette: spec.palette?.trim() ?? "",
+    materials: spec.materials?.trim() ?? "",
+    constraints: spec.constraints?.trim() ?? "",
+    negative: spec.negative?.trim() ?? "",
   };
 }
 

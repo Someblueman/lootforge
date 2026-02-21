@@ -34,21 +34,14 @@ function toZipEntryName(sourceDir: string, filePath: string): string {
   const relativePath = path.relative(sourceDir, filePath);
 
   // Guard against path traversal via unexpected relative paths.
-  if (
-    relativePath.length === 0 ||
-    relativePath.startsWith("..") ||
-    path.isAbsolute(relativePath)
-  ) {
+  if (relativePath.length === 0 || relativePath.startsWith("..") || path.isAbsolute(relativePath)) {
     throw new Error(`Unsafe zip entry path for ${filePath}`);
   }
 
   return relativePath.split(path.sep).join("/");
 }
 
-export async function createZipArchive(
-  sourceDir: string,
-  zipPath: string,
-): Promise<ZipResult> {
+export async function createZipArchive(sourceDir: string, zipPath: string): Promise<ZipResult> {
   const resolvedSourceDir = path.resolve(sourceDir);
   const resolvedZipPath = path.resolve(zipPath);
   await mkdir(path.dirname(resolvedZipPath), { recursive: true });
@@ -65,9 +58,15 @@ export async function createZipArchive(
       reject(error);
     }
 
-    zipOutput.on("close", () => resolve());
-    zipOutput.on("error", (error) => cleanup(error));
-    zipFile.outputStream.on("error", (error) => cleanup(error));
+    zipOutput.on("close", () => {
+      resolve();
+    });
+    zipOutput.on("error", (error) => {
+      cleanup(error);
+    });
+    zipFile.outputStream.on("error", (error: Error) => {
+      cleanup(error);
+    });
 
     zipFile.outputStream.pipe(zipOutput);
 

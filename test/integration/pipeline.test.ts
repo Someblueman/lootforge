@@ -1,6 +1,6 @@
 import { mkdtemp, mkdir, writeFile, access } from "node:fs/promises";
-import path from "node:path";
 import os from "node:os";
+import path from "node:path";
 
 import sharp from "sharp";
 import { describe, expect, test } from "vitest";
@@ -22,14 +22,7 @@ describe("pipeline package integration", () => {
     const outDir = path.join(tempRoot, "work");
     const manifestPath = path.join(outDir, "assets", "imagegen", "manifest.json");
     const indexPath = path.join(outDir, "jobs", "targets-index.json");
-    const imagePath = path.join(
-      outDir,
-      "assets",
-      "imagegen",
-      "processed",
-      "images",
-      "enemy.png",
-    );
+    const imagePath = path.join(outDir, "assets", "imagegen", "processed", "images", "enemy.png");
 
     await mkdir(path.dirname(manifestPath), { recursive: true });
     await mkdir(path.dirname(indexPath), { recursive: true });
@@ -123,7 +116,6 @@ describe("pipeline package integration", () => {
     ];
 
     for (const filePath of requiredFiles) {
-      // eslint-disable-next-line no-await-in-loop
       expect(await fileExists(filePath)).toBe(true);
     }
   });

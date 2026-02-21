@@ -31,9 +31,7 @@ export async function runPackageCommand(argv: string[]): Promise<PackageCommandR
   const indexPath = readArgValue(argv, "index");
   const strict = parseBooleanArg(readArgValue(argv, "strict") ?? "true");
   const runtimesArg = readArgValue(argv, "runtimes");
-  const runtimeTargets = runtimesArg
-    ? parseRuntimeManifestTargetsArg(runtimesArg)
-    : undefined;
+  const runtimeTargets = runtimesArg ? parseRuntimeManifestTargetsArg(runtimesArg) : undefined;
 
   const result = await runPackagePipeline({
     outDir,
@@ -58,5 +56,5 @@ function parseBooleanArg(value: string): boolean {
   if (["false", "0", "no", "n"].includes(normalized)) {
     return false;
   }
-  throw new Error(`Invalid boolean value \"${value}\" for --strict. Use true or false.`);
+  throw new Error(`Invalid boolean value "${value}" for --strict. Use true or false.`);
 }

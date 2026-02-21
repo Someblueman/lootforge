@@ -10,14 +10,14 @@ interface PixelBounds {
   height: number;
 }
 
-const CARDINAL_NEIGHBORS: ReadonlyArray<[dx: number, dy: number]> = [
+const CARDINAL_NEIGHBORS: readonly [dx: number, dy: number][] = [
   [0, -1],
   [-1, 0],
   [1, 0],
   [0, 1],
 ];
 
-const ALL_NEIGHBORS: ReadonlyArray<[dx: number, dy: number]> = [
+const ALL_NEIGHBORS: readonly [dx: number, dy: number][] = [
   [-1, -1],
   [0, -1],
   [1, -1],
@@ -114,15 +114,11 @@ export function computeBoundaryQualityMetrics(params: {
     edgePixelCount: edgePixels,
     haloRisk: edgePixels > 0 ? haloPixels / edgePixels : 0,
     strayNoiseRatio: opaquePixels > 0 ? isolatedOpaquePixels / opaquePixels : 0,
-    edgeSharpness:
-      edgeSharpnessSamples > 0 ? edgeSharpnessTotal / edgeSharpnessSamples : 0,
+    edgeSharpness: edgeSharpnessSamples > 0 ? edgeSharpnessTotal / edgeSharpnessSamples : 0,
   };
 }
 
-function forEachPixel(
-  bounds: PixelBounds,
-  fn: (x: number, y: number) => void,
-): void {
+function forEachPixel(bounds: PixelBounds, fn: (x: number, y: number) => void): void {
   for (let y = 0; y < bounds.height; y += 1) {
     for (let x = 0; x < bounds.width; x += 1) {
       fn(x, y);

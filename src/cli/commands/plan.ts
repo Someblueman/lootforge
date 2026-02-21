@@ -38,10 +38,10 @@ export async function runPlanCommand(argv: string[]): Promise<PlanCommandResult>
   const validation = validateManifestSource(source);
 
   if (!validation.manifest || validation.report.errors > 0) {
-    throw new CliError(
-      `Manifest validation failed with ${validation.report.errors} error(s).`,
-      { code: "manifest_validation_failed", exitCode: 1 },
-    );
+    throw new CliError(`Manifest validation failed with ${validation.report.errors} error(s).`, {
+      code: "manifest_validation_failed",
+      exitCode: 1,
+    });
   }
 
   const artifacts = createPlanArtifacts(validation.manifest, source.manifestPath);

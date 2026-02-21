@@ -5,7 +5,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { OpenAIProvider } from "../../src/providers/openai.ts";
-import type { PlannedTarget, ProviderJob } from "../../src/providers/types.ts";
+import { type PlannedTarget, type ProviderJob } from "../../src/providers/types.ts";
 
 function createTarget(overrides: Partial<PlannedTarget> = {}): PlannedTarget {
   return {
@@ -66,7 +66,7 @@ describe("openai provider", () => {
       editsEndpoint: "https://example.test/edits",
     });
 
-    const calls: Array<{ url: string; init: RequestInit | undefined }> = [];
+    const calls: { url: string; init: RequestInit | undefined }[] = [];
     const fetchImpl: typeof fetch = async (input, init) => {
       calls.push({ url: String(input), init });
       return new Response(
@@ -109,7 +109,7 @@ describe("openai provider", () => {
       editsEndpoint: "https://example.test/edits",
     });
 
-    const calls: Array<{ url: string; init: RequestInit | undefined }> = [];
+    const calls: { url: string; init: RequestInit | undefined }[] = [];
     const fetchImpl: typeof fetch = async (input, init) => {
       calls.push({ url: String(input), init });
       return new Response(

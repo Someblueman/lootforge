@@ -1,4 +1,4 @@
-export function formatIssuePath(pathItems: Array<string | number>): string {
+export function formatIssuePath(pathItems: (string | number)[]): string {
   if (pathItems.length === 0) {
     return "$";
   }

@@ -5,6 +5,7 @@ Last updated: 2026-02-18
 This list translates `docs/ROADMAP.md` into issue-ready work items with explicit acceptance criteria.
 
 Recent completion (2026-02-20):
+
 - Implemented Manifest Policy Coverage Gate:
   - added machine-checkable policy index (`docs/MANIFEST_POLICY_COVERAGE.md`),
   - added release gate script (`npm run check:manifest-policy`) that enforces `implemented|reserved` status and test evidence for implemented fields,
@@ -21,6 +22,7 @@ Recent completion (2026-02-20):
 ## P0 (Immediate: `0.3.0`)
 
 ### 1) Stage Artifact Contract Schemas and Compatibility Tests
+
 - **Release target:** `0.3.0`
 - **Why now:** Prevent stage drift and make artifacts safely reusable across pipeline runs.
 - **Acceptance criteria:**
@@ -29,6 +31,7 @@ Recent completion (2026-02-20):
   - Contract failures produce clear error codes and file/field-level diagnostics.
 
 ### 2) Provider Runtime Contract Enforcement
+
 - **Release target:** `0.3.0`
 - **Why now:** Provider config in manifest/env must be operational, not advisory.
 - **Acceptance criteria:**
@@ -37,6 +40,7 @@ Recent completion (2026-02-20):
   - Unsupported feature requests fail with explicit diagnostics and no silent fallback.
 
 ### 3) VLM Candidate Gating and Traceability
+
 - **Release target:** `0.3.0`
 - **Why now:** Raise floor quality and reduce human review load.
 - **Acceptance criteria:**
@@ -45,6 +49,7 @@ Recent completion (2026-02-20):
   - Eval/review outputs include per-candidate VLM score, threshold, and rejection reason.
 
 ### 4) Edge-Aware Boundary Quality Gates
+
 - **Release target:** `0.3.0`
 - **Why now:** Boundary artifacts are a top runtime-quality failure mode for sprites.
 - **Acceptance criteria:**
@@ -53,6 +58,7 @@ Recent completion (2026-02-20):
   - Hard-gate mode can reject outputs above configured boundary-artifact thresholds.
 
 ### 5) Pack-Level Invariants and Spritesheet Continuity
+
 - **Release target:** `0.3.0`
 - **Why now:** Single-image checks are insufficient for production packs.
 - **Acceptance criteria:**
@@ -61,6 +67,7 @@ Recent completion (2026-02-20):
   - Optional texture budget gate reports total pack memory and fails when over threshold.
 
 ### 6) Manifest Policy Coverage Gate
+
 - **Release target:** `0.3.0`
 - **Why now:** Keep schema/docs and implementation in sync.
 - **Acceptance criteria:**
@@ -69,6 +76,7 @@ Recent completion (2026-02-20):
   - New manifest fields require tests before merge.
 
 ### 7) Agentic Auto-Correction (Self-Healing Pipeline)
+
 - **Release target:** `0.3.0` to `0.4.0` bridge
 - **Why now:** Reduce human review load by actively reacting to VLM and edge-boundary failures.
 - **Acceptance criteria:**
@@ -79,6 +87,7 @@ Recent completion (2026-02-20):
 ## P1 (Next: `0.4.0`)
 
 ### 7) Directed Synthesis Schema + Capability Gating
+
 - **Release target:** `0.3.0` to `0.4.0` bridge
 - **Why now:** Unlock deterministic control without breaking non-local providers.
 - **Acceptance criteria:**
@@ -87,6 +96,7 @@ Recent completion (2026-02-20):
   - Non-supporting providers emit explicit unsupported-feature warnings/errors.
 
 ### 8) Local ControlNet + Dual Guidance Integration
+
 - **Release target:** `0.4.0`
 - **Why now:** Structural fidelity and edge/detail control are key differentiators.
 - **Acceptance criteria:**
@@ -95,6 +105,7 @@ Recent completion (2026-02-20):
   - Provenance captures full control stack used per output.
 
 ### 9) IP-Adapter + LoRA Local Workflow
+
 - **Release target:** `0.4.0`
 - **Why now:** Style consistency across large packs requires stronger conditioning than prompt text.
 - **Acceptance criteria:**
@@ -103,6 +114,7 @@ Recent completion (2026-02-20):
   - Provenance captures model, IP-Adapter references, LoRA identity, and strength.
 
 ### 10) Coarse-to-Fine Candidate Promotion
+
 - **Release target:** `0.3.0` to `0.4.0` bridge
 - **Why now:** Improve quality-per-cost by refining only promising candidates.
 - **Acceptance criteria:**
@@ -111,6 +123,7 @@ Recent completion (2026-02-20):
   - Benchmarks show reduced provider cost per approved asset for equivalent acceptance rate.
 
 ### 11) 3D-to-2D Projection & Automating ControlNets
+
 - **Release target:** `0.4.0`
 - **Why now:** Drawing or gathering boundary maps manually for ControlNet scales poorly.
 - **Acceptance criteria:**
@@ -121,6 +134,7 @@ Recent completion (2026-02-20):
 ## P2 (Scale-up: `0.5.0` and `1.0.0`)
 
 ### 11) Quality/Latency Operating Profiles
+
 - **Release target:** `0.5.0`
 - **Why now:** Teams need predictable throughput/quality tradeoffs.
 - **Acceptance criteria:**
@@ -129,6 +143,7 @@ Recent completion (2026-02-20):
   - Preset behavior is documented and covered by integration tests.
 
 ### 12) Golden-Set Regression Harness
+
 - **Release target:** `0.5.0`
 - **Why now:** Prevent silent quality regressions over time.
 - **Acceptance criteria:**
@@ -137,6 +152,7 @@ Recent completion (2026-02-20):
   - Output includes calibration data for score weight tuning.
 
 ### 13) Release-Grade CI and Supply-Chain Hardening
+
 - **Release target:** `0.5.0`
 - **Why now:** Public adoption requires reproducibility and security evidence.
 - **Acceptance criteria:**
@@ -146,6 +162,7 @@ Recent completion (2026-02-20):
   - Adapter security policy checks run in CI.
 
 ### 14) Visual Review Workspace
+
 - **Release target:** `0.5.0`
 - **Why now:** Human-in-loop review is a bottleneck for pack production.
 - **Acceptance criteria:**
@@ -154,6 +171,7 @@ Recent completion (2026-02-20):
   - Bulk actions exist for approve-passing and reject-outlier workflows.
 
 ### 15) Atlas Capacity Planning and Multipack Spillover
+
 - **Release target:** `0.5.0`
 - **Why now:** Prevent runtime sampling artifacts and failed pack builds from overfilled atlases.
 - **Acceptance criteria:**
@@ -163,6 +181,7 @@ Recent completion (2026-02-20):
   - Packaging outputs include atlas-page mapping metadata for spilled frames.
 
 ### 16) Adapter/Plugin Compatibility Contract
+
 - **Release target:** `1.0.0`
 - **Why now:** Ensure long-term adapter ecosystem stability.
 - **Acceptance criteria:**
@@ -171,6 +190,7 @@ Recent completion (2026-02-20):
   - Conformance tests validate adapter implementations against contract versions.
 
 ### 17) First-Class Audio Generation Pipeline
+
 - **Release target:** `0.5.0`
 - **Why now:** Games need unified aesthetics spanning both visual and auditory spheres.
 - **Acceptance criteria:**
@@ -181,6 +201,7 @@ Recent completion (2026-02-20):
   - Introduce LLM-driven generation to automatically create structured audio manifests.
 
 ### 18) Generative Dependency DAG ("Asset Lineage")
+
 - **Release target:** `0.5.0`
 - **Why now:** True collection-level coherence requires downstream assets to inherit their predecessors perfectly.
 - **Acceptance criteria:**
@@ -188,6 +209,7 @@ Recent completion (2026-02-20):
   - Auto-injection of Parent Lock artifacts into Child inference (e.g., as IP-Adapter styling).
 
 ### 19) Native Engine Editor Plugins
+
 - **Release target:** `0.5.0`
 - **Why now:** Reduce workflow friction between generating an asset and verifying it physically fits a map scene.
 - **Acceptance criteria:**
@@ -195,6 +217,7 @@ Recent completion (2026-02-20):
   - Developers can type prompts per-GameObject and directly fetch/auto-apply materials/sprites to the scene graph.
 
 ### 20) Native SVG & UI Generation
+
 - **Release target:** `0.5.0`
 - **Why now:** Real UI components require cleanly separated vector layers, not just edge-traced bitmaps.
 - **Acceptance criteria:**
@@ -202,6 +225,7 @@ Recent completion (2026-02-20):
   - Implementation of style-reference set distillation rules for icon packs mapping.
 
 ### 21) The Multimodal Style Bible
+
 - **Release target:** `1.0.0`
 - **Why now:** Massive projects require absolute guardrails guaranteeing consistency across teams.
 - **Acceptance criteria:**
@@ -209,6 +233,7 @@ Recent completion (2026-02-20):
   - Validation physically halts runs whose generated artifacts violate the style bible assertions.
 
 ### 22) Native 3D Asset Generation (`.gltf` / Three.js)
+
 - **Release target:** `Post-1.0`
 - **Why now:** Broaden the LootForge paradigm from purely 2D/Audio space into the lightweight web 3D ecosystem.
 - **Acceptance criteria:**
@@ -217,6 +242,7 @@ Recent completion (2026-02-20):
   - Validation metrics actively enforce polygon limits, detect broken UV layouts, and ensure standardized PBR materials.
 
 ### 23) Roadmap-to-Delivery Traceability Policy
+
 - **Release target:** `1.0.0`
 - **Why now:** Keep roadmap trustworthy as scope expands.
 - **Acceptance criteria:**

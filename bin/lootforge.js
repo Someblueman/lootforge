@@ -9,9 +9,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const distEntry = resolve(__dirname, "../dist/cli/index.js");
 
 if (!existsSync(distEntry)) {
-  process.stderr.write(
-    "lootforge: CLI is not built yet. Run `npm run build` first.\n",
-  );
+  process.stderr.write("lootforge: CLI is not built yet. Run `npm run build` first.\n");
   process.exit(1);
 }
 

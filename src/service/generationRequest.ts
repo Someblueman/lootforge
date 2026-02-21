@@ -4,10 +4,9 @@ import path from "node:path";
 import { z } from "zod";
 
 import { runPlanCommand } from "../cli/commands/plan.js";
-import { parseGenerateProviderFlag } from "../pipeline/generate.js";
-import { runGeneratePipeline } from "../pipeline/generate.js";
+import { parseGenerateProviderFlag, runGeneratePipeline } from "../pipeline/generate.js";
 import { PROVIDER_NAMES } from "../providers/types-core.js";
-import type { ProviderSelection } from "../providers/types.js";
+import { type ProviderSelection } from "../providers/types.js";
 import { isRecord } from "../shared/typeGuards.js";
 
 export const CANONICAL_GENERATION_REQUEST_VERSION = "v1";
@@ -23,7 +22,7 @@ const canonicalGenerationRequestSchema = z
     skipLocked: z.boolean().optional(),
     selectionLockPath: z.string().trim().min(1).optional(),
   })
-  .refine((value) => Boolean(value.manifestPath || value.manifest), {
+  .refine((value) => value.manifestPath !== undefined || value.manifest !== undefined, {
     message: "Either manifestPath or manifest must be provided.",
     path: ["manifestPath"],
   });
@@ -104,17 +103,14 @@ export function getCanonicalGenerationRequestContract(): {
     summary:
       "Canonical generation request contract that maps service payloads to manifest planning + generation pipeline targets.",
     fields: {
-      manifestPath:
-        "String path to manifest JSON (required unless manifest is provided).",
+      manifestPath: "String path to manifest JSON (required unless manifest is provided).",
       manifest:
         "Inline manifest object; when present it is materialized to a service request manifest file before planning.",
       outDir:
         "Output directory root for plan/generate artifacts. Falls back to service default out dir, then manifest parent directory.",
-      provider:
-        "Provider selection (openai|nano|local|auto). Defaults to auto.",
+      provider: "Provider selection (openai|nano|local|auto). Defaults to auto.",
       targetIds: "Optional target-id subset for generation.",
-      skipLocked:
-        "When true (default), lock-approved targets can be skipped during generation.",
+      skipLocked: "When true (default), lock-approved targets can be skipped during generation.",
       selectionLockPath: "Optional selection lock path override.",
     },
   };
@@ -133,11 +129,7 @@ export async function runCanonicalGenerationRequest(
 
   assertNoNullBytes(requestedManifestPath, "manifestPath");
 
-  const outDir = resolveOutDir(
-    request.outDir,
-    context.defaultOutDir,
-    requestedManifestPath,
-  );
+  const outDir = resolveOutDir(request.outDir, context.defaultOutDir, requestedManifestPath);
 
   assertNoNullBytes(outDir, "outDir");
 
@@ -160,12 +152,7 @@ export async function runCanonicalGenerationRequest(
   const shouldCleanupManifest = manifestResolution.source === "inline";
 
   try {
-    const planResult = await runPlanCommand([
-      "--manifest",
-      requestManifestPath,
-      "--out",
-      outDir,
-    ]);
+    const planResult = await runPlanCommand(["--manifest", requestManifestPath, "--out", outDir]);
 
     const generateResult = await runGeneratePipeline({
       outDir,
@@ -177,9 +164,7 @@ export async function runCanonicalGenerationRequest(
     });
 
     return {
-      ...(envelope.requestId !== undefined
-        ? { requestId: envelope.requestId }
-        : {}),
+      ...(envelope.requestId !== undefined ? { requestId: envelope.requestId } : {}),
       mappingVersion: CANONICAL_GENERATION_REQUEST_VERSION,
       normalizedRequest: {
         outDir,
@@ -210,9 +195,7 @@ export async function runCanonicalGenerationRequest(
   }
 }
 
-function parseCanonicalGenerationEnvelope(
-  value: unknown,
-): CanonicalGenerationRequestEnvelope {
+function parseCanonicalGenerationEnvelope(value: unknown): CanonicalGenerationRequestEnvelope {
   if (!isRecord(value)) {
     throw new CanonicalGenerationRequestError(
       "Canonical generation request must be a JSON object.",
@@ -235,11 +218,11 @@ function parseCanonicalGenerationEnvelope(
     };
   }
 
-  const issue = envelopeLike.error.issues[0] ?? requestOnly.error.issues[0];
+  const issue = (envelopeLike.error.issues[0] ?? requestOnly.error.issues[0]) as
+    | (typeof envelopeLike.error.issues)[number]
+    | undefined;
   throw new CanonicalGenerationRequestError(
-    issue
-      ? `${issue.path.join(".") || "request"}: ${issue.message}`
-      : "Invalid request shape.",
+    issue ? `${issue.path.join(".") || "request"}: ${issue.message}` : "Invalid request shape.",
     {
       code: "invalid_canonical_generation_request",
       status: 400,
@@ -288,11 +271,7 @@ async function resolveManifestPathForRequest(params: {
         `${createSafeRequestId(params.requestId)}-manifest.json`,
       );
     await mkdir(path.dirname(manifestPath), { recursive: true });
-    await writeFile(
-      manifestPath,
-      `${JSON.stringify(params.request.manifest, null, 2)}\n`,
-      "utf8",
-    );
+    await writeFile(manifestPath, `${JSON.stringify(params.request.manifest, null, 2)}\n`, "utf8");
 
     return {
       manifestPath,
@@ -307,22 +286,17 @@ async function resolveManifestPathForRequest(params: {
     };
   }
 
-  throw new CanonicalGenerationRequestError(
-    "Either manifestPath or manifest is required.",
-    {
-      code: "canonical_generation_missing_manifest",
-      status: 400,
-    },
-  );
+  throw new CanonicalGenerationRequestError("Either manifestPath or manifest is required.", {
+    code: "canonical_generation_missing_manifest",
+    status: 400,
+  });
 }
 
 function normalizeTargetIds(value: string[] | undefined): string[] {
   if (!value || value.length === 0) {
     return [];
   }
-  return Array.from(
-    new Set(value.map((id) => id.trim()).filter((id) => id.length > 0)),
-  );
+  return Array.from(new Set(value.map((id) => id.trim()).filter((id) => id.length > 0)));
 }
 
 function createSafeRequestId(value: string | number | undefined): string {
@@ -333,9 +307,9 @@ function createSafeRequestId(value: string | number | undefined): string {
 
 function assertNoNullBytes(value: string | undefined, label: string): void {
   if (typeof value === "string" && value.includes("\0")) {
-    throw new CanonicalGenerationRequestError(
-      `${label} contains a null byte.`,
-      { code: "canonical_generation_unsafe_path", status: 400 },
-    );
+    throw new CanonicalGenerationRequestError(`${label} contains a null byte.`, {
+      code: "canonical_generation_unsafe_path",
+      status: 400,
+    });
   }
 }

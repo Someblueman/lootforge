@@ -2,16 +2,13 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 
 import {
-  ImageAcceptanceItemReport,
+  type ImageAcceptanceItemReport,
   runImageAcceptanceChecks,
 } from "../checks/imageAcceptance.js";
-import type { PackInvariantSummary } from "../checks/packInvariants.js";
-import {
-  getEnabledSoftAdapterStatuses,
-  runEnabledSoftAdapters,
-} from "../checks/softAdapters.js";
-import type { SoftAdapterName } from "../checks/softAdapters.js";
-import type { PlannedTarget } from "../providers/types.js";
+import { type PackInvariantSummary } from "../checks/packInvariants.js";
+import { getEnabledSoftAdapterStatuses, runEnabledSoftAdapters } from "../checks/softAdapters.js";
+import { type SoftAdapterName } from "../checks/softAdapters.js";
+import { type PlannedTarget } from "../providers/types.js";
 import { writeJsonFile } from "../shared/fs.js";
 import { resolveStagePathLayout } from "../shared/paths.js";
 
@@ -20,9 +17,9 @@ interface TargetsIndexShape {
 }
 
 interface ProvenanceRun {
-  jobs?: Array<{
+  jobs?: {
     targetId: string;
-    candidateScores?: Array<{
+    candidateScores?: {
       outputPath: string;
       score: number;
       passedAcceptance: boolean;
@@ -38,8 +35,8 @@ interface ProvenanceRun {
         evaluator: "command" | "http";
       };
       selected?: boolean;
-    }>;
-  }>;
+    }[];
+  }[];
 }
 
 type ProvenanceCandidateScore = NonNullable<
@@ -73,7 +70,7 @@ export interface EvalTargetResult {
     rubric?: string;
     evaluator: "command" | "http";
   };
-  candidateVlmGrades?: Array<{
+  candidateVlmGrades?: {
     outputPath: string;
     selected: boolean;
     score: number;
@@ -83,7 +80,7 @@ export interface EvalTargetResult {
     reason: string;
     rubric?: string;
     evaluator: "command" | "http";
-  }>;
+  }[];
   adapterMetrics?: Record<string, number>;
   adapterScore?: number;
   adapterScoreComponents?: Record<string, number>;
@@ -104,7 +101,7 @@ export interface EvalReport {
     configured: string[];
     active: string[];
     failed: string[];
-    adapters: Array<{
+    adapters: {
       name: string;
       mode: "command" | "http" | "unconfigured";
       configured: boolean;
@@ -115,7 +112,7 @@ export interface EvalReport {
       failedTargets: number;
       warningCount: number;
       warnings: string[];
-    }>;
+    }[];
   };
   adapterWarnings: string[];
   packInvariants?: PackInvariantSummary;
@@ -161,7 +158,7 @@ export async function runEvalPipeline(options: EvalPipelineOptions): Promise<Eva
         mode: status.mode,
         configured: status.configured,
         active: false,
-        failed: status.configured !== true,
+        failed: !status.configured,
         attemptedTargets: 0,
         successfulTargets: 0,
         failedTargets: 0,
@@ -180,16 +177,14 @@ export async function runEvalPipeline(options: EvalPipelineOptions): Promise<Eva
     }
 
     const candidateScores = candidateScoresByTarget.get(item.targetId) ?? [];
-    const candidate =
-      candidateScores.find((score) => score.selected) ?? candidateScores[0];
+    const candidate = candidateScores.find((score) => score.selected) ?? candidateScores[0];
     const candidateVlmGrades = candidateScores
       .filter(
         (
           score,
         ): score is ProvenanceCandidateScore & {
           vlm: NonNullable<ProvenanceCandidateScore["vlm"]>;
-        } =>
-          Boolean(score.vlm),
+        } => Boolean(score.vlm),
       )
       .map((score) => ({
         outputPath: score.outputPath,
@@ -274,7 +269,7 @@ export async function runEvalPipeline(options: EvalPipelineOptions): Promise<Eva
       .filter((issue) => issue.level === "warning")
       .map((issue) => `${issue.code}: ${issue.message}`);
 
-    const candidateScore = typeof candidate?.score === "number" ? candidate.score : 0;
+    const candidateScore = typeof candidate.score === "number" ? candidate.score : 0;
     const penalty = hardGateErrors.length * 1000;
 
     targetResults.push({
@@ -285,15 +280,13 @@ export async function runEvalPipeline(options: EvalPipelineOptions): Promise<Eva
       hardGateWarnings,
       acceptanceMetrics: item.metrics,
       candidateScore,
-      candidateReasons: candidate?.reasons,
-      candidateMetrics: candidate?.metrics,
-      ...(candidate?.vlm ? { candidateVlm: candidate.vlm } : {}),
+      candidateReasons: candidate.reasons,
+      candidateMetrics: candidate.metrics,
+      ...(candidate.vlm ? { candidateVlm: candidate.vlm } : {}),
       ...(candidateVlmGrades.length > 0 ? { candidateVlmGrades } : {}),
       adapterMetrics,
       ...(adapterScore !== 0 ? { adapterScore } : {}),
-      ...(Object.keys(adapterScoreComponents).length > 0
-        ? { adapterScoreComponents }
-        : {}),
+      ...(Object.keys(adapterScoreComponents).length > 0 ? { adapterScoreComponents } : {}),
       ...(adapterWarnings.length > 0 ? { adapterWarnings } : {}),
       finalScore: candidateScore + adapterScore - penalty,
     });

@@ -1,19 +1,23 @@
+// eslint-disable-next-line n/no-unsupported-features/node-builtins
 import { cp, mkdir, readFile, writeFile } from "node:fs/promises";
-import path from "node:path";
 import { cpus } from "node:os";
+import path from "node:path";
 
 import sharp from "sharp";
 
-import { runImageAcceptanceChecks, assertImageAcceptanceReport } from "../checks/imageAcceptance.js";
+import { applySeamHeal } from "./seamHeal.js";
+import {
+  runImageAcceptanceChecks,
+  assertImageAcceptanceReport,
+} from "../checks/imageAcceptance.js";
 import { buildCatalog } from "../output/catalog.js";
-import { getTargetPostProcessPolicy, PlannedTarget } from "../providers/types.js";
+import { getTargetPostProcessPolicy, type PlannedTarget } from "../providers/types.js";
 import { writeJsonFile } from "../shared/fs.js";
 import {
   normalizeTargetOutPath,
   resolvePathWithinDir,
   resolveStagePathLayout,
 } from "../shared/paths.js";
-import { applySeamHeal } from "./seamHeal.js";
 
 interface TargetsIndexShape {
   targets?: PlannedTarget[];
@@ -104,7 +108,7 @@ async function applyOutline(
     .png()
     .toBuffer();
 
-  return await sharp(outlineLayer)
+  return sharp(outlineLayer)
     .composite([
       {
         input: imageBuffer,
@@ -117,7 +121,10 @@ async function applyOutline(
 function withVariantSuffix(filePath: string, variantName: string): string {
   const ext = path.extname(filePath);
   const base = filePath.slice(0, filePath.length - ext.length);
-  const safeName = variantName.trim().toLowerCase().replace(/[^a-z0-9_-]+/g, "-");
+  const safeName = variantName
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, "-");
   return `${base}__${safeName}${ext}`;
 }
 
@@ -153,8 +160,8 @@ async function smartCropImage(
   const mode = options.mode ?? "alpha-bounds";
   const padding = clamp(Math.round(options.padding ?? 0), 0, 256);
   const metadata = await sharp(imageBuffer, { failOn: "none" }).metadata();
-  const width = metadata.width ?? 0;
-  const height = metadata.height ?? 0;
+  const width = metadata.width;
+  const height = metadata.height;
   if (width <= 0 || height <= 0) {
     return imageBuffer;
   }
@@ -240,7 +247,7 @@ async function smartCropImage(
     .toBuffer();
 }
 
-function parsePaletteColors(colors: string[] | undefined): Array<{ r: number; g: number; b: number }> {
+function parsePaletteColors(colors: string[] | undefined): { r: number; g: number; b: number }[] {
   if (!colors || colors.length === 0) {
     return [];
   }
@@ -264,7 +271,7 @@ function parsePaletteColors(colors: string[] | undefined): Array<{ r: number; g:
 
 function nearestPaletteColor(
   source: { r: number; g: number; b: number },
-  palette: Array<{ r: number; g: number; b: number }>,
+  palette: { r: number; g: number; b: number }[],
 ): { r: number; g: number; b: number } {
   let best = palette[0];
   let bestDistance = Number.POSITIVE_INFINITY;
@@ -349,10 +356,7 @@ async function quantizeToExactPalette(
       data[i + 2] = 0;
       continue;
     }
-    const nearest = nearestPaletteColor(
-      { r: data[i], g: data[i + 1], b: data[i + 2] },
-      palette,
-    );
+    const nearest = nearestPaletteColor({ r: data[i], g: data[i + 1], b: data[i + 2] }, palette);
     data[i] = nearest.r;
     data[i + 1] = nearest.g;
     data[i + 2] = nearest.b;
@@ -511,7 +515,9 @@ async function processSingleTarget(params: {
   const mainRawInfo = decodedMain.info;
 
   if (params.target.palette?.mode === "exact" && params.target.palette.strict === true) {
-    const allowed = new Set(parsePaletteColors(params.target.palette.colors).map((color) => packRgb(color)));
+    const allowed = new Set(
+      parsePaletteColors(params.target.palette.colors).map((color) => packRgb(color)),
+    );
     if (allowed.size === 0) {
       throw new Error(
         `Strict exact palette enforcement for target "${params.target.id}" requires at least one valid palette color.`,
@@ -605,10 +611,7 @@ async function processSingleTarget(params: {
   if (params.target.auxiliaryMaps?.specularFromLuma) {
     const specularPath = withVariantSuffix(params.processedImagePath, "specular");
     const specularLegacyPath = withVariantSuffix(params.legacyImagePath, "specular");
-    const specularBuffer = await sharp(mainRaw, { raw: mainRawInfo })
-      .greyscale()
-      .png()
-      .toBuffer();
+    const specularBuffer = await sharp(mainRaw, { raw: mainRawInfo }).greyscale().png().toBuffer();
     await writeFile(specularPath, specularBuffer);
     if (params.mirrorLegacy) {
       await writeFile(specularLegacyPath, specularBuffer);
@@ -667,12 +670,12 @@ async function assembleSpritesheetTarget(params: {
     return (left.spritesheet?.frameIndex ?? 0) - (right.spritesheet?.frameIndex ?? 0);
   });
 
-  const frameBuffers: Array<{
+  const frameBuffers: {
     target: PlannedTarget;
     buffer: Buffer;
     width: number;
     height: number;
-  }> = [];
+  }[] = [];
 
   for (const frameTarget of orderedFrames) {
     const framePath = resolvePathWithinDir(
@@ -816,22 +819,20 @@ export async function runProcessPipeline(
 
   const rawIndex = await readFile(targetsIndexPath, "utf8");
   const index = parseTargetsIndex(rawIndex, targetsIndexPath);
-  const targets = (Array.isArray(index.targets) ? index.targets : []).map(
-    (target, targetIndex) => {
-      try {
-        return {
-          ...target,
-          out: normalizeTargetOutPath(target.out),
-        };
-      } catch (error) {
-        throw new Error(
-          `targets[${targetIndex}].out is invalid: ${
-            error instanceof Error ? error.message : String(error)
-          }`,
-        );
-      }
-    },
-  );
+  const targets = (Array.isArray(index.targets) ? index.targets : []).map((target, targetIndex) => {
+    try {
+      return {
+        ...target,
+        out: normalizeTargetOutPath(target.out),
+      };
+    } catch (error) {
+      throw new Error(
+        `targets[${targetIndex}].out is invalid: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
+  });
   const generationTargets = targets.filter((target) => target.generationDisabled !== true);
   const spritesheetSheetTargets = targets.filter((target) => target.spritesheet?.isSheet === true);
 
@@ -931,7 +932,7 @@ async function runPipelineWorkers<TInput, TOutput>(
   }
 
   const maxWorkers = Math.max(1, Math.floor(concurrency));
-  const results: TOutput[] = new Array(items.length);
+  const results = new Array<TOutput>(items.length);
   let nextIndex = 0;
 
   const workers: Promise<void>[] = [];
@@ -941,7 +942,7 @@ async function runPipelineWorkers<TInput, TOutput>(
         while (nextIndex < items.length) {
           const currentIndex = nextIndex;
           nextIndex += 1;
-          results[currentIndex] = await worker(items[currentIndex]!);
+          results[currentIndex] = await worker(items[currentIndex]);
         }
       })(),
     );

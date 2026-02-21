@@ -1,5 +1,5 @@
-import { AtlasBundle } from "./assetPackManifest.js";
-import { CatalogItem } from "./catalog.js";
+import { type AtlasBundle } from "./assetPackManifest.js";
+import { type CatalogItem } from "./catalog.js";
 
 export interface PixiManifestInput {
   packId: string;

@@ -1,8 +1,8 @@
 import path from "node:path";
 
+import { type ManifestV2 } from "../../manifest/types.js";
 import { ensureDir, pathExists, writeJsonFile } from "../../shared/fs.js";
 import { resolveInitImagegenDir } from "../../shared/paths.js";
-import type { ManifestV2 } from "../../manifest/types.js";
 
 export interface InitCommandArgs {
   outFlag?: string;
@@ -135,8 +135,7 @@ function createDefaultManifest(): ManifestV2 {
         evaluationProfileId: "default-sprite-quality",
         generationMode: "text",
         prompt: {
-          primary:
-            "Fantasy hero character sprite, front-facing idle pose, clean silhouette.",
+          primary: "Fantasy hero character sprite, front-facing idle pose, clean silhouette.",
           stylePreset: "topdown-painterly-sci-fi",
         },
         generationPolicy: {

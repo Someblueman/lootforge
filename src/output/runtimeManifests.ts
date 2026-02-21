@@ -1,9 +1,9 @@
-import type { PlannedTarget } from "../providers/types.js";
-import { AtlasBundle } from "./assetPackManifest.js";
-import { CatalogItem } from "./catalog.js";
+import { type AtlasBundle } from "./assetPackManifest.js";
+import { type CatalogItem } from "./catalog.js";
 import { buildPhaserManifest } from "./phaserManifest.js";
 import { buildPixiManifest } from "./pixiManifest.js";
 import { buildUnityImportManifest } from "./unityImportManifest.js";
+import { type PlannedTarget } from "../providers/types.js";
 
 export const RUNTIME_MANIFEST_TARGETS = ["phaser", "pixi", "unity"] as const;
 

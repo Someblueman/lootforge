@@ -9,6 +9,7 @@ lootforge serve --host 127.0.0.1 --port 8744
 ```
 
 Optional defaults:
+
 - `--out <dir>`: default out directory injected when command payload omits `out`
 - `LOOTFORGE_SERVICE_HOST`
 - `LOOTFORGE_SERVICE_PORT`
@@ -26,9 +27,11 @@ Optional defaults:
 - `POST /v1/generation/requests` (canonical generation request contract)
 
 Root helper endpoint:
+
 - `GET /`
 
 Provider capabilities query options:
+
 - `provider` (optional): `openai|nano|local`
 - `model` (optional): model override for introspection; requires `provider`
 
@@ -36,7 +39,8 @@ Provider capabilities query options:
 
 Tool execution accepts one of:
 
-1) `params` object (recommended stable interface)
+1. `params` object (recommended stable interface)
+
 ```json
 {
   "requestId": "req-123",
@@ -47,7 +51,8 @@ Tool execution accepts one of:
 }
 ```
 
-2) `args` override (raw CLI flag compatibility)
+2. `args` override (raw CLI flag compatibility)
+
 ```json
 {
   "args": ["--out", "/abs/path/to/workdir", "--strict", "true"]
@@ -57,6 +62,7 @@ Tool execution accepts one of:
 `ids` and `runtimes` support string arrays in `params` and are converted to CSV flags.
 
 Canonical generation request contract:
+
 ```json
 {
   "requestId": "req-gen-001",
@@ -72,12 +78,14 @@ Canonical generation request contract:
 ```
 
 Notes:
+
 - `request.manifest` can be provided inline instead of `manifestPath`; service mode will materialize it before planning.
 - Canonical request execution maps to `plan -> generate` and returns both plan metadata and generation run metadata.
 
 ## Response Shape
 
 Success:
+
 ```json
 {
   "ok": true,
@@ -89,6 +97,7 @@ Success:
 ```
 
 Failure:
+
 ```json
 {
   "ok": false,

@@ -6,7 +6,7 @@ import sharp from "sharp";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { runEnabledSoftAdapters } from "../../src/checks/softAdapters.ts";
-import type { PlannedTarget } from "../../src/providers/types.ts";
+import { type PlannedTarget } from "../../src/providers/types.ts";
 
 const ADAPTER_ENV_KEYS = [
   "LOOTFORGE_ENABLE_CLIP_ADAPTER",
@@ -74,7 +74,7 @@ describe("soft adapters", () => {
         "  const end = Date.now();",
         "  fs.writeFileSync(logPath, JSON.stringify({ start, end, adapter: payload.adapter }));",
         '  const score = payload.adapter === "clip" ? 1 : 2;',
-        '  process.stdout.write(JSON.stringify({ metrics: { score }, score }));',
+        "  process.stdout.write(JSON.stringify({ metrics: { score }, score }));",
         "}, delayMs);",
         "",
       ].join("\n"),
@@ -158,7 +158,7 @@ describe("soft adapters", () => {
         'const payload = JSON.parse(fs.readFileSync(0, "utf8"));',
         'const logPath = process.argv[2] || "missing-path";',
         "fs.writeFileSync(logPath, JSON.stringify({ adapter: payload.adapter }));",
-        'process.stdout.write(JSON.stringify({ metrics: { score: 3 }, score: 3 }));',
+        "process.stdout.write(JSON.stringify({ metrics: { score: 3 }, score: 3 }));",
       ].join("\n"),
       "utf8",
     );

@@ -87,40 +87,40 @@ describe("eval + select integration", () => {
               model: "gpt-image-1",
               inputHash: "abc123",
               outputPath: path.join(outDir, "assets", "imagegen", "raw", "hero.png"),
-            candidateScores: [
-              {
-                outputPath: path.join(outDir, "assets", "imagegen", "raw", "hero-v1.png"),
-                score: 38,
-                passedAcceptance: false,
-                reasons: ["vlm_gate_below_threshold"],
-                vlm: {
-                  score: 3.3,
-                  threshold: 4,
-                  maxScore: 5,
-                  passed: false,
-                  reason: "framing cutoff",
-                  evaluator: "command",
+              candidateScores: [
+                {
+                  outputPath: path.join(outDir, "assets", "imagegen", "raw", "hero-v1.png"),
+                  score: 38,
+                  passedAcceptance: false,
+                  reasons: ["vlm_gate_below_threshold"],
+                  vlm: {
+                    score: 3.3,
+                    threshold: 4,
+                    maxScore: 5,
+                    passed: false,
+                    reason: "framing cutoff",
+                    evaluator: "command",
+                  },
                 },
-              },
-              {
-                outputPath: path.join(outDir, "assets", "imagegen", "raw", "hero.png"),
-                score: 42,
-                passedAcceptance: true,
-                reasons: [],
-                vlm: {
-                  score: 4.4,
-                  threshold: 4,
-                  maxScore: 5,
-                  passed: true,
-                  reason: "clear silhouette",
-                  evaluator: "command",
+                {
+                  outputPath: path.join(outDir, "assets", "imagegen", "raw", "hero.png"),
+                  score: 42,
+                  passedAcceptance: true,
+                  reasons: [],
+                  vlm: {
+                    score: 4.4,
+                    threshold: 4,
+                    maxScore: 5,
+                    passed: true,
+                    reason: "clear silhouette",
+                    evaluator: "command",
+                  },
+                  selected: true,
                 },
-                selected: true,
-              },
-            ],
-          },
-        ],
-      },
+              ],
+            },
+          ],
+        },
         null,
         2,
       )}\n`,
@@ -441,9 +441,9 @@ describe("eval + select integration", () => {
     });
     expect(selectResult.approvedTargets).toBe(0);
 
-    const lock = JSON.parse(
-      await readFile(selectResult.selectionLockPath, "utf8"),
-    ) as { targets: Array<{ approved: boolean }> };
+    const lock = JSON.parse(await readFile(selectResult.selectionLockPath, "utf8")) as {
+      targets: { approved: boolean }[];
+    };
     expect(lock.targets.every((target) => target.approved === false)).toBe(true);
   });
 });

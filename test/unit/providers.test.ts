@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  createProviderRegistry,
+  resolveTargetProviderName,
+  resolveTargetProviderRoute,
+} from "../../src/providers/registry.ts";
+import {
   buildStructuredPrompt,
   createProviderJob,
   createDeterministicJobId,
@@ -10,11 +15,6 @@ import {
   parseProviderSelection,
   type PlannedTarget,
 } from "../../src/providers/types.ts";
-import {
-  createProviderRegistry,
-  resolveTargetProviderName,
-  resolveTargetProviderRoute,
-} from "../../src/providers/registry.ts";
 
 const baseTarget: PlannedTarget = {
   id: "target-1",
@@ -105,7 +105,7 @@ describe("providers helpers", () => {
     expect(parseProviderSelection(undefined)).toBe("auto");
 
     expect(() => parseProviderSelection("invalid-provider")).toThrow(
-      /Unsupported provider \"invalid-provider\"/,
+      /Unsupported provider "invalid-provider"/,
     );
   });
 
@@ -192,9 +192,7 @@ describe("providers helpers", () => {
     });
 
     expect(result.policy.outputFormat).toBe("png");
-    expect(result.issues.some((issue) => issue.code === "jpg_transparency_normalized")).toBe(
-      true,
-    );
+    expect(result.issues.some((issue) => issue.code === "jpg_transparency_normalized")).toBe(true);
   });
 
   it("returns an error when transparent background is requested on unsupported providers", () => {
@@ -209,8 +207,7 @@ describe("providers helpers", () => {
 
     expect(
       result.issues.some(
-        (issue) =>
-          issue.level === "error" && issue.code === "transparent_background_unsupported",
+        (issue) => issue.level === "error" && issue.code === "transparent_background_unsupported",
       ),
     ).toBe(true);
     expect(result.policy.background).toBe("transparent");

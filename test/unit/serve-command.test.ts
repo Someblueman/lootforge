@@ -36,11 +36,7 @@ describe("serve command", () => {
   });
 
   it("throws on invalid port values", () => {
-    expect(() => parseServeCommandArgs(["--port", "abc"])).toThrow(
-      /Invalid --port value/i,
-    );
-    expect(() => parseServeCommandArgs(["--port", "99999"])).toThrow(
-      /Invalid --port value/i,
-    );
+    expect(() => parseServeCommandArgs(["--port", "abc"])).toThrow(/Invalid --port value/i);
+    expect(() => parseServeCommandArgs(["--port", "99999"])).toThrow(/Invalid --port value/i);
   });
 });

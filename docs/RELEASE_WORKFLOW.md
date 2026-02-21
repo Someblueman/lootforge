@@ -5,17 +5,20 @@ This workflow keeps release docs, changelog entries, and showcase images consist
 ## Branch Strategy (`0.3.0`)
 
 Use a release-train branch model so `main` stays stable until release cut:
+
 - `main` is release-only (no feature merges while `0.3.0` is in flight).
 - `release/0.3` is the integration branch for all `0.3.0` work.
 - Feature branches are short-lived and branch from `release/0.3`.
 - PR targets should be `release/0.3` until release readiness.
 
 Cut `0.3.0` with:
+
 1. Freeze `release/0.3` and ensure release checks pass.
 2. Open a release PR from `release/0.3` to `main`.
 3. Merge the release PR and tag `v0.3.0` from `main`.
 
 Recommended branch protection:
+
 - `main`: block direct pushes, require PR + required checks.
 - `release/0.3`: block direct pushes, require PR + required checks.
 
@@ -24,6 +27,7 @@ Recommended branch protection:
 Codenames are docs-only labels. Semver remains authoritative for npm/git releases.
 
 Current codename map:
+
 - `0.2.0` -> `Emberforge`
 - `0.3.0` -> `Tempered Steel`
 - `0.4.0` -> `Anvilheart`
@@ -31,6 +35,7 @@ Current codename map:
 - `1.0.0` -> `Mythic Foundry`
 
 If you add a new planned version, assign its codename in:
+
 - `docs/ROADMAP.md`
 - `README.md` (Status / Roadmap)
 - `CHANGELOG.md` release heading
@@ -38,6 +43,7 @@ If you add a new planned version, assign its codename in:
 ## Changelog Update Pattern
 
 For each release:
+
 1. Collect completed items from roadmap/progress and group by:
    - `Added`
    - `Changed`
@@ -54,6 +60,7 @@ For each release:
 Showcase images are versioned under `docs/showcase/<version>/`.
 
 Current `0.2.0` flow:
+
 - Inputs + manifest: `examples/showcase/retro-fantasy/`
 - Generator: `examples/showcase/generate-showcase.sh`
 - Image composer: `examples/showcase/build-readme-images.mjs`
@@ -63,11 +70,13 @@ Current `0.2.0` flow:
   - `docs/showcase/0.2.0/03-pack-preview.png`
 
 To refresh `0.2.0` showcase assets:
+
 ```bash
 bash examples/showcase/generate-showcase.sh
 ```
 
 When creating a new release showcase:
+
 1. Copy/update the manifest/style assets under `examples/showcase/`.
 2. Generate artifacts into `.tmp/showcase-<version>/`.
 3. Render final PNGs into `docs/showcase/<version>/`.
@@ -76,6 +85,7 @@ When creating a new release showcase:
 ## Release Validation Checklist
 
 Run before cutting a release:
+
 ```bash
 npm run typecheck
 npm test
@@ -83,6 +93,7 @@ npm run build
 ```
 
 Then verify:
+
 - README image links exist and render.
 - Codename references match across `README.md`, `docs/ROADMAP.md`, `CHANGELOG.md`.
 - `CHANGELOG.md` heading format remains consistent.

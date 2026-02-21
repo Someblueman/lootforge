@@ -1,7 +1,6 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-import { resolvePathWithinRoot } from "../shared/paths.js";
 import {
   DEFAULT_PROVIDER_REQUEST_TIMEOUT_MS,
   fetchWithTimeout,
@@ -14,23 +13,23 @@ import {
 } from "./runtime.js";
 import {
   createProviderJob,
-  GenerationProvider,
+  type GenerationProvider,
   nowIso,
-  PlannedTarget,
-  ProviderCapabilities,
-  ProviderCandidateOutput,
+  type PlannedTarget,
+  type ProviderCapabilities,
+  type ProviderCandidateOutput,
   ProviderError,
-  ProviderFeature,
-  ProviderJob,
-  ProviderPrepareContext,
-  ProviderRunContext,
-  ProviderRunResult,
+  type ProviderFeature,
+  type ProviderJob,
+  type ProviderPrepareContext,
+  type ProviderRunContext,
+  type ProviderRunResult,
   PROVIDER_CAPABILITIES,
-  TargetEditInput,
+  type TargetEditInput,
 } from "./types.js";
+import { resolvePathWithinRoot } from "../shared/paths.js";
 
-const GEMINI_API_BASE =
-  "https://generativelanguage.googleapis.com/v1beta/models";
+const GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
 export const DEFAULT_NANO_MODEL = "gemini-2.5-flash-image";
 const DEFAULT_EDIT_IMAGE_MIME_TYPE = "image/png";
 
@@ -72,10 +71,7 @@ export class NanoProvider implements GenerationProvider {
         options.defaultConcurrency,
         defaults.defaultConcurrency,
       ),
-      minDelayMs: normalizeNonNegativeInteger(
-        options.minDelayMs,
-        defaults.minDelayMs,
-      ),
+      minDelayMs: normalizeNonNegativeInteger(options.minDelayMs, defaults.minDelayMs),
     };
     this.model = model;
     this.apiBase = options.apiBase ?? GEMINI_API_BASE;
@@ -86,10 +82,7 @@ export class NanoProvider implements GenerationProvider {
     this.maxRetries = toOptionalNonNegativeInteger(options.maxRetries);
   }
 
-  prepareJobs(
-    targets: PlannedTarget[],
-    ctx: ProviderPrepareContext,
-  ): ProviderJob[] {
+  prepareJobs(targets: PlannedTarget[], ctx: ProviderPrepareContext): ProviderJob[] {
     return targets.map((target) =>
       createProviderJob({
         provider: this.name,
@@ -108,6 +101,7 @@ export class NanoProvider implements GenerationProvider {
     if (feature === "transparent-background") return false;
     if (feature === "image-edits") return this.capabilities.supportsEdits;
     if (feature === "multi-candidate") return true;
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
     if (feature === "controlnet") return false;
     return false;
   }
@@ -123,8 +117,7 @@ export class NanoProvider implements GenerationProvider {
         code: "nano_request_failed",
         message: error.message,
         cause: error,
-        actionable:
-          "Check GEMINI_API_KEY, selected model, and request payload compatibility.",
+        actionable: "Check GEMINI_API_KEY, selected model, and request payload compatibility.",
       });
     }
 
@@ -133,15 +126,11 @@ export class NanoProvider implements GenerationProvider {
       code: "nano_request_failed",
       message: "Nano provider failed with a non-error throwable.",
       cause: error,
-      actionable:
-        "Check GEMINI_API_KEY, selected model, and request payload compatibility.",
+      actionable: "Check GEMINI_API_KEY, selected model, and request payload compatibility.",
     });
   }
 
-  async runJob(
-    job: ProviderJob,
-    ctx: ProviderRunContext,
-  ): Promise<ProviderRunResult> {
+  async runJob(job: ProviderJob, ctx: ProviderRunContext): Promise<ProviderRunResult> {
     const startedAt = nowIso(ctx.now);
     const fetchImpl = ctx.fetchImpl ?? globalThis.fetch;
     const apiKey = process.env.GEMINI_API_KEY?.trim();
@@ -156,13 +145,13 @@ export class NanoProvider implements GenerationProvider {
       });
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
     if (!fetchImpl) {
       throw new ProviderError({
         provider: this.name,
         code: "missing_fetch",
         message: "Global fetch is unavailable for Nano provider.",
-        actionable:
-          "Use Node.js 18+ or pass a fetch implementation in the run context.",
+        actionable: "Use Node.js 18+ or pass a fetch implementation in the run context.",
       });
     }
 
@@ -209,13 +198,13 @@ export class NanoProvider implements GenerationProvider {
         }
 
         const payload = (await response.json()) as {
-          candidates?: Array<{
+          candidates?: {
             content?: {
-              parts?: Array<{
+              parts?: {
                 inlineData?: GeminiInlineData;
-              }>;
+              }[];
             };
-          }>;
+          }[];
         };
 
         const inlineData = this.findInlineImage(payload);
@@ -250,10 +239,7 @@ export class NanoProvider implements GenerationProvider {
           });
         }
 
-        const outputPath =
-          index === 0
-            ? job.outPath
-            : withCandidateSuffix(job.outPath, index + 1);
+        const outputPath = index === 0 ? job.outPath : withCandidateSuffix(job.outPath, index + 1);
         await mkdir(path.dirname(outputPath), { recursive: true });
         await writeFile(outputPath, imageBytes);
         candidateOutputs.push({
@@ -288,7 +274,7 @@ export class NanoProvider implements GenerationProvider {
   }
 
   private buildTextRequestPayload(job: ProviderJob): {
-    contents: Array<{ role: "user"; parts: Array<{ text: string }> }>;
+    contents: { role: "user"; parts: { text: string }[] }[];
     generationConfig: { responseModalities: ["TEXT", "IMAGE"] };
   } {
     return {
@@ -319,18 +305,14 @@ export class NanoProvider implements GenerationProvider {
     job: ProviderJob,
     ctx: ProviderRunContext,
   ): Promise<{
-    contents: Array<{
+    contents: {
       role: "user";
-      parts: Array<
-        { text: string } | { inlineData: { mimeType: string; data: string } }
-      >;
-    }>;
+      parts: ({ text: string } | { inlineData: { mimeType: string; data: string } })[];
+    }[];
     generationConfig: { responseModalities: ["TEXT", "IMAGE"] };
   }> {
     const editInputs = job.target.edit?.inputs ?? [];
-    const baseAndReferenceInputs = editInputs.filter(
-      (input) => input.role !== "mask",
-    );
+    const baseAndReferenceInputs = editInputs.filter((input) => input.role !== "mask");
 
     if (baseAndReferenceInputs.length === 0) {
       throw new ProviderError({
@@ -342,20 +324,13 @@ export class NanoProvider implements GenerationProvider {
       });
     }
 
-    const parts: Array<
-      { text: string } | { inlineData: { mimeType: string; data: string } }
-    > = [{ text: this.buildEditPrompt(job, editInputs) }];
+    const parts: ({ text: string } | { inlineData: { mimeType: string; data: string } })[] = [
+      { text: this.buildEditPrompt(job, editInputs) },
+    ];
 
     for (const [index, input] of editInputs.entries()) {
-      const resolvedPath = this.resolveEditInputPath(
-        input.path,
-        ctx.outDir,
-        job.targetId,
-      );
-      const imageBytes = await this.readEditInputBytes(
-        resolvedPath,
-        job.targetId,
-      );
+      const resolvedPath = this.resolveEditInputPath(input.path, ctx.outDir, job.targetId);
+      const imageBytes = await this.readEditInputBytes(resolvedPath, job.targetId);
       parts.push({
         text: this.describeEditInput(index + 1, input),
       });
@@ -425,17 +400,9 @@ export class NanoProvider implements GenerationProvider {
     return `Input ${index}: role=reference, fidelity=${fidelity}. Use this for style and detail guidance.`;
   }
 
-  private resolveEditInputPath(
-    inputPath: string,
-    outDir: string,
-    targetId: string,
-  ): string {
+  private resolveEditInputPath(inputPath: string, outDir: string, targetId: string): string {
     try {
-      return resolvePathWithinRoot(
-        outDir,
-        inputPath,
-        `edit input path for target "${targetId}"`,
-      );
+      return resolvePathWithinRoot(outDir, inputPath, `edit input path for target "${targetId}"`);
     } catch (error) {
       throw new ProviderError({
         provider: this.name,
@@ -447,10 +414,7 @@ export class NanoProvider implements GenerationProvider {
     }
   }
 
-  private async readEditInputBytes(
-    inputPath: string,
-    targetId: string,
-  ): Promise<Buffer> {
+  private async readEditInputBytes(inputPath: string, targetId: string): Promise<Buffer> {
     try {
       return await readFile(inputPath);
     } catch (error) {
@@ -476,9 +440,9 @@ export class NanoProvider implements GenerationProvider {
   }
 
   private findInlineImage(payload: {
-    candidates?: Array<{
-      content?: { parts?: Array<{ inlineData?: GeminiInlineData }> };
-    }>;
+    candidates?: {
+      content?: { parts?: { inlineData?: GeminiInlineData }[] };
+    }[];
   }): GeminiInlineData | undefined {
     for (const candidate of payload.candidates ?? []) {
       for (const part of candidate.content?.parts ?? []) {
@@ -504,8 +468,7 @@ export class NanoProvider implements GenerationProvider {
           provider: this.name,
           code: "nano_request_timeout",
           message: `Nano provider request timed out after ${error.timeoutMs}ms.`,
-          actionable:
-            "Increase providers.nano.timeoutMs or LOOTFORGE_NANO_TIMEOUT_MS and retry.",
+          actionable: "Increase providers.nano.timeoutMs or LOOTFORGE_NANO_TIMEOUT_MS and retry.",
           cause: error,
         });
       }
@@ -514,9 +477,7 @@ export class NanoProvider implements GenerationProvider {
   }
 }
 
-export function createNanoProvider(
-  options: NanoProviderOptions = {},
-): NanoProvider {
+export function createNanoProvider(options: NanoProviderOptions = {}): NanoProvider {
   return new NanoProvider(options);
 }
 

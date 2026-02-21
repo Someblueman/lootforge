@@ -5,18 +5,18 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { runRegenerateCommand } from "../../src/cli/commands/regenerate.js";
-import { ProviderRegistry } from "../../src/providers/registry.js";
+import { type ProviderRegistry } from "../../src/providers/registry.js";
 import {
   createProviderJob,
-  GenerationProvider,
-  PlannedTarget,
-  ProviderCapabilities,
+  type GenerationProvider,
+  type PlannedTarget,
+  type ProviderCapabilities,
   ProviderError,
-  ProviderFeature,
-  ProviderJob,
-  ProviderPrepareContext,
-  ProviderRunContext,
-  ProviderRunResult,
+  type ProviderFeature,
+  type ProviderJob,
+  type ProviderPrepareContext,
+  type ProviderRunContext,
+  type ProviderRunResult,
   PROVIDER_CAPABILITIES,
 } from "../../src/providers/types.js";
 
@@ -162,10 +162,8 @@ describe("regenerate command", () => {
       fidelity: "high",
     });
 
-    const provenance = JSON.parse(
-      await readFile(result.provenancePath, "utf8"),
-    ) as {
-      jobs?: Array<{
+    const provenance = JSON.parse(await readFile(result.provenancePath, "utf8")) as {
+      jobs?: {
         targetId: string;
         generationMode?: string;
         regenerationSource?: {
@@ -173,7 +171,7 @@ describe("regenerate command", () => {
           lockSelectedOutputPath: string;
           lockInputHash: string;
         };
-      }>;
+      }[];
     };
 
     const heroJob = provenance.jobs?.find((job) => job.targetId === "hero");
@@ -241,10 +239,10 @@ describe("regenerate command", () => {
     );
 
     await expect(
-      runRegenerateCommand(
-        ["--out", outDir, "--edit", "true", "--provider", "openai"],
-        { registry: createRegistry([]), onProgress: () => {} },
-      ),
+      runRegenerateCommand(["--out", outDir, "--edit", "true", "--provider", "openai"], {
+        registry: createRegistry([]),
+        onProgress: () => {},
+      }),
     ).rejects.toMatchObject({
       code: "regenerate_unsafe_locked_path",
     });

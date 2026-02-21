@@ -1,5 +1,5 @@
-import { createServer, type Server } from "node:http";
 import { access, mkdtemp } from "node:fs/promises";
+import { createServer, type Server } from "node:http";
 import os from "node:os";
 import path from "node:path";
 
@@ -94,7 +94,7 @@ describe("service mode", () => {
       const toolsResponse = await fetch(`${service.baseUrl}/v1/tools`);
       const toolsPayload = (await toolsResponse.json()) as {
         ok: boolean;
-        tools: Array<{ name: string; endpoint: string; alias: string }>;
+        tools: { name: string; endpoint: string; alias: string }[];
         contracts?: {
           generationRequest?: {
             version: string;
@@ -110,19 +110,13 @@ describe("service mode", () => {
       expect(toolsResponse.status).toBe(200);
       expect(toolsPayload.ok).toBe(true);
       expect(toolsPayload.tools.some((tool) => tool.name === "generate")).toBe(true);
-      expect(toolsPayload.tools.some((tool) => tool.endpoint === "/v1/tools/generate")).toBe(
-        true,
-      );
-      expect(toolsPayload.contracts?.generationRequest?.endpoint).toBe(
-        "/v1/generation/requests",
-      );
+      expect(toolsPayload.tools.some((tool) => tool.endpoint === "/v1/tools/generate")).toBe(true);
+      expect(toolsPayload.contracts?.generationRequest?.endpoint).toBe("/v1/generation/requests");
       expect(toolsPayload.contracts?.providerCapabilities?.endpoint).toBe(
         "/v1/providers/capabilities",
       );
 
-      const contractResponse = await fetch(
-        `${service.baseUrl}/v1/contracts/generation-request`,
-      );
+      const contractResponse = await fetch(`${service.baseUrl}/v1/contracts/generation-request`);
       const contractPayload = (await contractResponse.json()) as {
         ok: boolean;
         contract: {
@@ -158,7 +152,7 @@ describe("service mode", () => {
       const providerCapabilitiesPayload = (await providerCapabilitiesResponse.json()) as {
         ok: boolean;
         endpoint: string;
-        capabilities: Array<{
+        capabilities: {
           provider: string;
           model: string;
           directives: {
@@ -166,7 +160,7 @@ describe("service mode", () => {
             highRes: { supported: boolean; mode: string };
             references: { supported: boolean; mode: string };
           };
-        }>;
+        }[];
       };
       expect(providerCapabilitiesResponse.status).toBe(200);
       expect(providerCapabilitiesPayload.ok).toBe(true);
@@ -188,13 +182,13 @@ describe("service mode", () => {
       );
       const providerQueryPayload = (await providerQueryResponse.json()) as {
         ok: boolean;
-        capabilities: Array<{
+        capabilities: {
           provider: string;
           model: string;
           directives: {
             references: { supported: boolean };
           };
-        }>;
+        }[];
       };
       expect(providerQueryResponse.status).toBe(200);
       expect(providerQueryPayload.ok).toBe(true);
@@ -240,9 +234,7 @@ describe("service mode", () => {
       expect(initPayload.result.manifestPath).toBe(
         path.join(workspace, "assets", "imagegen", "manifest.json"),
       );
-      expect(initPayload.result.imagegenDir).toBe(
-        path.join(workspace, "assets", "imagegen"),
-      );
+      expect(initPayload.result.imagegenDir).toBe(path.join(workspace, "assets", "imagegen"));
 
       const generateResponse = await fetch(`${service.baseUrl}/v1/generate`, {
         method: "POST",
@@ -406,7 +398,9 @@ describe("service mode", () => {
       expect(canonicalPayload.result.plan.targets).toBe(1);
       expect(canonicalPayload.result.generate.jobs).toBe(1);
       expect(typeof canonicalPayload.result.generate.runId).toBe("string");
-      await expect(access(canonicalPayload.result.normalizedRequest.manifestPath)).rejects.toThrow();
+      await expect(
+        access(canonicalPayload.result.normalizedRequest.manifestPath),
+      ).rejects.toThrow();
 
       const canonicalBadResponse = await fetch(`${service.baseUrl}/v1/generation/requests`, {
         method: "POST",

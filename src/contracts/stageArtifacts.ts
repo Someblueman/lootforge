@@ -530,7 +530,7 @@ export class StageArtifactContractError extends Error {
   declare readonly cause?: unknown;
 
   constructor(init: StageArtifactContractErrorInit) {
-    const first = init.diagnostics[0];
+    const first = init.diagnostics[0] as StageArtifactDiagnostic | undefined;
     super(
       first
         ? `[${init.code}] ${init.kind} failed at ${first.path}: ${first.message}`
@@ -607,9 +607,7 @@ export async function readAndValidateStageArtifact<K extends StageArtifactKind>(
           path: "$",
           code: "invalid_json",
           message:
-            error instanceof Error
-              ? error.message
-              : `Unable to parse JSON: ${String(error)}`,
+            error instanceof Error ? error.message : `Unable to parse JSON: ${String(error)}`,
         },
       ],
       cause: error,
@@ -619,7 +617,7 @@ export async function readAndValidateStageArtifact<K extends StageArtifactKind>(
   return validateStageArtifact(kind, parsed, artifactPath);
 }
 
-function formatIssuePath(pathItems: Array<string | number>): string {
+function formatIssuePath(pathItems: (string | number)[]): string {
   if (pathItems.length === 0) {
     return "$";
   }

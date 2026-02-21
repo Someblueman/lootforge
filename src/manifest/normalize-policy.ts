@@ -1,29 +1,18 @@
-import type {
-  NormalizedGenerationPolicy,
-  PalettePolicy,
-  PostProcessPolicy,
-  ResizeVariant,
-} from "../providers/types.js";
+import { type ManifestPostProcess, type ManifestTarget } from "./types.js";
 import {
-  normalizeOutputFormatAlias,
-  POST_PROCESS_ALGORITHMS,
+  type NormalizedGenerationPolicy,
+  type PalettePolicy,
+  type PostProcessPolicy,
+  type ResizeVariant,
 } from "../providers/types.js";
+import { normalizeOutputFormatAlias, POST_PROCESS_ALGORITHMS } from "../providers/types.js";
 import { parseSize } from "../shared/image.js";
-import type { ManifestPostProcess, ManifestTarget } from "./types.js";
 
-export const SUPPORTED_POST_PROCESS_ALGORITHMS = new Set(
-  POST_PROCESS_ALGORITHMS,
-);
+export const SUPPORTED_POST_PROCESS_ALGORITHMS = new Set(POST_PROCESS_ALGORITHMS);
 
-export function toNormalizedGenerationPolicy(
-  target: ManifestTarget,
-): NormalizedGenerationPolicy {
-  const outputFormat = normalizeOutputFormatAlias(
-    target.generationPolicy?.outputFormat,
-  );
-  const normalizedHiresFix = normalizeHiresFixPolicy(
-    target.generationPolicy?.hiresFix,
-  );
+export function toNormalizedGenerationPolicy(target: ManifestTarget): NormalizedGenerationPolicy {
+  const outputFormat = normalizeOutputFormatAlias(target.generationPolicy?.outputFormat);
+  const normalizedHiresFix = normalizeHiresFixPolicy(target.generationPolicy?.hiresFix);
   const candidates =
     typeof target.generationPolicy?.candidates === "number"
       ? Math.max(1, Math.round(target.generationPolicy.candidates))
@@ -34,14 +23,11 @@ export function toNormalizedGenerationPolicy(
       : undefined;
 
   return {
-    size:
-      target.generationPolicy?.size?.trim() ||
-      target.acceptance?.size ||
-      "1024x1024",
-    quality: target.generationPolicy?.quality?.trim() || "high",
-    draftQuality: target.generationPolicy?.draftQuality?.trim() || undefined,
-    finalQuality: target.generationPolicy?.finalQuality?.trim() || undefined,
-    background: target.generationPolicy?.background?.trim() || "opaque",
+    size: target.generationPolicy?.size?.trim() ?? target.acceptance?.size ?? "1024x1024",
+    quality: target.generationPolicy?.quality?.trim() ?? "high",
+    draftQuality: target.generationPolicy?.draftQuality?.trim() ?? undefined,
+    finalQuality: target.generationPolicy?.finalQuality?.trim() ?? undefined,
+    background: target.generationPolicy?.background?.trim() ?? "opaque",
     outputFormat,
     ...(typeof target.generationPolicy?.highQuality === "boolean"
       ? { highQuality: target.generationPolicy.highQuality }
@@ -53,16 +39,12 @@ export function toNormalizedGenerationPolicy(
     providerConcurrency: target.generationPolicy?.providerConcurrency,
     rateLimitPerMinute: target.generationPolicy?.rateLimitPerMinute,
     vlmGate: normalizeVlmGatePolicy(target.generationPolicy?.vlmGate),
-    coarseToFine: normalizeCoarseToFinePolicy(
-      target.generationPolicy?.coarseToFine,
-    ),
+    coarseToFine: normalizeCoarseToFinePolicy(target.generationPolicy?.coarseToFine),
   };
 }
 
 export function normalizeHiresFixPolicy(
-  policy:
-    | NonNullable<ManifestTarget["generationPolicy"]>["hiresFix"]
-    | undefined,
+  policy: NonNullable<ManifestTarget["generationPolicy"]>["hiresFix"] | undefined,
 ): NonNullable<NormalizedGenerationPolicy["hiresFix"]> | undefined {
   if (!policy) {
     return undefined;
@@ -76,23 +58,15 @@ export function normalizeHiresFixPolicy(
   if (typeof policy.upscale === "number" && Number.isFinite(policy.upscale)) {
     normalized.upscale = Math.max(1.01, Math.min(4, policy.upscale));
   }
-  if (
-    typeof policy.denoiseStrength === "number" &&
-    Number.isFinite(policy.denoiseStrength)
-  ) {
-    normalized.denoiseStrength = Math.max(
-      0,
-      Math.min(1, policy.denoiseStrength),
-    );
+  if (typeof policy.denoiseStrength === "number" && Number.isFinite(policy.denoiseStrength)) {
+    normalized.denoiseStrength = Math.max(0, Math.min(1, policy.denoiseStrength));
   }
 
   return Object.keys(normalized).length > 0 ? normalized : undefined;
 }
 
 export function normalizeVlmGatePolicy(
-  policy:
-    | NonNullable<ManifestTarget["generationPolicy"]>["vlmGate"]
-    | undefined,
+  policy: NonNullable<ManifestTarget["generationPolicy"]>["vlmGate"] | undefined,
 ): NormalizedGenerationPolicy["vlmGate"] {
   if (!policy) {
     return undefined;
@@ -114,22 +88,18 @@ export function normalizeVlmGatePolicy(
 }
 
 export function normalizeCoarseToFinePolicy(
-  policy:
-    | NonNullable<ManifestTarget["generationPolicy"]>["coarseToFine"]
-    | undefined,
+  policy: NonNullable<ManifestTarget["generationPolicy"]>["coarseToFine"] | undefined,
 ): NormalizedGenerationPolicy["coarseToFine"] {
   if (!policy) {
     return undefined;
   }
 
   const promoteTopK =
-    typeof policy.promoteTopK === "number" &&
-    Number.isFinite(policy.promoteTopK)
+    typeof policy.promoteTopK === "number" && Number.isFinite(policy.promoteTopK)
       ? Math.max(1, Math.round(policy.promoteTopK))
       : 1;
   const minDraftScore =
-    typeof policy.minDraftScore === "number" &&
-    Number.isFinite(policy.minDraftScore)
+    typeof policy.minDraftScore === "number" && Number.isFinite(policy.minDraftScore)
       ? policy.minDraftScore
       : undefined;
 
@@ -152,16 +122,10 @@ export function resolvePostProcess(
 
   const resizeTo = parseResizeTo(postProcess.resizeTo, target.acceptance?.size);
   const operations = {
-    ...(postProcess.operations?.trim
-      ? { trim: postProcess.operations.trim }
-      : {}),
+    ...(postProcess.operations?.trim ? { trim: postProcess.operations.trim } : {}),
     ...(postProcess.operations?.pad ? { pad: postProcess.operations.pad } : {}),
-    ...(postProcess.operations?.outline
-      ? { outline: postProcess.operations.outline }
-      : {}),
-    ...(postProcess.operations?.quantize
-      ? { quantize: postProcess.operations.quantize }
-      : {}),
+    ...(postProcess.operations?.outline ? { outline: postProcess.operations.outline } : {}),
+    ...(postProcess.operations?.quantize ? { quantize: postProcess.operations.quantize } : {}),
     ...(postProcess.operations?.resizeVariants
       ? {
           resizeVariants: {
@@ -173,29 +137,22 @@ export function resolvePostProcess(
       : {}),
     ...(postProcess.operations?.pixelPerfect
       ? {
-          pixelPerfect: normalizePixelPerfectOperation(
-            postProcess.operations.pixelPerfect,
-          ),
+          pixelPerfect: normalizePixelPerfectOperation(postProcess.operations.pixelPerfect),
         }
       : {}),
     ...(postProcess.operations?.smartCrop
       ? {
-          smartCrop: normalizeSmartCropOperation(
-            postProcess.operations.smartCrop,
-          ),
+          smartCrop: normalizeSmartCropOperation(postProcess.operations.smartCrop),
         }
       : {}),
     ...(postProcess.operations?.emitVariants
       ? {
-          emitVariants: normalizeEmitVariantsOperation(
-            postProcess.operations.emitVariants,
-          ),
+          emitVariants: normalizeEmitVariantsOperation(postProcess.operations.emitVariants),
         }
       : {}),
   };
 
-  const normalizedPalette =
-    paletteOverride ?? normalizePalettePolicyFromTarget(target);
+  const normalizedPalette = paletteOverride ?? normalizePalettePolicyFromTarget(target);
   const paletteColors =
     normalizedPalette?.mode === "max-colors"
       ? normalizedPalette.maxColors
@@ -219,9 +176,7 @@ export function resolvePostProcess(
   };
 }
 
-export function resolvePostProcessAlgorithm(
-  value: string | undefined,
-): "nearest" | "lanczos3" {
+export function resolvePostProcessAlgorithm(value: string | undefined): "nearest" | "lanczos3" {
   const normalized = value?.trim().toLowerCase();
   if (normalized === "nearest") {
     return "nearest";
@@ -229,10 +184,7 @@ export function resolvePostProcessAlgorithm(
   return "lanczos3";
 }
 
-export function normalizePixelPerfectOperation(operation: {
-  enabled?: boolean;
-  scale?: number;
-}): {
+export function normalizePixelPerfectOperation(operation: { enabled?: boolean; scale?: number }): {
   enabled?: boolean;
   scale?: number;
 } {
@@ -256,8 +208,7 @@ export function normalizeSmartCropOperation(operation: {
   return {
     enabled: operation.enabled ?? true,
     mode: operation.mode ?? "alpha-bounds",
-    ...(typeof operation.padding === "number" &&
-    Number.isFinite(operation.padding)
+    ...(typeof operation.padding === "number" && Number.isFinite(operation.padding)
       ? { padding: Math.max(0, Math.round(operation.padding)) }
       : {}),
   };
@@ -275,9 +226,7 @@ export function normalizeEmitVariantsOperation(operation: {
   return {
     ...(typeof operation.raw === "boolean" ? { raw: operation.raw } : {}),
     ...(typeof operation.pixel === "boolean" ? { pixel: operation.pixel } : {}),
-    ...(typeof operation.styleRef === "boolean"
-      ? { styleRef: operation.styleRef }
-      : {}),
+    ...(typeof operation.styleRef === "boolean" ? { styleRef: operation.styleRef } : {}),
   };
 }
 
@@ -303,11 +252,7 @@ export function parseResizeTo(
   resizeTo: ManifestPostProcess["resizeTo"],
   fallbackSize?: string,
 ): { width: number; height: number } | undefined {
-  if (
-    typeof resizeTo === "number" &&
-    Number.isFinite(resizeTo) &&
-    resizeTo > 0
-  ) {
+  if (typeof resizeTo === "number" && Number.isFinite(resizeTo) && resizeTo > 0) {
     const rounded = Math.max(1, Math.round(resizeTo));
     return { width: rounded, height: rounded };
   }
@@ -328,9 +273,7 @@ export function parseResizeTo(
 
 // Internal helper used only by resolvePostProcess to avoid circular dependency
 // with normalize-palette.ts. The full normalizePalettePolicy lives in normalize-palette.ts.
-function normalizePalettePolicyFromTarget(
-  target: ManifestTarget,
-): PalettePolicy | undefined {
+function normalizePalettePolicyFromTarget(target: ManifestTarget): PalettePolicy | undefined {
   const palette = target.palette;
   if (!palette) {
     return undefined;
@@ -339,9 +282,7 @@ function normalizePalettePolicyFromTarget(
   if (palette.mode === "exact") {
     return {
       mode: "exact",
-      colors: (palette.colors ?? []).map((color) =>
-        normalizeHexColorInline(color),
-      ),
+      colors: (palette.colors ?? []).map((color) => normalizeHexColorInline(color)),
       dither: palette.dither,
       strict: palette.strict,
     };

@@ -1,7 +1,7 @@
+import { spawnSync } from "node:child_process";
 import { mkdtemp, mkdir, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
@@ -35,7 +35,11 @@ describe("manifest policy coverage gate script", () => {
     await mkdir(path.join(tempRoot, "src"), { recursive: true });
     await mkdir(path.join(tempRoot, "test"), { recursive: true });
     await writeFile(path.join(tempRoot, "src", "impl.ts"), "export const ok = true;\n", "utf8");
-    await writeFile(path.join(tempRoot, "test", "impl.test.ts"), "export const ok = true;\n", "utf8");
+    await writeFile(
+      path.join(tempRoot, "test", "impl.test.ts"),
+      "export const ok = true;\n",
+      "utf8",
+    );
 
     const sourcePath = await writeCoverageFile({
       root: tempRoot,

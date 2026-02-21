@@ -5,10 +5,7 @@ import sharp from "sharp";
 import { computeBoundaryQualityMetrics } from "./boundaryMetrics.js";
 import { runEnabledSoftAdapters } from "./softAdapters.js";
 import { runCandidateVlmGate, targetHasVlmGate } from "./vlmGate.js";
-import type {
-  CandidateScoreRecord,
-  PlannedTarget,
-} from "../providers/types.js";
+import { type CandidateScoreRecord, type PlannedTarget } from "../providers/types.js";
 import { parseSize } from "../shared/image.js";
 const DEFAULT_EXACT_PALETTE_COMPLIANCE = 0.98;
 
@@ -44,10 +41,7 @@ export interface ScoreCandidateImagesOptions {
 }
 
 function targetRequiresAlpha(target: PlannedTarget): boolean {
-  return (
-    target.runtimeSpec?.alphaRequired === true ||
-    target.acceptance?.alpha === true
-  );
+  return target.runtimeSpec?.alphaRequired === true || target.acceptance?.alpha === true;
 }
 
 function requiredExactPaletteCompliance(target: PlannedTarget): number {
@@ -64,10 +58,7 @@ function computeSeamScore(
   channels: number,
   strip: number,
 ): number {
-  const stripPx = Math.max(
-    1,
-    Math.min(strip, Math.floor(Math.min(width, height) / 2)),
-  );
+  const stripPx = Math.max(1, Math.min(strip, Math.floor(Math.min(width, height) / 2)));
   let total = 0;
   let count = 0;
 
@@ -159,10 +150,7 @@ function analyzeRawCandidate(
     }
 
     const luma = Math.round(0.2126 * r + 0.7152 * g + 0.0722 * b);
-    const bin = Math.max(
-      0,
-      Math.min(bins - 1, Math.floor((luma / 256) * bins)),
-    );
+    const bin = Math.max(0, Math.min(bins - 1, Math.floor((luma / 256) * bins)));
     histogram[bin] += 1;
     visiblePixelCount += 1;
   }
@@ -177,12 +165,9 @@ function analyzeRawCandidate(
     return Math.sqrt(variance);
   };
 
-  const edgeStdev =
-    (normalizeStdev(0) + normalizeStdev(1) + normalizeStdev(2)) / 3;
+  const edgeStdev = (normalizeStdev(0) + normalizeStdev(1) + normalizeStdev(2)) / 3;
   const normalizedHistogram =
-    visiblePixelCount === 0
-      ? histogram
-      : histogram.map((value) => value / visiblePixelCount);
+    visiblePixelCount === 0 ? histogram : histogram.map((value) => value / visiblePixelCount);
 
   if (exactPalette) {
     return {
@@ -245,14 +230,11 @@ async function inspectCandidate(
     throw new Error(`Unable to read candidate dimensions for ${outputPath}`);
   }
 
-  const rawResult = await image
-    .ensureAlpha()
-    .raw()
-    .toBuffer({ resolveWithObject: true });
+  const rawResult = await image.ensureAlpha().raw().toBuffer({ resolveWithObject: true });
   const raw = rawResult.data;
   const channels = rawResult.info.channels;
 
-  const hasAlpha = metadata.hasAlpha === true;
+  const hasAlpha = metadata.hasAlpha;
   const derivedMetrics = analyzeRawCandidate(raw, channels, target);
   const hasTransparency = hasAlpha ? derivedMetrics.hasTransparency : false;
   const boundaryMetrics = hasTransparency
@@ -266,13 +248,7 @@ async function inspectCandidate(
 
   const seamScore =
     target.tileable || typeof target.seamThreshold === "number"
-      ? computeSeamScore(
-          raw,
-          metadata.width,
-          metadata.height,
-          channels,
-          target.seamStripPx ?? 4,
-        )
+      ? computeSeamScore(raw, metadata.width, metadata.height, channels, target.seamStripPx ?? 4)
       : undefined;
   return {
     outputPath,
@@ -299,9 +275,7 @@ export async function scoreCandidateImages(
   options: ScoreCandidateImagesOptions = {},
 ): Promise<{ bestPath: string; scores: CandidateScoreRecord[] }> {
   if (outputPaths.length === 0) {
-    throw new Error(
-      `No candidate outputs available for target "${target.id}".`,
-    );
+    throw new Error(`No candidate outputs available for target "${target.id}".`);
   }
 
   const inspections = await Promise.all(
@@ -314,19 +288,14 @@ export async function scoreCandidateImages(
       ? Math.round(target.acceptance.maxFileSizeKB * 1024)
       : undefined;
 
-  const center = centroidHistogram(
-    inspections.map((inspection) => inspection.histogram),
-  );
+  const center = centroidHistogram(inspections.map((inspection) => inspection.histogram));
   const scoreWeights = resolveScoreWeights(target);
   const outDir = options.outDir;
   const softAdapterByOutputPath = new Map<
     string,
     Awaited<ReturnType<typeof runEnabledSoftAdapters>>
   >();
-  const vlmByOutputPath = new Map<
-    string,
-    NonNullable<CandidateScoreRecord["vlm"]>
-  >();
+  const vlmByOutputPath = new Map<string, NonNullable<CandidateScoreRecord["vlm"]>>();
 
   if (outDir) {
     const softResults = await Promise.all(
@@ -408,8 +377,7 @@ export async function scoreCandidateImages(
     if (typeof maxBytes === "number") {
       if (inspection.sizeBytes > maxBytes) {
         passedAcceptance = false;
-        const penaltyBase =
-          600 + Math.round((inspection.sizeBytes - maxBytes) / 2048);
+        const penaltyBase = 600 + Math.round((inspection.sizeBytes - maxBytes) / 2048);
         const penalty = Math.round(penaltyBase * scoreWeights.fileSize);
         components.fileSizePenalty = -penalty;
         score -= penalty;
@@ -422,9 +390,7 @@ export async function scoreCandidateImages(
       }
     }
 
-    const readabilityReward = Math.round(
-      inspection.edgeStdev * 2 * scoreWeights.readability,
-    );
+    const readabilityReward = Math.round(inspection.edgeStdev * 2 * scoreWeights.readability);
     components.readabilityReward = readabilityReward;
     score += readabilityReward;
     metrics.edgeStdev = inspection.edgeStdev;
@@ -434,8 +400,7 @@ export async function scoreCandidateImages(
       const threshold = target.seamThreshold ?? 12;
       if (inspection.seamScore > threshold) {
         passedAcceptance = false;
-        const penalty =
-          Math.round((inspection.seamScore - threshold) * 20) + 500;
+        const penalty = Math.round((inspection.seamScore - threshold) * 20) + 500;
         components.seamPenalty = -penalty;
         score -= penalty;
         reasons.push("tile_seam_exceeded");
@@ -459,10 +424,7 @@ export async function scoreCandidateImages(
       ) {
         passedAcceptance = false;
         const penalty =
-          450 +
-          Math.round(
-            (inspection.alphaHaloRisk - target.alphaHaloRiskMax) * 1000,
-          );
+          450 + Math.round((inspection.alphaHaloRisk - target.alphaHaloRiskMax) * 1000);
         components.alphaHaloRiskPenalty = -penalty;
         score -= penalty;
         reasons.push("alpha_halo_risk_exceeded");
@@ -476,10 +438,7 @@ export async function scoreCandidateImages(
       ) {
         passedAcceptance = false;
         const penalty =
-          350 +
-          Math.round(
-            (inspection.alphaStrayNoise - target.alphaStrayNoiseMax) * 1500,
-          );
+          350 + Math.round((inspection.alphaStrayNoise - target.alphaStrayNoiseMax) * 1500);
         components.alphaStrayNoisePenalty = -penalty;
         score -= penalty;
         reasons.push("alpha_stray_noise_exceeded");
@@ -493,21 +452,14 @@ export async function scoreCandidateImages(
       ) {
         passedAcceptance = false;
         const penalty =
-          450 +
-          Math.round(
-            (target.alphaEdgeSharpnessMin - inspection.alphaEdgeSharpness) *
-              1200,
-          );
+          450 + Math.round((target.alphaEdgeSharpnessMin - inspection.alphaEdgeSharpness) * 1200);
         components.alphaEdgeSharpnessPenalty = -penalty;
         score -= penalty;
         reasons.push("alpha_edge_sharpness_too_low");
       }
     }
 
-    if (
-      target.palette?.mode === "max-colors" &&
-      typeof inspection.distinctColors === "number"
-    ) {
+    if (target.palette?.mode === "max-colors" && typeof inspection.distinctColors === "number") {
       metrics.distinctColors = inspection.distinctColors;
       const maxColors = target.palette.maxColors ?? 256;
       if (inspection.distinctColors > maxColors) {
@@ -523,17 +475,12 @@ export async function scoreCandidateImages(
       }
     }
 
-    if (
-      target.palette?.mode === "exact" &&
-      typeof inspection.paletteCompliance === "number"
-    ) {
+    if (target.palette?.mode === "exact" && typeof inspection.paletteCompliance === "number") {
       metrics.paletteCompliance = inspection.paletteCompliance;
       const requiredCompliance = requiredExactPaletteCompliance(target);
       if (inspection.paletteCompliance < requiredCompliance) {
         passedAcceptance = false;
-        const penalty = Math.round(
-          (requiredCompliance - inspection.paletteCompliance) * 2000,
-        );
+        const penalty = Math.round((requiredCompliance - inspection.paletteCompliance) * 2000);
         components.paletteCompliancePenalty = -penalty;
         score -= penalty;
         reasons.push(
@@ -571,25 +518,18 @@ export async function scoreCandidateImages(
       }
     }
 
-    const softAdapterResult = softAdapterByOutputPath.get(
-      inspection.outputPath,
-    );
+    const softAdapterResult = softAdapterByOutputPath.get(inspection.outputPath);
     if (softAdapterResult) {
       for (const adapterName of softAdapterResult.adapterNames) {
         const adapterMetrics = softAdapterResult.adapterMetrics[adapterName];
         if (adapterMetrics) {
-          for (const [metricName, metricValue] of Object.entries(
-            adapterMetrics,
-          )) {
+          for (const [metricName, metricValue] of Object.entries(adapterMetrics)) {
             metrics[`${adapterName}.${metricName}`] = metricValue;
           }
         }
 
         const rawAdapterScore = softAdapterResult.adapterScores[adapterName];
-        if (
-          typeof rawAdapterScore === "number" &&
-          Number.isFinite(rawAdapterScore)
-        ) {
+        if (typeof rawAdapterScore === "number" && Number.isFinite(rawAdapterScore)) {
           const weightedAdapterScore = Math.round(
             rawAdapterScore * resolveAdapterWeight(scoreWeights, adapterName),
           );

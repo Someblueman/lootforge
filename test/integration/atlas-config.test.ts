@@ -189,4 +189,4 @@ describe("atlas config artifacts", () => {
       /^\/cdn\/assets\/(?:images|atlases)\/.*$/,
     );
   });
-}); 
+});

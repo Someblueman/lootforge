@@ -1,6 +1,6 @@
 import sharp from "sharp";
 
-import type { PlannedTarget } from "../providers/types.js";
+import { type PlannedTarget } from "../providers/types.js";
 
 const DEFAULT_STRIP_PX = 4;
 const DEFAULT_STRENGTH = 0.6;
@@ -20,12 +20,8 @@ function blendPixelPair(
     const left = data[leftIndex + channel];
     const right = data[rightIndex + channel];
     const average = (left + right) / 2;
-    data[leftIndex + channel] = clampByte(
-      Math.round(left + (average - left) * strength),
-    );
-    data[rightIndex + channel] = clampByte(
-      Math.round(right + (average - right) * strength),
-    );
+    data[leftIndex + channel] = clampByte(Math.round(left + (average - left) * strength));
+    data[rightIndex + channel] = clampByte(Math.round(right + (average - right) * strength));
   }
 }
 
@@ -39,9 +35,7 @@ function resolveSeamHeal(target: PlannedTarget): { stripPx: number; strength: nu
     Math.round(target.seamHeal.stripPx ?? target.seamStripPx ?? DEFAULT_STRIP_PX),
   );
   const strengthRaw =
-    typeof target.seamHeal.strength === "number"
-      ? target.seamHeal.strength
-      : DEFAULT_STRENGTH;
+    typeof target.seamHeal.strength === "number" ? target.seamHeal.strength : DEFAULT_STRENGTH;
   const strength = Math.max(0, Math.min(1, strengthRaw));
 
   if (strength <= 0) {
@@ -51,10 +45,7 @@ function resolveSeamHeal(target: PlannedTarget): { stripPx: number; strength: nu
   return { stripPx, strength };
 }
 
-export async function applySeamHeal(
-  imageBuffer: Buffer,
-  target: PlannedTarget,
-): Promise<Buffer> {
+export async function applySeamHeal(imageBuffer: Buffer, target: PlannedTarget): Promise<Buffer> {
   const seamHeal = resolveSeamHeal(target);
   if (!seamHeal) {
     return imageBuffer;

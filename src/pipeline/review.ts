@@ -8,14 +8,14 @@ interface EvalReportShape {
   packInvariants?: {
     errors: number;
     warnings: number;
-    issues: Array<{
+    issues: {
       level: "error" | "warning";
       code: string;
       message: string;
       targetIds: string[];
       evaluationProfileId?: string;
       metrics?: Record<string, number>;
-    }>;
+    }[];
     metrics?: {
       textureBudgetMBByProfile?: Record<
         string,
@@ -35,7 +35,7 @@ interface EvalReportShape {
       >;
     };
   };
-  targets?: Array<{
+  targets?: {
     targetId: string;
     out: string;
     passedHardGates: boolean;
@@ -54,7 +54,7 @@ interface EvalReportShape {
       rubric?: string;
       evaluator: "command" | "http";
     };
-    candidateVlmGrades?: Array<{
+    candidateVlmGrades?: {
       outputPath: string;
       selected: boolean;
       score: number;
@@ -64,12 +64,12 @@ interface EvalReportShape {
       reason: string;
       rubric?: string;
       evaluator: "command" | "http";
-    }>;
+    }[];
     adapterMetrics?: Record<string, number>;
     adapterScore?: number;
     adapterScoreComponents?: Record<string, number>;
     adapterWarnings?: string[];
-  }>;
+  }[];
 }
 
 export interface ReviewPipelineOptions {
@@ -119,7 +119,7 @@ export async function runReviewPipeline(
 function renderReviewHtml(params: {
   generatedAt: string;
   packInvariants?: EvalReportShape["packInvariants"];
-  targets: Array<{
+  targets: {
     targetId: string;
     out: string;
     passedHardGates: boolean;
@@ -138,7 +138,7 @@ function renderReviewHtml(params: {
       rubric?: string;
       evaluator: "command" | "http";
     };
-    candidateVlmGrades?: Array<{
+    candidateVlmGrades?: {
       outputPath: string;
       selected: boolean;
       score: number;
@@ -148,12 +148,12 @@ function renderReviewHtml(params: {
       reason: string;
       rubric?: string;
       evaluator: "command" | "http";
-    }>;
+    }[];
     adapterMetrics?: Record<string, number>;
     adapterScore?: number;
     adapterScoreComponents?: Record<string, number>;
     adapterWarnings?: string[];
-  }>;
+  }[];
 }): string {
   const rows = params.targets
     .map((target) => {
@@ -337,25 +337,22 @@ function renderReviewHtml(params: {
 </html>`;
 }
 
-function renderPackInvariantSummary(
-  packInvariants: EvalReportShape["packInvariants"],
-): string {
+function renderPackInvariantSummary(packInvariants: EvalReportShape["packInvariants"]): string {
   if (!packInvariants) {
     return "";
   }
 
-  const issueRows = packInvariants.issues
-    .map((issue) => {
-      const scope = issue.evaluationProfileId
-        ? `profile=${issue.evaluationProfileId}`
-        : "profile=all";
-      const targets = issue.targetIds.join(", ");
-      const metrics =
-        issue.metrics && Object.keys(issue.metrics).length > 0
-          ? ` metrics=${JSON.stringify(issue.metrics)}`
-          : "";
-      return `${issue.level.toUpperCase()} ${issue.code}: ${issue.message} (${scope}; targets=${targets})${metrics}`;
-    });
+  const issueRows = packInvariants.issues.map((issue) => {
+    const scope = issue.evaluationProfileId
+      ? `profile=${issue.evaluationProfileId}`
+      : "profile=all";
+    const targets = issue.targetIds.join(", ");
+    const metrics =
+      issue.metrics && Object.keys(issue.metrics).length > 0
+        ? ` metrics=${JSON.stringify(issue.metrics)}`
+        : "";
+    return `${issue.level.toUpperCase()} ${issue.code}: ${issue.message} (${scope}; targets=${targets})${metrics}`;
+  });
 
   const metricsRows: string[] = [];
   const budget = packInvariants.metrics?.textureBudgetMBByProfile;
@@ -365,9 +362,7 @@ function renderPackInvariantSummary(
     )) {
       metricsRows.push(
         `Texture budget ${profileId}: estimated=${values.estimatedMB.toFixed(3)}MB${
-          typeof values.budgetMB === "number"
-            ? ` budget=${values.budgetMB.toFixed(3)}MB`
-            : ""
+          typeof values.budgetMB === "number" ? ` budget=${values.budgetMB.toFixed(3)}MB` : ""
         } targets=${values.targetCount}`,
       );
     }
@@ -386,17 +381,13 @@ function renderPackInvariantSummary(
     }
   }
 
-  return `<section class=\"pack-invariants\">
+  return `<section class="pack-invariants">
   <h2>Pack Invariants</h2>
   <p>Errors: ${packInvariants.errors} · Warnings: ${packInvariants.warnings} · Issues: ${
     packInvariants.issues.length
   }</p>
   ${renderList(issueRows)}
-  ${renderDetailsBlock(
-    "Pack metrics",
-    renderList(metricsRows),
-    metricsRows.length,
-  )}
+  ${renderDetailsBlock("Pack metrics", renderList(metricsRows), metricsRows.length)}
 </section>`;
 }
 
@@ -415,7 +406,7 @@ function renderScoreDetails(target: {
     rubric?: string;
     evaluator: "command" | "http";
   };
-  candidateVlmGrades?: Array<{
+  candidateVlmGrades?: {
     outputPath: string;
     selected: boolean;
     score: number;
@@ -425,7 +416,7 @@ function renderScoreDetails(target: {
     reason: string;
     rubric?: string;
     evaluator: "command" | "http";
-  }>;
+  }[];
   adapterMetrics?: Record<string, number>;
   adapterScoreComponents?: Record<string, number>;
   adapterWarnings?: string[];
@@ -518,9 +509,7 @@ function renderList(values: string[] | undefined): string {
     .join("")}</ul>`;
 }
 
-function renderObject(
-  value: Record<string, number> | undefined,
-): string {
+function renderObject(value: Record<string, number> | undefined): string {
   if (!value || Object.keys(value).length === 0) {
     return `<div class="empty">No entries.</div>`;
   }
@@ -530,9 +519,7 @@ function renderObject(
   );
   return `<pre>${escapeHtml(
     JSON.stringify(
-      Object.fromEntries(
-        sortedEntries.map(([key, metric]) => [key, Number(metric.toFixed(4))]),
-      ),
+      Object.fromEntries(sortedEntries.map(([key, metric]) => [key, Number(metric.toFixed(4))])),
       null,
       2,
     ),
@@ -548,7 +535,7 @@ function formatScore(score: number | undefined): string {
 
 function renderVlmGrades(
   grades:
-    | Array<{
+    | {
         outputPath: string;
         selected: boolean;
         score: number;
@@ -558,7 +545,7 @@ function renderVlmGrades(
         reason: string;
         rubric?: string;
         evaluator: "command" | "http";
-      }>
+      }[]
     | undefined,
 ): string[] {
   if (!grades || grades.length === 0) {

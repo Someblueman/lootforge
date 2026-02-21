@@ -1,7 +1,6 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-import { resolvePathWithinRoot } from "../shared/paths.js";
 import {
   DEFAULT_PROVIDER_REQUEST_TIMEOUT_MS,
   fetchWithTimeout,
@@ -15,20 +14,21 @@ import {
 } from "./runtime.js";
 import {
   createProviderJob,
-  GenerationProvider,
+  type GenerationProvider,
   nowIso,
-  PlannedTarget,
-  ProviderCapabilities,
-  ProviderCandidateOutput,
+  type PlannedTarget,
+  type ProviderCapabilities,
+  type ProviderCandidateOutput,
   ProviderError,
-  ProviderFeature,
-  ProviderJob,
-  ProviderPrepareContext,
-  ProviderRunContext,
-  ProviderRunResult,
+  type ProviderFeature,
+  type ProviderJob,
+  type ProviderPrepareContext,
+  type ProviderRunContext,
+  type ProviderRunResult,
   PROVIDER_CAPABILITIES,
-  TargetEditInput,
+  type TargetEditInput,
 } from "./types.js";
+import { resolvePathWithinRoot } from "../shared/paths.js";
 
 export const DEFAULT_LOCAL_MODEL = "sdxl-controlnet";
 const DEFAULT_LOCAL_BASE_URL = "http://127.0.0.1:8188";
@@ -43,10 +43,10 @@ export interface LocalDiffusionProviderOptions {
 }
 
 interface LocalImageResponse {
-  images?: Array<{
+  images?: {
     b64_json?: string;
     url?: string;
-  }>;
+  }[];
 }
 
 export class LocalDiffusionProvider implements GenerationProvider {
@@ -66,16 +66,11 @@ export class LocalDiffusionProvider implements GenerationProvider {
         options.defaultConcurrency,
         defaults.defaultConcurrency,
       ),
-      minDelayMs: normalizeNonNegativeInteger(
-        options.minDelayMs,
-        defaults.minDelayMs,
-      ),
+      minDelayMs: normalizeNonNegativeInteger(options.minDelayMs, defaults.minDelayMs),
     };
     this.model = options.model ?? DEFAULT_LOCAL_MODEL;
     this.baseUrl =
-      options.baseUrl ??
-      process.env.LOCAL_DIFFUSION_BASE_URL ??
-      DEFAULT_LOCAL_BASE_URL;
+      options.baseUrl ?? process.env.LOCAL_DIFFUSION_BASE_URL ?? DEFAULT_LOCAL_BASE_URL;
     this.timeoutMs = normalizePositiveInteger(
       options.timeoutMs,
       DEFAULT_PROVIDER_REQUEST_TIMEOUT_MS,
@@ -83,10 +78,7 @@ export class LocalDiffusionProvider implements GenerationProvider {
     this.maxRetries = toOptionalNonNegativeInteger(options.maxRetries);
   }
 
-  prepareJobs(
-    targets: PlannedTarget[],
-    ctx: ProviderPrepareContext,
-  ): ProviderJob[] {
+  prepareJobs(targets: PlannedTarget[], ctx: ProviderPrepareContext): ProviderJob[] {
     return targets.map((target) =>
       createProviderJob({
         provider: this.name,
@@ -105,6 +97,7 @@ export class LocalDiffusionProvider implements GenerationProvider {
     if (feature === "transparent-background") return true;
     if (feature === "image-edits") return true;
     if (feature === "multi-candidate") return true;
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
     if (feature === "controlnet") return true;
     return false;
   }
@@ -120,8 +113,7 @@ export class LocalDiffusionProvider implements GenerationProvider {
         code: "local_diffusion_failed",
         message: error.message,
         cause: error,
-        actionable:
-          "Check LOCAL_DIFFUSION_BASE_URL and service health, then retry generation.",
+        actionable: "Check LOCAL_DIFFUSION_BASE_URL and service health, then retry generation.",
       });
     }
 
@@ -130,25 +122,21 @@ export class LocalDiffusionProvider implements GenerationProvider {
       code: "local_diffusion_failed",
       message: "Local diffusion provider failed with a non-error throwable.",
       cause: error,
-      actionable:
-        "Check local diffusion service health and request payload compatibility.",
+      actionable: "Check local diffusion service health and request payload compatibility.",
     });
   }
 
-  async runJob(
-    job: ProviderJob,
-    ctx: ProviderRunContext,
-  ): Promise<ProviderRunResult> {
+  async runJob(job: ProviderJob, ctx: ProviderRunContext): Promise<ProviderRunResult> {
     const startedAt = nowIso(ctx.now);
     const fetchImpl = ctx.fetchImpl ?? globalThis.fetch;
 
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
     if (!fetchImpl) {
       throw new ProviderError({
         provider: this.name,
         code: "missing_fetch",
         message: "Global fetch is unavailable for Local Diffusion provider.",
-        actionable:
-          "Use Node.js 18+ or pass a fetch implementation in the run context.",
+        actionable: "Use Node.js 18+ or pass a fetch implementation in the run context.",
       });
     }
 
@@ -169,11 +157,7 @@ export class LocalDiffusionProvider implements GenerationProvider {
             background: job.background,
             output_format: job.outputFormat,
             candidates: job.candidateCount,
-            control: this.toControlPayload(
-              job.target.edit?.inputs,
-              ctx.outDir,
-              job.targetId,
-            ),
+            control: this.toControlPayload(job.target.edit?.inputs, ctx.outDir, job.targetId),
           }),
         },
       );
@@ -184,8 +168,7 @@ export class LocalDiffusionProvider implements GenerationProvider {
           code: "local_diffusion_http_error",
           status: response.status,
           message: `Local diffusion request failed with status ${response.status}.`,
-          actionable:
-            "Check local diffusion API compatibility and service logs.",
+          actionable: "Check local diffusion API compatibility and service logs.",
           cause: await response.text(),
         });
       }
@@ -204,10 +187,7 @@ export class LocalDiffusionProvider implements GenerationProvider {
       for (let index = 0; index < Math.max(job.candidateCount, 1); index += 1) {
         const image = images[index] ?? images[0];
         const bytes = await this.resolveImageBytes(image, fetchImpl);
-        const outputPath =
-          index === 0
-            ? job.outPath
-            : withCandidateSuffix(job.outPath, index + 1);
+        const outputPath = index === 0 ? job.outPath : withCandidateSuffix(job.outPath, index + 1);
         await mkdir(path.dirname(outputPath), { recursive: true });
         await writeFile(outputPath, bytes);
         outputs.push({ outputPath, bytesWritten: bytes.byteLength });
@@ -246,11 +226,7 @@ export class LocalDiffusionProvider implements GenerationProvider {
     }));
   }
 
-  private resolveControlInputPath(
-    inputPath: string,
-    outDir: string,
-    targetId: string,
-  ): string {
+  private resolveControlInputPath(inputPath: string, outDir: string, targetId: string): string {
     try {
       return resolvePathWithinRoot(
         outDir,
@@ -272,10 +248,7 @@ export class LocalDiffusionProvider implements GenerationProvider {
     imageData: { b64_json?: string; url?: string },
     fetchImpl: typeof fetch,
   ): Promise<Buffer> {
-    if (
-      typeof imageData.b64_json === "string" &&
-      imageData.b64_json.length > 0
-    ) {
+    if (typeof imageData.b64_json === "string" && imageData.b64_json.length > 0) {
       const buffer = Buffer.from(imageData.b64_json, "base64");
       if (buffer.byteLength > MAX_DECODED_IMAGE_BYTES) {
         throw new ProviderError({
@@ -290,10 +263,7 @@ export class LocalDiffusionProvider implements GenerationProvider {
 
     if (typeof imageData.url === "string" && imageData.url.length > 0) {
       validateImageUrl(imageData.url, "local diffusion image download");
-      const imageResponse = await this.requestWithTimeout(
-        fetchImpl,
-        imageData.url,
-      );
+      const imageResponse = await this.requestWithTimeout(fetchImpl, imageData.url);
       if (!imageResponse.ok) {
         throw new ProviderError({
           provider: this.name,
@@ -317,8 +287,7 @@ export class LocalDiffusionProvider implements GenerationProvider {
     throw new ProviderError({
       provider: this.name,
       code: "local_diffusion_missing_image",
-      message:
-        "Local diffusion image payload contained neither b64_json nor url fields.",
+      message: "Local diffusion image payload contained neither b64_json nor url fields.",
     });
   }
 
@@ -335,8 +304,7 @@ export class LocalDiffusionProvider implements GenerationProvider {
           provider: this.name,
           code: "local_diffusion_request_timeout",
           message: `Local diffusion request timed out after ${error.timeoutMs}ms.`,
-          actionable:
-            "Increase providers.local.timeoutMs or LOOTFORGE_LOCAL_TIMEOUT_MS and retry.",
+          actionable: "Increase providers.local.timeoutMs or LOOTFORGE_LOCAL_TIMEOUT_MS and retry.",
           cause: error,
         });
       }

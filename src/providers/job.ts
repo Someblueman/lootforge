@@ -1,22 +1,20 @@
 import { createHash } from "node:crypto";
 
-import { resolvePathWithinDir } from "../shared/paths.js";
-
-import type {
-  NormalizedGenerationPolicy,
-  NormalizedOutputFormat,
-  PlannedTarget,
-  ProviderJob,
-  ProviderName,
-  ProviderSelection,
-} from "./types-core.js";
-
-import { buildStructuredPrompt } from "./prompt.js";
 import {
   getTargetGenerationPolicy,
   isProviderName,
   normalizeGenerationPolicyForProvider,
 } from "./policy.js";
+import { buildStructuredPrompt } from "./prompt.js";
+import {
+  type NormalizedGenerationPolicy,
+  type NormalizedOutputFormat,
+  type PlannedTarget,
+  type ProviderJob,
+  type ProviderName,
+  type ProviderSelection,
+} from "./types-core.js";
+import { resolvePathWithinDir } from "../shared/paths.js";
 
 const DEFAULT_MAX_RETRIES = 1;
 
@@ -55,9 +53,7 @@ export interface DeterministicJobIdParams {
   candidateCount: number;
 }
 
-export function createDeterministicJobId(
-  params: DeterministicJobIdParams,
-): string {
+export function createDeterministicJobId(params: DeterministicJobIdParams): string {
   const source = stableSerialize({
     provider: params.provider,
     targetId: params.targetId,
@@ -91,14 +87,10 @@ export function createInputHash(
   );
 }
 
-export function parseProviderSelection(
-  value: string | undefined,
-): ProviderSelection {
+export function parseProviderSelection(value: string | undefined): ProviderSelection {
   if (!value || value === "auto") return "auto";
   if (isProviderName(value)) return value;
-  throw new Error(
-    `Unsupported provider \"${value}\". Use openai, nano, local, or auto.`,
-  );
+  throw new Error(`Unsupported provider "${value}". Use openai, nano, local, or auto.`);
 }
 
 export interface CreateJobParams {
@@ -114,16 +106,11 @@ export interface CreateJobParams {
 export function createProviderJob(params: CreateJobParams): ProviderJob {
   const prompt = buildStructuredPrompt(params.target.promptSpec);
   const basePolicy = getTargetGenerationPolicy(params.target);
-  const normalized = normalizeGenerationPolicyForProvider(
-    params.provider,
-    basePolicy,
-  );
-  const policyErrors = normalized.issues.filter(
-    (issue) => issue.level === "error",
-  );
+  const normalized = normalizeGenerationPolicyForProvider(params.provider, basePolicy);
+  const policyErrors = normalized.issues.filter((issue) => issue.level === "error");
   if (policyErrors.length > 0) {
     throw new Error(
-      `Provider policy normalization failed for target \"${params.target.id}\": ${policyErrors
+      `Provider policy normalization failed for target "${params.target.id}": ${policyErrors
         .map((issue) => issue.message)
         .join(" ")}`,
     );
@@ -174,7 +161,7 @@ export function createProviderJob(params: CreateJobParams): ProviderJob {
   };
 }
 
-function firstNonNegativeInteger(...values: Array<number | undefined>): number {
+function firstNonNegativeInteger(...values: (number | undefined)[]): number {
   for (const value of values) {
     if (typeof value !== "number" || !Number.isFinite(value)) {
       continue;

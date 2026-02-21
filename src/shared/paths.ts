@@ -3,19 +3,13 @@ import path from "node:path";
 export const IMAGEGEN_RELATIVE_DIR = path.join("assets", "imagegen");
 export const RAW_RELATIVE_DIR = path.join(IMAGEGEN_RELATIVE_DIR, "raw");
 export const PROCESSED_RELATIVE_DIR = path.join(IMAGEGEN_RELATIVE_DIR, "processed");
-export const PROCESSED_IMAGES_RELATIVE_DIR = path.join(
-  PROCESSED_RELATIVE_DIR,
-  "images",
-);
+export const PROCESSED_IMAGES_RELATIVE_DIR = path.join(PROCESSED_RELATIVE_DIR, "images");
 export const LEGACY_IMAGES_RELATIVE_DIR = path.join("assets", "images");
 export const ATLAS_RELATIVE_DIR = path.join("assets", "atlases");
 export const JOBS_RELATIVE_DIR = "jobs";
 export const CHECKS_RELATIVE_DIR = "checks";
 export const PROVENANCE_RELATIVE_DIR = "provenance";
-export const DEFAULT_MANIFEST_RELATIVE_PATH = path.join(
-  IMAGEGEN_RELATIVE_DIR,
-  "manifest.json",
-);
+export const DEFAULT_MANIFEST_RELATIVE_PATH = path.join(IMAGEGEN_RELATIVE_DIR, "manifest.json");
 
 export interface StagePathLayout {
   outDir: string;
@@ -93,23 +87,18 @@ export function normalizeManifestAssetPath(value: string): string {
 export function resolvePathWithinDir(
   baseDir: string,
   targetOutPath: string,
-  label: string = "path",
+  label = "path",
 ): string {
   const normalizedOut = normalizeTargetOutPath(targetOutPath);
   const resolvedBase = path.resolve(baseDir);
-  const resolvedPath = path.resolve(
-    resolvedBase,
-    normalizedOut.split("/").join(path.sep),
-  );
+  const resolvedPath = path.resolve(resolvedBase, normalizedOut.split("/").join(path.sep));
   const relativeToBase = path.relative(resolvedBase, resolvedPath);
   if (
     relativeToBase.length === 0 ||
     relativeToBase.startsWith("..") ||
     path.isAbsolute(relativeToBase)
   ) {
-    throw new Error(
-      `Unsafe ${label} "${targetOutPath}" resolves outside ${resolvedBase}.`,
-    );
+    throw new Error(`Unsafe ${label} "${targetOutPath}" resolves outside ${resolvedBase}.`);
   }
 
   return resolvedPath;
@@ -118,7 +107,7 @@ export function resolvePathWithinDir(
 export function resolvePathWithinRoot(
   rootDir: string,
   candidatePath: string,
-  label: string = "path",
+  label = "path",
 ): string {
   const trimmed = candidatePath.trim();
   if (!trimmed) {
@@ -131,25 +120,16 @@ export function resolvePathWithinRoot(
 
   const resolvedRoot = path.resolve(rootDir);
   if (WINDOWS_ABSOLUTE_PATH_PATTERN.test(trimmed) && process.platform !== "win32") {
-    throw new Error(
-      `Unsafe ${label} "${candidatePath}" resolves outside ${resolvedRoot}.`,
-    );
+    throw new Error(`Unsafe ${label} "${candidatePath}" resolves outside ${resolvedRoot}.`);
   }
 
   const resolvedPath = path.resolve(
     path.isAbsolute(trimmed) ? trimmed : resolvedRoot,
-    path.isAbsolute(trimmed)
-      ? "."
-      : trimmed.replaceAll("\\", path.sep).split("/").join(path.sep),
+    path.isAbsolute(trimmed) ? "." : trimmed.replaceAll("\\", path.sep).split("/").join(path.sep),
   );
   const relativeToRoot = path.relative(resolvedRoot, resolvedPath);
-  if (
-    relativeToRoot.startsWith("..") ||
-    path.isAbsolute(relativeToRoot)
-  ) {
-    throw new Error(
-      `Unsafe ${label} "${candidatePath}" resolves outside ${resolvedRoot}.`,
-    );
+  if (relativeToRoot.startsWith("..") || path.isAbsolute(relativeToRoot)) {
+    throw new Error(`Unsafe ${label} "${candidatePath}" resolves outside ${resolvedRoot}.`);
   }
 
   return resolvedPath;

@@ -6,7 +6,7 @@ import sharp from "sharp";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { scoreCandidateImages } from "../../src/checks/candidateScore.js";
-import type { PlannedTarget } from "../../src/providers/types.js";
+import { type PlannedTarget } from "../../src/providers/types.js";
 
 const ADAPTER_ENV_KEYS = [
   "LOOTFORGE_ENABLE_CLIP_ADAPTER",
@@ -170,7 +170,7 @@ describe("candidate scoring", () => {
         'const payload = JSON.parse(fs.readFileSync(0, "utf8"));',
         'const favored = payload.imagePath.endsWith("candidate-flat.png");',
         "const score = favored ? 200 : 0;",
-        'process.stdout.write(JSON.stringify({ metrics: { alignment: favored ? 0.9 : 0.1 }, score }));',
+        "process.stdout.write(JSON.stringify({ metrics: { alignment: favored ? 0.9 : 0.1 }, score }));",
         "",
       ].join("\n"),
       "utf8",
@@ -323,7 +323,7 @@ describe("candidate scoring", () => {
     const compliantPath = path.join(dir, "candidate-compliant.png");
     const nonCompliantPath = path.join(dir, "candidate-non-compliant.png");
 
-    const writeRow = async (filePath: string, row: Array<[number, number, number, number]>) => {
+    const writeRow = async (filePath: string, row: [number, number, number, number][]) => {
       const width = row.length;
       const height = 1;
       const channels = 4;

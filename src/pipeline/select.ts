@@ -5,27 +5,27 @@ import { writeJsonFile } from "../shared/fs.js";
 import { resolveStagePathLayout } from "../shared/paths.js";
 
 interface EvalReportShape {
-  targets?: Array<{
+  targets?: {
     targetId: string;
     passedHardGates: boolean;
     finalScore?: number;
-  }>;
+  }[];
 }
 
 interface ProvenanceRunShape {
-  jobs?: Array<{
+  jobs?: {
     targetId: string;
     provider: string;
     model: string;
     inputHash: string;
     outputPath: string;
-    candidateScores?: Array<{
+    candidateScores?: {
       outputPath: string;
       score: number;
       passedAcceptance?: boolean;
       selected?: boolean;
-    }>;
-  }>;
+    }[];
+  }[];
 }
 
 export interface SelectPipelineOptions {
@@ -70,13 +70,13 @@ export async function runSelectPipeline(
   );
 
   const [evalRaw, provenanceRaw] = await Promise.all([
-    readFile(evalReportPath, "utf8").catch((error) => {
+    readFile(evalReportPath, "utf8").catch((error: unknown) => {
       throw new Error(
         `Failed to read eval report at ${evalReportPath}: ${error instanceof Error ? error.message : String(error)}`,
         { cause: error },
       );
     }),
-    readFile(provenancePath, "utf8").catch((error) => {
+    readFile(provenancePath, "utf8").catch((error: unknown) => {
       throw new Error(
         `Failed to read provenance at ${provenancePath}: ${error instanceof Error ? error.message : String(error)}`,
         { cause: error },
@@ -117,18 +117,17 @@ export async function runSelectPipeline(
       targetId: job.targetId,
       approved: evalTarget.passedHardGates,
       inputHash: job.inputHash,
-      selectedOutputPath: selected?.outputPath ?? job.outputPath,
+      selectedOutputPath: selected.outputPath || job.outputPath,
       provider: job.provider,
       model: job.model,
-      score: selected?.score ?? evalTarget.finalScore,
+      score: selected.score,
     });
   }
 
   targets.sort((left, right) => left.targetId.localeCompare(right.targetId));
 
   const selectionLockPath = path.resolve(
-    options.selectionLockPath ??
-      path.join(layout.outDir, "locks", "selection-lock.json"),
+    options.selectionLockPath ?? path.join(layout.outDir, "locks", "selection-lock.json"),
   );
 
   const lock: SelectionLockFile = {

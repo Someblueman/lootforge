@@ -20,7 +20,9 @@ for (let i = 0; i < args.length; i += 1) {
 }
 
 const outDir = path.resolve(argMap.get("out-dir") ?? path.join(repoRoot, ".tmp", "showcase-0.2.0"));
-const destDir = path.resolve(argMap.get("dest-dir") ?? path.join(repoRoot, "docs", "showcase", "0.2.0"));
+const destDir = path.resolve(
+  argMap.get("dest-dir") ?? path.join(repoRoot, "docs", "showcase", "0.2.0"),
+);
 
 function clampByte(value) {
   return Math.max(0, Math.min(255, Math.round(value)));
@@ -234,7 +236,15 @@ function buildThreePanelSvg(width, height, title, subtitle, labels) {
 </svg>`);
 }
 
-async function buildThreePanelShowcase({ title, subtitle, leftImage, centerImage, rightImage, labels, outPath }) {
+async function buildThreePanelShowcase({
+  title,
+  subtitle,
+  leftImage,
+  centerImage,
+  rightImage,
+  labels,
+  outPath,
+}) {
   const width = 1560;
   const height = 760;
   const margin = 40;
@@ -368,9 +378,30 @@ async function main() {
 
   const beforeHero = path.join(outDir, "showcase", "before", "hero-idle.png");
   const afterHero = path.join(outDir, "assets", "imagegen", "processed", "images", "hero-idle.png");
-  const dungeonTile = path.join(outDir, "assets", "imagegen", "processed", "images", "dungeon-tile.png");
-  const relicIcon = path.join(outDir, "assets", "imagegen", "processed", "images", "ui-relic-icon.png");
-  const tavernBackground = path.join(outDir, "assets", "imagegen", "processed", "images", "tavern-hub-bg.png");
+  const dungeonTile = path.join(
+    outDir,
+    "assets",
+    "imagegen",
+    "processed",
+    "images",
+    "dungeon-tile.png",
+  );
+  const relicIcon = path.join(
+    outDir,
+    "assets",
+    "imagegen",
+    "processed",
+    "images",
+    "ui-relic-icon.png",
+  );
+  const tavernBackground = path.join(
+    outDir,
+    "assets",
+    "imagegen",
+    "processed",
+    "images",
+    "tavern-hub-bg.png",
+  );
   const beforeEval = path.join(outDir, "showcase", "before", "eval-report-before.json");
   const afterEval = path.join(outDir, "checks", "eval-report.json");
 
@@ -414,8 +445,14 @@ async function main() {
     },
   });
 
-  await writeFile(path.join(outDir, "showcase", "before", "dungeon-tile-seam-broken.png"), brokenTile);
-  await writeFile(path.join(outDir, "showcase", "before", "dungeon-tile-seam-healed.png"), healedTile);
+  await writeFile(
+    path.join(outDir, "showcase", "before", "dungeon-tile-seam-broken.png"),
+    brokenTile,
+  );
+  await writeFile(
+    path.join(outDir, "showcase", "before", "dungeon-tile-seam-healed.png"),
+    healedTile,
+  );
 
   const brokenScoreRaw = await loadRaw(brokenTile, 512, 512, sharp.kernel.nearest);
   const healedScoreRaw = await loadRaw(healedTile, 512, 512, sharp.kernel.nearest);

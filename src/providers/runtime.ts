@@ -21,16 +21,12 @@ export function validateImageUrl(url: string, label: string): void {
   const parsed = new URL(url);
 
   if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-    throw new Error(
-      `SSRF protection: ${label} URL "${url}" targets a blocked address.`,
-    );
+    throw new Error(`SSRF protection: ${label} URL "${url}" targets a blocked address.`);
   }
 
   for (const pattern of BLOCKED_HOSTNAME_PATTERNS) {
     if (pattern.test(parsed.hostname)) {
-      throw new Error(
-        `SSRF protection: ${label} URL "${url}" targets a blocked address.`,
-      );
+      throw new Error(`SSRF protection: ${label} URL "${url}" targets a blocked address.`);
     }
   }
 }
@@ -45,38 +41,28 @@ export class ProviderRequestTimeoutError extends Error {
   }
 }
 
-export function normalizePositiveInteger(
-  value: number | undefined,
-  fallback: number,
-): number {
+export function normalizePositiveInteger(value: number | undefined, fallback: number): number {
   if (typeof value === "number" && Number.isFinite(value) && value > 0) {
     return Math.round(value);
   }
   return fallback;
 }
 
-export function normalizeNonNegativeInteger(
-  value: number | undefined,
-  fallback: number,
-): number {
+export function normalizeNonNegativeInteger(value: number | undefined, fallback: number): number {
   if (typeof value === "number" && Number.isFinite(value) && value >= 0) {
     return Math.round(value);
   }
   return fallback;
 }
 
-export function toOptionalPositiveInteger(
-  value: number | undefined,
-): number | undefined {
+export function toOptionalPositiveInteger(value: number | undefined): number | undefined {
   if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
     return undefined;
   }
   return Math.round(value);
 }
 
-export function toOptionalNonNegativeInteger(
-  value: number | undefined,
-): number | undefined {
+export function toOptionalNonNegativeInteger(value: number | undefined): number | undefined {
   if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
     return undefined;
   }
@@ -94,7 +80,9 @@ export async function fetchWithTimeout(
     DEFAULT_PROVIDER_REQUEST_TIMEOUT_MS,
   );
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), normalizedTimeoutMs);
+  const timeout = setTimeout(() => {
+    controller.abort();
+  }, normalizedTimeoutMs);
 
   try {
     return await fetchImpl(input, {
@@ -130,10 +118,7 @@ export function parseTimeoutMs(value: string | undefined): number | undefined {
   return parsed;
 }
 
-export function withCandidateSuffix(
-  filePath: string,
-  candidateNumber: number,
-): string {
+export function withCandidateSuffix(filePath: string, candidateNumber: number): string {
   const ext = path.extname(filePath);
   const base = filePath.slice(0, filePath.length - ext.length);
   return `${base}.candidate-${candidateNumber}${ext}`;

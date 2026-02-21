@@ -1,15 +1,17 @@
-import { createLocalDiffusionProvider, LocalDiffusionProviderOptions } from "./localDiffusion.js";
-import { createNanoProvider, NanoProviderOptions } from "./nano.js";
-import { createOpenAIProvider, OpenAIProviderOptions } from "./openai.js";
 import {
-  GenerationProvider,
-  getProviderCapabilities,
+  createLocalDiffusionProvider,
+  type LocalDiffusionProviderOptions,
+} from "./localDiffusion.js";
+import { createNanoProvider, type NanoProviderOptions } from "./nano.js";
+import { createOpenAIProvider, type OpenAIProviderOptions } from "./openai.js";
+import {
+  type GenerationProvider,
   isProviderName,
   parseProviderSelection,
-  PlannedTarget,
-  ProviderFeature,
-  ProviderName,
-  ProviderSelection,
+  type PlannedTarget,
+  type ProviderFeature,
+  type ProviderName,
+  type ProviderSelection,
 } from "./types.js";
 
 export interface ProviderRegistryOptions {
@@ -29,9 +31,7 @@ export interface ProviderRoute {
   fallbacks: ProviderName[];
 }
 
-export function createProviderRegistry(
-  options: ProviderRegistryOptions = {},
-): ProviderRegistry {
+export function createProviderRegistry(options: ProviderRegistryOptions = {}): ProviderRegistry {
   const registry: ProviderRegistry = {
     openai: createOpenAIProvider(options.openai),
     nano: createNanoProvider(options.nano),
@@ -58,9 +58,7 @@ export function resolveTargetProviderName(
 ): ProviderName {
   if (target.provider !== undefined) {
     if (!isProviderName(target.provider)) {
-      throw new Error(
-        `Target \"${target.id}\" has unsupported provider \"${target.provider}\".`,
-      );
+      throw new Error(`Target "${target.id}" has unsupported provider "${target.provider}".`);
     }
     return target.provider;
   }
@@ -92,8 +90,6 @@ export function resolveTargetProviderRoute(
   const autoFallbacks: ProviderName[] = [];
   for (const candidate of ["openai", "nano", "local"] as const) {
     if (candidate === primary) continue;
-    const capabilities = getProviderCapabilities(candidate);
-    if (!capabilities) continue;
     autoFallbacks.push(candidate);
   }
 
@@ -144,7 +140,7 @@ function assertProviderCapabilityParity(provider: GenerationProvider): void {
     );
   }
 
-  const checks: Array<[ProviderFeature, boolean]> = [
+  const checks: [ProviderFeature, boolean][] = [
     ["image-generation", true],
     ["transparent-background", provider.capabilities.supportsTransparentBackground],
     ["image-edits", provider.capabilities.supportsEdits],

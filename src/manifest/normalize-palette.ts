@@ -1,19 +1,17 @@
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
-import type { PalettePolicy, PlannedTarget } from "../providers/types.js";
-import { normalizeManifestAssetPath } from "../shared/paths.js";
-import type {
-  ManifestEvaluationProfile,
-  ManifestStyleKit,
-  ManifestTarget,
+import {
+  type ManifestEvaluationProfile,
+  type ManifestStyleKit,
+  type ManifestTarget,
 } from "./types.js";
+import { type PalettePolicy, type PlannedTarget } from "../providers/types.js";
+import { normalizeManifestAssetPath } from "../shared/paths.js";
 
 export const HEX_COLOR_PATTERN = /^#?[0-9a-fA-F]{6}$/;
 
-export function normalizePalettePolicy(
-  target: ManifestTarget,
-): PalettePolicy | undefined {
+export function normalizePalettePolicy(target: ManifestTarget): PalettePolicy | undefined {
   const palette = target.palette;
   if (!palette) {
     return undefined;
@@ -154,9 +152,8 @@ export function parsePaletteFileColors(rawPalette: string): string[] {
     }
 
     const rgbTriple =
-      /^\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})(?:\s+.*)?$/u.exec(
-        trimmed,
-      ) ?? /^\s*(\d{1,3})\s+(\d{1,3})\s+(\d{1,3})(?:\s+.*)?$/u.exec(trimmed);
+      /^\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})(?:\s+.*)?$/u.exec(trimmed) ??
+      /^\s*(\d{1,3})\s+(\d{1,3})\s+(\d{1,3})(?:\s+.*)?$/u.exec(trimmed);
     if (rgbTriple) {
       const r = Number.parseInt(rgbTriple[1], 10);
       const g = Number.parseInt(rgbTriple[2], 10);
@@ -209,15 +206,10 @@ export function normalizeSeamHealPolicy(
     return undefined;
   }
 
-  const stripPx =
-    seamHeal.stripPx ??
-    target.seamStripPx ??
-    evalProfile.hardGates?.seamStripPx;
+  const stripPx = seamHeal.stripPx ?? target.seamStripPx ?? evalProfile.hardGates?.seamStripPx;
   return {
     enabled: seamHeal.enabled ?? true,
-    ...(typeof stripPx === "number"
-      ? { stripPx: Math.max(1, Math.round(stripPx)) }
-      : {}),
+    ...(typeof stripPx === "number" ? { stripPx: Math.max(1, Math.round(stripPx)) } : {}),
     ...(typeof seamHeal.strength === "number"
       ? { strength: Math.max(0, Math.min(1, seamHeal.strength)) }
       : {}),
@@ -234,13 +226,9 @@ export function normalizeWrapGridPolicy(
   }
 
   const seamThreshold =
-    wrapGrid.seamThreshold ??
-    target.seamThreshold ??
-    evalProfile.hardGates?.seamThreshold;
+    wrapGrid.seamThreshold ?? target.seamThreshold ?? evalProfile.hardGates?.seamThreshold;
   const seamStripPx =
-    wrapGrid.seamStripPx ??
-    target.seamStripPx ??
-    evalProfile.hardGates?.seamStripPx;
+    wrapGrid.seamStripPx ?? target.seamStripPx ?? evalProfile.hardGates?.seamStripPx;
 
   return {
     columns: Math.max(1, Math.round(wrapGrid.columns)),

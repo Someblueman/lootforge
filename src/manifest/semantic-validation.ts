@@ -1,30 +1,27 @@
 import { existsSync } from "node:fs";
 import path from "node:path";
 
-import { ZodIssue } from "zod";
+import { type ZodIssue } from "zod";
 
-import {
-  normalizeGenerationPolicyForProvider,
-  normalizeOutputFormatAlias,
-} from "../providers/types.js";
-import {
-  normalizeManifestAssetPath,
-  normalizeTargetOutPath,
-} from "../shared/paths.js";
-import { formatIssuePath } from "../shared/zod.js";
-import { SIZE_PATTERN } from "../shared/image.js";
 import { HEX_COLOR_PATTERN } from "./normalize-palette.js";
 import {
   SUPPORTED_POST_PROCESS_ALGORITHMS,
   parseResizeTo,
   toNormalizedGenerationPolicy,
 } from "./normalize-policy.js";
-import type {
-  ManifestConsistencyGroup,
-  ManifestTarget,
-  ManifestV2,
-  ValidationIssue,
+import {
+  type ManifestConsistencyGroup,
+  type ManifestTarget,
+  type ManifestV2,
+  type ValidationIssue,
 } from "./types.js";
+import {
+  normalizeGenerationPolicyForProvider,
+  normalizeOutputFormatAlias,
+} from "../providers/types.js";
+import { SIZE_PATTERN } from "../shared/image.js";
+import { normalizeManifestAssetPath, normalizeTargetOutPath } from "../shared/paths.js";
+import { formatIssuePath } from "../shared/zod.js";
 
 export function collectSemanticIssues(
   manifest: ManifestV2,
@@ -76,10 +73,7 @@ export function collectSemanticIssues(
       });
     }
 
-    for (const [
-      referenceIndex,
-      referencePath,
-    ] of kit.referenceImages.entries()) {
+    for (const [referenceIndex, referencePath] of kit.referenceImages.entries()) {
       checkManifestAssetPath({
         issues,
         manifestDir,
@@ -89,9 +83,7 @@ export function collectSemanticIssues(
       });
     }
 
-    for (const [referenceIndex, referencePath] of (
-      kit.styleReferenceImages ?? []
-    ).entries()) {
+    for (const [referenceIndex, referencePath] of (kit.styleReferenceImages ?? []).entries()) {
       checkManifestAssetPath({
         issues,
         manifestDir,
@@ -139,10 +131,7 @@ export function collectSemanticIssues(
       });
     }
 
-    for (const [
-      referenceIndex,
-      referencePath,
-    ] of group.referenceImages.entries()) {
+    for (const [referenceIndex, referencePath] of group.referenceImages.entries()) {
       checkManifestAssetPath({
         issues,
         manifestDir,
@@ -181,7 +170,7 @@ export function collectSemanticIssues(
     }
   });
 
-  const defaultProvider = manifest.providers?.default ?? "openai";
+  const defaultProvider = manifest.providers.default ?? "openai";
 
   manifest.targets.forEach((target, index) => {
     const id = target.id.trim();
@@ -240,10 +229,7 @@ export function collectSemanticIssues(
       });
     }
 
-    if (
-      target.scoringProfile &&
-      !scoringProfileIds.has(target.scoringProfile)
-    ) {
+    if (target.scoringProfile && !scoringProfileIds.has(target.scoringProfile)) {
       issues.push({
         level: "error",
         code: "missing_scoring_profile",
@@ -253,9 +239,7 @@ export function collectSemanticIssues(
     }
 
     if (consistencyGroups.length > 0) {
-      const consistencyGroup = consistencyGroupById.get(
-        target.consistencyGroup,
-      );
+      const consistencyGroup = consistencyGroupById.get(target.consistencyGroup);
       if (!consistencyGroup) {
         issues.push({
           level: "error",
@@ -265,10 +249,7 @@ export function collectSemanticIssues(
         });
       } else {
         seenConsistencyGroups.add(consistencyGroup.id);
-        if (
-          consistencyGroup.styleKitId &&
-          consistencyGroup.styleKitId !== target.styleKitId
-        ) {
+        if (consistencyGroup.styleKitId && consistencyGroup.styleKitId !== target.styleKitId) {
           issues.push({
             level: "error",
             code: "consistency_group_style_kit_mismatch",
@@ -315,12 +296,7 @@ export function collectSemanticIssues(
     }
 
     const algorithm = target.postProcess?.algorithm?.trim().toLowerCase();
-    if (
-      algorithm &&
-      !SUPPORTED_POST_PROCESS_ALGORITHMS.has(
-        algorithm as "nearest" | "lanczos3",
-      )
-    ) {
+    if (algorithm && !SUPPORTED_POST_PROCESS_ALGORITHMS.has(algorithm as "nearest" | "lanczos3")) {
       issues.push({
         level: "warning",
         code: "unusual_postprocess_algorithm",
@@ -330,9 +306,7 @@ export function collectSemanticIssues(
     }
 
     if (target.palette?.mode === "exact") {
-      for (const [colorIndex, color] of (
-        target.palette.colors ?? []
-      ).entries()) {
+      for (const [colorIndex, color] of (target.palette.colors ?? []).entries()) {
         if (!HEX_COLOR_PATTERN.test(color.trim())) {
           issues.push({
             level: "error",
@@ -349,8 +323,7 @@ export function collectSemanticIssues(
         level: "warning",
         code: "tile_without_seam_threshold",
         path: `targets[${index}].seamThreshold`,
-        message:
-          "Tileable targets should define seamThreshold for deterministic acceptance.",
+        message: "Tileable targets should define seamThreshold for deterministic acceptance.",
       });
     }
 
@@ -395,16 +368,12 @@ export function collectSemanticIssues(
       }
     }
 
-    if (
-      target.generationMode === "edit-first" &&
-      (!target.edit || !target.edit.inputs?.length)
-    ) {
+    if (target.generationMode === "edit-first" && !target.edit?.inputs?.length) {
       issues.push({
         level: "warning",
         code: "edit_mode_without_inputs",
         path: `targets[${index}].edit`,
-        message:
-          "generationMode=edit-first should include edit inputs for reliable consistency.",
+        message: "generationMode=edit-first should include edit inputs for reliable consistency.",
       });
     }
 
@@ -466,8 +435,7 @@ export function collectSemanticIssues(
         path.extname(normalizedOut ?? target.out).replace(".", ""),
     );
     const alphaRequired =
-      target.runtimeSpec?.alphaRequired === true ||
-      target.acceptance?.alpha === true;
+      target.runtimeSpec?.alphaRequired === true || target.acceptance?.alpha === true;
     if (alphaRequired && outputFormat === "jpeg") {
       issues.push({
         level: "error",
@@ -512,10 +480,7 @@ function checkManifestAssetPath(params: {
     return undefined;
   }
 
-  const resolvedPath = path.resolve(
-    params.manifestDir,
-    normalized.split("/").join(path.sep),
-  );
+  const resolvedPath = path.resolve(params.manifestDir, normalized.split("/").join(path.sep));
   if (!existsSync(resolvedPath)) {
     params.issues.push({
       level: "warning",

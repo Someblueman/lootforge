@@ -25,7 +25,7 @@ describe("review pipeline", () => {
               {
                 level: "error",
                 code: "pack_duplicate_runtime_out",
-                message: "Runtime output collision for normalized path \"dupes/hero.png\".",
+                message: 'Runtime output collision for normalized path "dupes/hero.png".',
                 targetIds: ["hero-low", "hero-high"],
               },
               {

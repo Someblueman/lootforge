@@ -1,7 +1,6 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-import { resolvePathWithinRoot } from "../shared/paths.js";
 import {
   DEFAULT_PROVIDER_REQUEST_TIMEOUT_MS,
   fetchWithTimeout,
@@ -15,19 +14,20 @@ import {
 } from "./runtime.js";
 import {
   createProviderJob,
-  GenerationProvider,
+  type GenerationProvider,
   nowIso,
-  PlannedTarget,
-  ProviderCapabilities,
-  ProviderCandidateOutput,
+  type PlannedTarget,
+  type ProviderCapabilities,
+  type ProviderCandidateOutput,
   ProviderError,
-  ProviderFeature,
-  ProviderJob,
-  ProviderPrepareContext,
-  ProviderRunContext,
-  ProviderRunResult,
+  type ProviderFeature,
+  type ProviderJob,
+  type ProviderPrepareContext,
+  type ProviderRunContext,
+  type ProviderRunResult,
   PROVIDER_CAPABILITIES,
 } from "./types.js";
+import { resolvePathWithinRoot } from "../shared/paths.js";
 
 const OPENAI_IMAGES_ENDPOINT = "https://api.openai.com/v1/images/generations";
 const OPENAI_EDITS_ENDPOINT = "https://api.openai.com/v1/images/edits";
@@ -62,10 +62,7 @@ export class OpenAIProvider implements GenerationProvider {
         options.defaultConcurrency,
         defaults.defaultConcurrency,
       ),
-      minDelayMs: normalizeNonNegativeInteger(
-        options.minDelayMs,
-        defaults.minDelayMs,
-      ),
+      minDelayMs: normalizeNonNegativeInteger(options.minDelayMs, defaults.minDelayMs),
     };
     this.model = options.model ?? DEFAULT_OPENAI_MODEL;
     this.endpoint = options.endpoint ?? OPENAI_IMAGES_ENDPOINT;
@@ -77,10 +74,7 @@ export class OpenAIProvider implements GenerationProvider {
     this.maxRetries = toOptionalNonNegativeInteger(options.maxRetries);
   }
 
-  prepareJobs(
-    targets: PlannedTarget[],
-    ctx: ProviderPrepareContext,
-  ): ProviderJob[] {
+  prepareJobs(targets: PlannedTarget[], ctx: ProviderPrepareContext): ProviderJob[] {
     return targets.map((target) =>
       createProviderJob({
         provider: this.name,
@@ -99,6 +93,7 @@ export class OpenAIProvider implements GenerationProvider {
     if (feature === "transparent-background") return true;
     if (feature === "image-edits") return true;
     if (feature === "multi-candidate") return true;
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
     if (feature === "controlnet") return false;
     return false;
   }
@@ -114,8 +109,7 @@ export class OpenAIProvider implements GenerationProvider {
         code: "openai_request_failed",
         message: error.message,
         cause: error,
-        actionable:
-          "Check OPENAI_API_KEY and provider/model settings, then retry generation.",
+        actionable: "Check OPENAI_API_KEY and provider/model settings, then retry generation.",
       });
     }
 
@@ -124,15 +118,11 @@ export class OpenAIProvider implements GenerationProvider {
       code: "openai_request_failed",
       message: "OpenAI provider failed with a non-error throwable.",
       cause: error,
-      actionable:
-        "Check OPENAI_API_KEY and provider/model settings, then retry generation.",
+      actionable: "Check OPENAI_API_KEY and provider/model settings, then retry generation.",
     });
   }
 
-  async runJob(
-    job: ProviderJob,
-    ctx: ProviderRunContext,
-  ): Promise<ProviderRunResult> {
+  async runJob(job: ProviderJob, ctx: ProviderRunContext): Promise<ProviderRunResult> {
     const startedAt = nowIso(ctx.now);
     const fetchImpl = ctx.fetchImpl ?? globalThis.fetch;
     const apiKey = process.env.OPENAI_API_KEY?.trim();
@@ -146,13 +136,13 @@ export class OpenAIProvider implements GenerationProvider {
       });
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
     if (!fetchImpl) {
       throw new ProviderError({
         provider: this.name,
         code: "missing_fetch",
         message: "Global fetch is unavailable for OpenAI provider.",
-        actionable:
-          "Use Node.js 18+ or pass a fetch implementation in the run context.",
+        actionable: "Use Node.js 18+ or pass a fetch implementation in the run context.",
       });
     }
 
@@ -190,7 +180,7 @@ export class OpenAIProvider implements GenerationProvider {
       }
 
       const payload = (await response.json()) as {
-        data?: Array<{ b64_json?: string; url?: string }>;
+        data?: { b64_json?: string; url?: string }[];
       };
 
       const images = payload.data ?? [];
@@ -199,8 +189,7 @@ export class OpenAIProvider implements GenerationProvider {
           provider: this.name,
           code: "openai_missing_image",
           message: "OpenAI returned no image data for this job.",
-          actionable:
-            "Check prompt/model compatibility and retry with a simpler prompt.",
+          actionable: "Check prompt/model compatibility and retry with a simpler prompt.",
         });
       }
 
@@ -210,10 +199,7 @@ export class OpenAIProvider implements GenerationProvider {
       for (let index = 0; index < count; index += 1) {
         const image = images[index] ?? images[0];
         const imageBytes = await this.resolveImageBytes(image, fetchImpl);
-        const outputPath =
-          index === 0
-            ? job.outPath
-            : withCandidateSuffix(job.outPath, index + 1);
+        const outputPath = index === 0 ? job.outPath : withCandidateSuffix(job.outPath, index + 1);
         await mkdir(path.dirname(outputPath), { recursive: true });
         await writeFile(outputPath, imageBytes);
         candidateOutputs.push({
@@ -254,9 +240,7 @@ export class OpenAIProvider implements GenerationProvider {
     apiKey: string,
   ): Promise<Response> {
     const editInputs = job.target.edit?.inputs ?? [];
-    const baseAndReferenceInputs = editInputs.filter(
-      (input) => input.role !== "mask",
-    );
+    const baseAndReferenceInputs = editInputs.filter((input) => input.role !== "mask");
     const maskInputs = editInputs.filter((input) => input.role === "mask");
 
     if (baseAndReferenceInputs.length === 0) {
@@ -279,15 +263,8 @@ export class OpenAIProvider implements GenerationProvider {
     form.set("n", String(Math.max(1, job.candidateCount)));
 
     for (const input of baseAndReferenceInputs) {
-      const resolvedPath = this.resolveEditInputPath(
-        input.path,
-        ctx.outDir,
-        job.targetId,
-      );
-      const imageBytes = await this.readEditInputBytes(
-        resolvedPath,
-        job.targetId,
-      );
+      const resolvedPath = this.resolveEditInputPath(input.path, ctx.outDir, job.targetId);
+      const imageBytes = await this.readEditInputBytes(resolvedPath, job.targetId);
       const imageData = new Uint8Array(imageBytes);
 
       if (baseAndReferenceInputs.length === 1) {
@@ -306,11 +283,7 @@ export class OpenAIProvider implements GenerationProvider {
     }
 
     if (maskInputs.length > 0) {
-      const maskPath = this.resolveEditInputPath(
-        maskInputs[0].path,
-        ctx.outDir,
-        job.targetId,
-      );
+      const maskPath = this.resolveEditInputPath(maskInputs[0].path, ctx.outDir, job.targetId);
       const maskBytes = await this.readEditInputBytes(maskPath, job.targetId);
       const maskData = new Uint8Array(maskBytes);
       form.append(
@@ -329,17 +302,9 @@ export class OpenAIProvider implements GenerationProvider {
     });
   }
 
-  private resolveEditInputPath(
-    inputPath: string,
-    outDir: string,
-    targetId: string,
-  ): string {
+  private resolveEditInputPath(inputPath: string, outDir: string, targetId: string): string {
     try {
-      return resolvePathWithinRoot(
-        outDir,
-        inputPath,
-        `edit input path for target "${targetId}"`,
-      );
+      return resolvePathWithinRoot(outDir, inputPath, `edit input path for target "${targetId}"`);
     } catch (error) {
       throw new ProviderError({
         provider: this.name,
@@ -351,10 +316,7 @@ export class OpenAIProvider implements GenerationProvider {
     }
   }
 
-  private async readEditInputBytes(
-    inputPath: string,
-    targetId: string,
-  ): Promise<Buffer> {
+  private async readEditInputBytes(inputPath: string, targetId: string): Promise<Buffer> {
     try {
       return await readFile(inputPath);
     } catch (error) {
@@ -379,12 +341,7 @@ export class OpenAIProvider implements GenerationProvider {
       return [job.prompt, preserveCompositionHint].filter(Boolean).join("\n\n");
     }
 
-    return [
-      instruction,
-      preserveCompositionHint,
-      "Target style/output requirements:",
-      job.prompt,
-    ]
+    return [instruction, preserveCompositionHint, "Target style/output requirements:", job.prompt]
       .filter(Boolean)
       .join("\n\n");
   }
@@ -403,10 +360,7 @@ export class OpenAIProvider implements GenerationProvider {
     imageData: { b64_json?: string; url?: string },
     fetchImpl: typeof fetch,
   ): Promise<Buffer> {
-    if (
-      typeof imageData.b64_json === "string" &&
-      imageData.b64_json.length > 0
-    ) {
+    if (typeof imageData.b64_json === "string" && imageData.b64_json.length > 0) {
       const buffer = Buffer.from(imageData.b64_json, "base64");
       if (buffer.byteLength > MAX_DECODED_IMAGE_BYTES) {
         throw new ProviderError({
@@ -421,10 +375,7 @@ export class OpenAIProvider implements GenerationProvider {
 
     if (typeof imageData.url === "string" && imageData.url.length > 0) {
       validateImageUrl(imageData.url, "OpenAI image download");
-      const imageResponse = await this.requestWithTimeout(
-        fetchImpl,
-        imageData.url,
-      );
+      const imageResponse = await this.requestWithTimeout(fetchImpl, imageData.url);
       if (!imageResponse.ok) {
         throw new ProviderError({
           provider: this.name,
@@ -442,8 +393,7 @@ export class OpenAIProvider implements GenerationProvider {
           provider: this.name,
           code: "openai_empty_image",
           message: "OpenAI returned an empty image payload.",
-          actionable:
-            "Retry generation and verify the requested model can output images.",
+          actionable: "Retry generation and verify the requested model can output images.",
         });
       }
 
@@ -463,8 +413,7 @@ export class OpenAIProvider implements GenerationProvider {
       provider: this.name,
       code: "openai_missing_image",
       message: "OpenAI response had neither b64_json nor url image data.",
-      actionable:
-        "Switch model or prompt format and verify the Images API response schema.",
+      actionable: "Switch model or prompt format and verify the Images API response schema.",
     });
   }
 
@@ -491,8 +440,6 @@ export class OpenAIProvider implements GenerationProvider {
   }
 }
 
-export function createOpenAIProvider(
-  options: OpenAIProviderOptions = {},
-): OpenAIProvider {
+export function createOpenAIProvider(options: OpenAIProviderOptions = {}): OpenAIProvider {
   return new OpenAIProvider(options);
 }

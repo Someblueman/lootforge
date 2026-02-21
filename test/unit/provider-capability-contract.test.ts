@@ -19,9 +19,7 @@ describe("provider capability introspection contract", () => {
     const descriptors = resolveProviderCapabilityDescriptors();
 
     expect(descriptors).toHaveLength(3);
-    expect(descriptors.every((entry) => entry.directives.pixel.mode === "post-process")).toBe(
-      true,
-    );
+    expect(descriptors.every((entry) => entry.directives.pixel.mode === "post-process")).toBe(true);
     expect(descriptors.every((entry) => entry.directives.highRes.mode === "scaffold-only")).toBe(
       true,
     );

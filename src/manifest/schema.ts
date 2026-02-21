@@ -139,39 +139,31 @@ export const ManifestEditSchema = EditSchema;
 
 export const ManifestAuxiliaryMapsSchema = AuxiliaryMapsSchema;
 
-export const ManifestPalettePolicySchema = PalettePolicyBaseSchema.superRefine(
-  (palette, ctx) => {
-    if (
-      palette.mode === "exact" &&
-      (!palette.colors || palette.colors.length === 0)
-    ) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["colors"],
-        message: "Exact palette mode requires at least one color.",
-      });
-    }
+export const ManifestPalettePolicySchema = PalettePolicyBaseSchema.superRefine((palette, ctx) => {
+  if (palette.mode === "exact" && (!palette.colors || palette.colors.length === 0)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["colors"],
+      message: "Exact palette mode requires at least one color.",
+    });
+  }
 
-    if (
-      palette.mode === "max-colors" &&
-      typeof palette.maxColors !== "number"
-    ) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["maxColors"],
-        message: "max-colors mode requires maxColors.",
-      });
-    }
+  if (palette.mode === "max-colors" && typeof palette.maxColors !== "number") {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["maxColors"],
+      message: "max-colors mode requires maxColors.",
+    });
+  }
 
-    if (palette.mode !== "exact" && palette.strict !== undefined) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["strict"],
-        message: "Palette strict mode is only supported for exact palettes.",
-      });
-    }
-  },
-);
+  if (palette.mode !== "exact" && palette.strict !== undefined) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["strict"],
+      message: "Palette strict mode is only supported for exact palettes.",
+    });
+  }
+});
 
 const animationPivotSchema = z.object({
   x: z.number().min(0).max(1),
@@ -246,8 +238,7 @@ export const ManifestTargetSchema = z
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["prompt"],
-        message:
-          "Each non-spritesheet target requires `prompt` or `promptSpec`.",
+        message: "Each non-spritesheet target requires `prompt` or `promptSpec`.",
       });
     }
 

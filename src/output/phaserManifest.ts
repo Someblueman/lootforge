@@ -1,5 +1,5 @@
-import { CatalogItem } from "./catalog.js";
-import { AtlasBundle } from "./assetPackManifest.js";
+import { type AtlasBundle } from "./assetPackManifest.js";
+import { type CatalogItem } from "./catalog.js";
 
 export interface PhaserManifestInput {
   packId: string;
@@ -7,9 +7,7 @@ export interface PhaserManifestInput {
   catalogItems: CatalogItem[];
 }
 
-export function buildPhaserManifest(
-  input: PhaserManifestInput,
-): Record<string, unknown> {
+export function buildPhaserManifest(input: PhaserManifestInput): Record<string, unknown> {
   return {
     generatedAt: new Date().toISOString(),
     packId: input.packId,
@@ -33,4 +31,3 @@ export function buildPhaserManifest(
     })),
   };
 }
-

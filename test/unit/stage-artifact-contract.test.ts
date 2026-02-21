@@ -151,6 +151,77 @@ describe("stage artifact contracts", () => {
     expect(result.targets[0]?.candidateVlmGrades).toHaveLength(2);
   });
 
+  it("accepts provenance-run artifacts with agentic retry attempt traces", () => {
+    const result = validateStageArtifact(
+      "provenance-run",
+      {
+        runId: "run-1",
+        inputHash: "hash-1",
+        startedAt: "2026-02-21T00:00:00.000Z",
+        finishedAt: "2026-02-21T00:00:05.000Z",
+        generatedAt: "2026-02-21T00:00:05.000Z",
+        jobs: [
+          {
+            jobId: "job-1",
+            provider: "openai",
+            model: "gpt-image-1",
+            targetId: "hero",
+            inputHash: "hash-hero",
+            startedAt: "2026-02-21T00:00:00.000Z",
+            finishedAt: "2026-02-21T00:00:05.000Z",
+            outputPath: "/tmp/out/assets/imagegen/raw/hero.png",
+            bytesWritten: 1024,
+            candidateScores: [
+              {
+                outputPath: "/tmp/out/assets/imagegen/raw/hero.png",
+                score: 10,
+                passedAcceptance: false,
+                reasons: ["vlm_gate_below_threshold"],
+                stage: "draft",
+                selected: false,
+              },
+              {
+                outputPath: "/tmp/out/assets/imagegen/raw/hero.autocorrect-1.png",
+                score: 42,
+                passedAcceptance: true,
+                reasons: [],
+                stage: "autocorrect",
+                autoCorrectAttempt: 1,
+                sourceOutputPath: "/tmp/out/assets/imagegen/raw/hero.png",
+                selected: true,
+              },
+            ],
+            agenticRetry: {
+              enabled: true,
+              maxRetries: 2,
+              attempted: 1,
+              succeeded: true,
+              attempts: [
+                {
+                  attempt: 1,
+                  sourceOutputPath: "/tmp/out/assets/imagegen/raw/hero.png",
+                  outputPath: "/tmp/out/assets/imagegen/raw/hero.autocorrect-1.png",
+                  critique: "Refine framing and remove edge halo artifacts.",
+                  triggeredBy: ["vlm_gate_below_threshold"],
+                  scoreBefore: 10,
+                  scoreAfter: 42,
+                  passedBefore: false,
+                  passedAfter: true,
+                  reasonsBefore: ["vlm_gate_below_threshold"],
+                  reasonsAfter: [],
+                },
+              ],
+            },
+          },
+        ],
+      },
+      "/tmp/out/provenance/run.json",
+    );
+
+    expect(result.jobs[0]?.agenticRetry?.attempted).toBe(1);
+    expect(result.jobs[0]?.candidateScores?.[1]?.stage).toBe("autocorrect");
+  });
+
   it("accepts acceptance-report boundary quality metrics", () => {
     const result = validateStageArtifact(
       "acceptance-report",

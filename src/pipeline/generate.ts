@@ -113,10 +113,28 @@ interface ScoredCandidateSet {
   bestPath: string;
 }
 
+interface AutoCorrectionTrigger {
+  critique: string;
+  triggeredBy: string[];
+}
+
+type AgenticRetrySummary = NonNullable<ProviderRunResult["agenticRetry"]>;
+
+interface AgenticAutoCorrectionResult extends ScoredCandidateSet {
+  agenticRetry?: AgenticRetrySummary;
+}
+
 const COARSE_TO_FINE_DRAFT_SCORING_OPTIONS: Omit<ScoreCandidateImagesOptions, "outDir"> = {
   includeSoftAdapters: false,
   includeVlmGate: false,
 };
+
+const AGENTIC_RETRY_TRIGGER_REASONS = new Set([
+  "vlm_gate_below_threshold",
+  "alpha_halo_risk_exceeded",
+  "alpha_stray_noise_exceeded",
+  "alpha_edge_sharpness_too_low",
+]);
 
 export async function runGeneratePipeline(
   options: GeneratePipelineOptions,
@@ -307,6 +325,7 @@ export async function runGeneratePipeline(
       candidateOutputs: result.candidateOutputs,
       candidateScores: result.candidateScores,
       coarseToFine: result.coarseToFine,
+      agenticRetry: result.agenticRetry,
       styleReferenceLineage: result.styleReferenceLineage,
       generationMode: result.generationMode,
       edit: result.edit,
@@ -580,6 +599,9 @@ async function runTaskWithFallback(params: {
             : {}),
         });
 
+        let candidateSet: ScoredCandidateSet;
+        let coarseToFineRecord: ProviderRunResult["coarseToFine"] | undefined;
+
         if (coarseToFinePolicy?.enabled) {
           const coarseToFineResult = await runCoarseToFineRefinement({
             provider,
@@ -595,33 +617,41 @@ async function runTaskWithFallback(params: {
             normalizedPolicy,
             draftCandidates,
           });
-          await copyIfDifferent(coarseToFineResult.bestPath, job.outPath);
-
-          const fileStat = await stat(job.outPath);
-          return {
-            ...runResult,
-            provider: providerName,
-            outputPath: job.outPath,
-            bytesWritten: fileStat.size,
+          candidateSet = {
             candidateOutputs: coarseToFineResult.candidateOutputs,
-            candidateScores: coarseToFineResult.scores,
-            coarseToFine: coarseToFineResult.coarseToFine,
-            ...(styleReferenceLineage ? { styleReferenceLineage } : {}),
-            generationMode: params.task.target.generationMode,
-            edit: params.task.target.edit,
-            regenerationSource: params.task.target.regenerationSource,
+            scores: coarseToFineResult.scores,
+            bestPath: coarseToFineResult.bestPath,
           };
+          coarseToFineRecord = coarseToFineResult.coarseToFine;
+        } else {
+          candidateSet = draftCandidates;
         }
 
-        await copyIfDifferent(draftCandidates.bestPath, job.outPath);
+        const autoCorrection = await runAgenticAutoCorrection({
+          provider,
+          providerName,
+          task: params.task,
+          runContext: {
+            outDir: params.outDir,
+            imagesDir: params.imagesDir,
+            now: params.now,
+            fetchImpl: params.fetchImpl,
+          },
+          normalizedPolicy,
+          initialCandidates: candidateSet,
+        });
+
+        await copyIfDifferent(autoCorrection.bestPath, job.outPath);
         const fileStat = await stat(job.outPath);
         return {
           ...runResult,
           provider: providerName,
           outputPath: job.outPath,
           bytesWritten: fileStat.size,
-          candidateOutputs: draftCandidates.candidateOutputs,
-          candidateScores: draftCandidates.scores,
+          candidateOutputs: autoCorrection.candidateOutputs,
+          candidateScores: autoCorrection.scores,
+          ...(coarseToFineRecord ? { coarseToFine: coarseToFineRecord } : {}),
+          ...(autoCorrection.agenticRetry ? { agenticRetry: autoCorrection.agenticRetry } : {}),
           ...(styleReferenceLineage ? { styleReferenceLineage } : {}),
           generationMode: params.task.target.generationMode,
           edit: params.task.target.edit,
@@ -918,6 +948,269 @@ async function runCoarseToFineRefinement(params: {
   };
 }
 
+async function runAgenticAutoCorrection(params: {
+  provider: GenerationProvider;
+  providerName: ProviderName;
+  task: TargetTask;
+  runContext: {
+    outDir: string;
+    imagesDir: string;
+    now?: () => Date;
+    fetchImpl?: typeof fetch;
+  };
+  normalizedPolicy: ReturnType<typeof resolveProviderGenerationPolicy>;
+  initialCandidates: ScoredCandidateSet;
+}): Promise<AgenticAutoCorrectionResult> {
+  const policy = params.normalizedPolicy.agenticRetry;
+  if (!policy?.enabled) {
+    return params.initialCandidates;
+  }
+
+  const summary: AgenticRetrySummary = {
+    enabled: true,
+    maxRetries: policy.maxRetries,
+    attempted: 0,
+    succeeded: false,
+    attempts: [],
+  };
+
+  if (policy.maxRetries <= 0) {
+    summary.skippedReason = "max_retries_zero";
+    return {
+      ...params.initialCandidates,
+      agenticRetry: summary,
+    };
+  }
+
+  let current = ensureSingleSelectedScore(params.initialCandidates);
+  const initialSelected = getSelectedCandidate(current.scores);
+  const initialTrigger = initialSelected
+    ? resolveAutoCorrectionTrigger(initialSelected)
+    : undefined;
+  if (!initialSelected || !initialTrigger) {
+    summary.skippedReason = "no_trigger_conditions";
+    summary.succeeded = true;
+    return {
+      ...current,
+      agenticRetry: summary,
+    };
+  }
+
+  if (!params.provider.supports("image-edits")) {
+    summary.skippedReason = "provider_missing_image_edit_support";
+    return {
+      ...current,
+      agenticRetry: summary,
+    };
+  }
+
+  for (let attempt = 1; attempt <= policy.maxRetries; attempt += 1) {
+    const selectedBefore = getSelectedCandidate(current.scores);
+    if (!selectedBefore) {
+      summary.skippedReason = "selected_candidate_missing";
+      break;
+    }
+
+    const trigger = resolveAutoCorrectionTrigger(selectedBefore);
+    if (!trigger) {
+      summary.succeeded = true;
+      break;
+    }
+
+    summary.attempted += 1;
+    const retryTarget = createAutoCorrectionTarget({
+      target: params.task.target,
+      sourceOutputPath: selectedBefore.outputPath,
+      outDir: params.runContext.outDir,
+      quality: params.normalizedPolicy.finalQuality ?? params.normalizedPolicy.quality,
+      attempt,
+      critique: trigger.critique,
+    });
+
+    const retryJobs = await params.provider.prepareJobs([retryTarget], {
+      outDir: params.runContext.outDir,
+      imagesDir: params.runContext.imagesDir,
+      now: params.runContext.now,
+    });
+    if (retryJobs.length === 0) {
+      summary.skippedReason = "provider_no_retry_job";
+      break;
+    }
+
+    const retryJob = retryJobs[0];
+    const retryRunResult = await params.provider.runJob(retryJob, {
+      outDir: params.runContext.outDir,
+      imagesDir: params.runContext.imagesDir,
+      now: params.runContext.now,
+      fetchImpl: params.runContext.fetchImpl,
+    });
+    const scoredRetry = await scoreProviderRunCandidates({
+      target: params.task.target,
+      runResult: retryRunResult,
+      outDir: params.runContext.outDir,
+    });
+    const retryScores = scoredRetry.scores.map((score) => ({
+      ...score,
+      stage: "autocorrect" as const,
+      autoCorrectAttempt: attempt,
+      sourceOutputPath: selectedBefore.outputPath,
+      selected: false,
+    }));
+
+    current = mergeScoredCandidateSets(current, {
+      candidateOutputs: scoredRetry.candidateOutputs,
+      scores: retryScores,
+      bestPath: scoredRetry.bestPath,
+    });
+
+    const selectedAfter = getSelectedCandidate(current.scores);
+    if (!selectedAfter) {
+      summary.skippedReason = "retry_selected_candidate_missing";
+      break;
+    }
+
+    summary.attempts.push({
+      attempt,
+      sourceOutputPath: selectedBefore.outputPath,
+      outputPath: selectedAfter.outputPath,
+      critique: trigger.critique,
+      triggeredBy: trigger.triggeredBy,
+      scoreBefore: selectedBefore.score,
+      scoreAfter: selectedAfter.score,
+      passedBefore: selectedBefore.passedAcceptance,
+      passedAfter: selectedAfter.passedAcceptance,
+      reasonsBefore: selectedBefore.reasons,
+      reasonsAfter: selectedAfter.reasons,
+    });
+
+    if (!resolveAutoCorrectionTrigger(selectedAfter)) {
+      summary.succeeded = true;
+      break;
+    }
+  }
+
+  return {
+    ...current,
+    agenticRetry: summary,
+  };
+}
+
+function mergeScoredCandidateSets(
+  base: ScoredCandidateSet,
+  delta: ScoredCandidateSet,
+): ScoredCandidateSet {
+  const outputsByPath = new Map(base.candidateOutputs.map((row) => [row.outputPath, row]));
+  for (const row of delta.candidateOutputs) {
+    outputsByPath.set(row.outputPath, row);
+  }
+
+  const scores = [...base.scores, ...delta.scores];
+  scores.sort((left, right) => {
+    if (left.passedAcceptance !== right.passedAcceptance) {
+      return left.passedAcceptance ? -1 : 1;
+    }
+    if (left.score !== right.score) {
+      return right.score - left.score;
+    }
+    return left.outputPath.localeCompare(right.outputPath);
+  });
+
+  return ensureSingleSelectedScore({
+    candidateOutputs: Array.from(outputsByPath.values()).sort((left, right) =>
+      left.outputPath.localeCompare(right.outputPath),
+    ),
+    scores,
+    bestPath: scores[0]?.outputPath ?? base.bestPath,
+  });
+}
+
+function ensureSingleSelectedScore(set: ScoredCandidateSet): ScoredCandidateSet {
+  const selectedPath = set.scores[0].outputPath;
+
+  const scores = set.scores.map((score) => ({
+    ...score,
+    selected: Boolean(selectedPath && score.outputPath === selectedPath),
+  }));
+
+  return {
+    ...set,
+    scores,
+    bestPath: selectedPath,
+  };
+}
+
+function getSelectedCandidate(scores: CandidateScoreRecord[]): CandidateScoreRecord | undefined {
+  return scores.find((score) => score.selected) ?? scores[0];
+}
+
+function resolveAutoCorrectionTrigger(
+  score: CandidateScoreRecord,
+): AutoCorrectionTrigger | undefined {
+  const triggeredBy = dedupeTargetIdList(
+    score.reasons.filter((reason) => AGENTIC_RETRY_TRIGGER_REASONS.has(reason)),
+  );
+  if (triggeredBy.length === 0) {
+    return undefined;
+  }
+
+  const critiqueParts = [
+    "Refine this image to pass hard quality gates while preserving composition, silhouette, and style.",
+  ];
+
+  if (triggeredBy.includes("vlm_gate_below_threshold")) {
+    critiqueParts.push(
+      `VLM critique: ${score.vlm?.reason ?? "Improve framing and subject clarity against rubric expectations."}`,
+    );
+  }
+  if (triggeredBy.includes("alpha_halo_risk_exceeded")) {
+    critiqueParts.push("Remove edge haloing and color fringe around transparent boundaries.");
+  }
+  if (triggeredBy.includes("alpha_stray_noise_exceeded")) {
+    critiqueParts.push("Eliminate isolated stray alpha noise and detached transparency speckles.");
+  }
+  if (triggeredBy.includes("alpha_edge_sharpness_too_low")) {
+    critiqueParts.push("Increase alpha-edge sharpness while keeping clean anti-aliased contours.");
+  }
+
+  return {
+    critique: critiqueParts.join(" "),
+    triggeredBy,
+  };
+}
+
+function createAutoCorrectionTarget(params: {
+  target: PlannedTarget;
+  sourceOutputPath: string;
+  outDir: string;
+  quality: string;
+  attempt: number;
+  critique: string;
+}): PlannedTarget {
+  const relativeSource = toPortableRelativePath(params.outDir, params.sourceOutputPath);
+  return {
+    ...params.target,
+    out: withAutoCorrectSuffix(params.target.out, params.attempt),
+    generationMode: "edit-first",
+    generationPolicy: {
+      ...(params.target.generationPolicy ?? {}),
+      quality: params.quality,
+      candidates: 1,
+    },
+    edit: {
+      mode: "iterate",
+      instruction: params.critique,
+      preserveComposition: true,
+      inputs: [
+        {
+          path: relativeSource,
+          role: "base",
+          fidelity: "high",
+        },
+      ],
+    },
+  };
+}
+
 function createRefineTarget(params: {
   target: PlannedTarget;
   sourceOutputPath: string;
@@ -956,6 +1249,12 @@ function withRefineSuffix(filePath: string, refineIndex: number): string {
   const ext = path.extname(filePath);
   const base = filePath.slice(0, filePath.length - ext.length);
   return `${base}.refine-${refineIndex}${ext}`;
+}
+
+function withAutoCorrectSuffix(filePath: string, attempt: number): string {
+  const ext = path.extname(filePath);
+  const base = filePath.slice(0, filePath.length - ext.length);
+  return `${base}.autocorrect-${attempt}${ext}`;
 }
 
 function toPortableRelativePath(rootDir: string, filePath: string): string {

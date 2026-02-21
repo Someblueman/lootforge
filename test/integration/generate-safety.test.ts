@@ -937,6 +937,179 @@ describe("generate pipeline safety", () => {
     }
   });
 
+  test("runs bounded agentic retry when VLM hard-gate fails and records provenance deltas", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "lootforge-generate-agentic-retry-"));
+    const outDir = path.join(root, "out");
+    const indexPath = path.join(outDir, "jobs", "targets-index.json");
+    await mkdir(path.dirname(indexPath), { recursive: true });
+
+    const vlmScriptPath = path.join(root, "vlm-gate.js");
+    await writeFile(
+      vlmScriptPath,
+      [
+        'const fs = require("node:fs");',
+        'const payload = JSON.parse(fs.readFileSync(0, "utf8"));',
+        'const healed = payload.imagePath.includes(".autocorrect-1.");',
+        "const score = healed ? 4.7 : 2.2;",
+        "const reason = healed ? 'gate_pass' : 'framing_drift';",
+        "process.stdout.write(JSON.stringify({ score, reason }));",
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+
+    const previousVlmCommand = process.env.LOOTFORGE_VLM_GATE_CMD;
+    const previousVlmUrl = process.env.LOOTFORGE_VLM_GATE_URL;
+
+    try {
+      process.env.LOOTFORGE_VLM_GATE_CMD = `${process.execPath} ${vlmScriptPath}`;
+      delete process.env.LOOTFORGE_VLM_GATE_URL;
+
+      await writeFile(
+        indexPath,
+        `${JSON.stringify(
+          {
+            targets: [
+              {
+                id: "hero-agentic",
+                kind: "sprite",
+                out: "hero-agentic.png",
+                promptSpec: { primary: "hero agentic retry" },
+                generationPolicy: {
+                  outputFormat: "png",
+                  background: "transparent",
+                  vlmGate: { threshold: 4 },
+                  agenticRetry: {
+                    enabled: true,
+                    maxRetries: 2,
+                  },
+                },
+                acceptance: {
+                  size: "64x64",
+                  alpha: true,
+                  maxFileSizeKB: 256,
+                },
+                runtimeSpec: {
+                  alphaRequired: true,
+                },
+              },
+            ],
+          },
+          null,
+          2,
+        )}\n`,
+        "utf8",
+      );
+
+      const initialImage = await sharp({
+        create: {
+          width: 64,
+          height: 64,
+          channels: 4,
+          background: { r: 140, g: 80, b: 60, alpha: 0 },
+        },
+      })
+        .png()
+        .toBuffer();
+      const healedImage = await sharp({
+        create: {
+          width: 64,
+          height: 64,
+          channels: 4,
+          background: { r: 40, g: 170, b: 90, alpha: 0 },
+        },
+      })
+        .png()
+        .toBuffer();
+
+      let runCalls = 0;
+      const openaiProvider = createTestProvider({
+        name: "openai",
+        runJob: async (job) => {
+          runCalls += 1;
+          await mkdir(path.dirname(job.outPath), { recursive: true });
+          if (job.target.generationMode === "edit-first") {
+            await writeFile(job.outPath, healedImage);
+            return {
+              jobId: job.id,
+              provider: "openai",
+              model: job.model,
+              targetId: job.targetId,
+              outputPath: job.outPath,
+              bytesWritten: healedImage.byteLength,
+              inputHash: job.inputHash,
+              startedAt: new Date().toISOString(),
+              finishedAt: new Date().toISOString(),
+            };
+          }
+
+          await writeFile(job.outPath, initialImage);
+          return {
+            jobId: job.id,
+            provider: "openai",
+            model: job.model,
+            targetId: job.targetId,
+            outputPath: job.outPath,
+            bytesWritten: initialImage.byteLength,
+            inputHash: job.inputHash,
+            startedAt: new Date().toISOString(),
+            finishedAt: new Date().toISOString(),
+          };
+        },
+      });
+
+      const result = await runGeneratePipeline({
+        outDir,
+        provider: "openai",
+        skipLocked: false,
+        registry: {
+          openai: openaiProvider,
+          nano: openaiProvider,
+          local: openaiProvider,
+        },
+      });
+
+      expect(runCalls).toBe(2);
+      expect(result.jobs[0]?.agenticRetry).toMatchObject({
+        enabled: true,
+        maxRetries: 2,
+        attempted: 1,
+        succeeded: true,
+      });
+      expect(result.jobs[0]?.agenticRetry?.attempts[0]?.triggeredBy).toContain(
+        "vlm_gate_below_threshold",
+      );
+      expect(
+        result.jobs[0]?.candidateScores?.some(
+          (score) => score.stage === "autocorrect" && score.selected === true,
+        ),
+      ).toBe(true);
+
+      const finalBytes = await readFile(result.jobs[0]!.outputPath);
+      expect(finalBytes.equals(healedImage)).toBe(true);
+
+      const provenance = JSON.parse(
+        await readFile(path.join(outDir, "provenance", "run.json"), "utf8"),
+      ) as {
+        jobs?: { targetId: string; agenticRetry?: { attempted: number; attempts?: unknown[] } }[];
+      };
+      const job = provenance.jobs?.find((entry) => entry.targetId === "hero-agentic");
+      expect(job?.agenticRetry?.attempted).toBe(1);
+      expect((job?.agenticRetry?.attempts ?? []).length).toBe(1);
+    } finally {
+      if (previousVlmCommand === undefined) {
+        delete process.env.LOOTFORGE_VLM_GATE_CMD;
+      } else {
+        process.env.LOOTFORGE_VLM_GATE_CMD = previousVlmCommand;
+      }
+      if (previousVlmUrl === undefined) {
+        delete process.env.LOOTFORGE_VLM_GATE_URL;
+      } else {
+        process.env.LOOTFORGE_VLM_GATE_URL = previousVlmUrl;
+      }
+    }
+  });
+
   test("enforces dependency-aware execution ordering across providers", async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "lootforge-generate-dependency-order-"));
     const outDir = path.join(root, "out");

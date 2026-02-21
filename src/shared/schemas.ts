@@ -85,6 +85,12 @@ export const CoarseToFineBaseSchema = z.object({
   requireDraftAcceptance: z.boolean().optional(),
 });
 
+/** Base AgenticRetry schema with all fields optional. Contracts makes some required. */
+export const AgenticRetryBaseSchema = z.object({
+  enabled: z.boolean().optional(),
+  maxRetries: z.number().int().min(0).optional(),
+});
+
 /** Base RuntimeSpec schema without bounds on anchorX/Y. Manifest adds .min(0).max(1). */
 export const RuntimeSpecBaseSchema = z.object({
   alphaRequired: z.boolean().optional(),

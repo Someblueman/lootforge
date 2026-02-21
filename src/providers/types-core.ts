@@ -101,6 +101,11 @@ export interface CoarseToFinePolicy {
   requireDraftAcceptance?: boolean;
 }
 
+export interface AgenticRetryPolicy {
+  enabled?: boolean;
+  maxRetries?: number;
+}
+
 export interface GenerationPolicy {
   size?: string;
   /** Accepts "transparent", "opaque", or any custom value. */
@@ -122,6 +127,7 @@ export interface GenerationPolicy {
   rateLimitPerMinute?: number;
   vlmGate?: VlmGatePolicy;
   coarseToFine?: CoarseToFinePolicy;
+  agenticRetry?: AgenticRetryPolicy;
 }
 
 export interface VlmGatePolicy {
@@ -366,6 +372,10 @@ export interface NormalizedGenerationPolicy {
     minDraftScore?: number;
     requireDraftAcceptance: boolean;
   };
+  agenticRetry?: {
+    enabled: boolean;
+    maxRetries: number;
+  };
 }
 
 export interface PolicyNormalizationIssue {
@@ -410,9 +420,10 @@ export interface CandidateScoreRecord {
   score: number;
   passedAcceptance: boolean;
   reasons: string[];
-  stage?: "draft" | "refine";
+  stage?: "draft" | "refine" | "autocorrect";
   promoted?: boolean;
   sourceOutputPath?: string;
+  autoCorrectAttempt?: number;
   components?: Record<string, number>;
   metrics?: Record<string, number>;
   vlm?: CandidateVlmScore;
@@ -465,6 +476,26 @@ export interface ProviderRunResult {
     }[];
     skippedReason?: string;
     warnings?: string[];
+  };
+  agenticRetry?: {
+    enabled: boolean;
+    maxRetries: number;
+    attempted: number;
+    succeeded: boolean;
+    skippedReason?: string;
+    attempts: {
+      attempt: number;
+      sourceOutputPath: string;
+      outputPath: string;
+      critique: string;
+      triggeredBy: string[];
+      scoreBefore: number;
+      scoreAfter: number;
+      passedBefore: boolean;
+      passedAfter: boolean;
+      reasonsBefore: string[];
+      reasonsAfter: string[];
+    }[];
   };
   styleReferenceLineage?: {
     source: "style-kit" | "target-output";

@@ -38,6 +38,10 @@ Recent completion (2026-02-21):
   - added `evaluationProfiles[].consistencyGroupScoring` controls for warning threshold, penalty threshold, and penalty weight,
   - emitted aggregate group warning/outlier summaries (counts, warned/outlier target ids, max score, total penalty) in eval/review artifacts,
   - added selection-lock trace fields (`evalFinalScore`, `groupSignalTrace`) so group-level ranking effects are auditable in downstream decisions.
+- Implemented bounded agentic auto-correction retries for VLM/edge hard-fails:
+  - added optional `generationPolicy.agenticRetry` controls (`enabled`, `maxRetries`) to trigger edit-first self-healing loops from failed candidates,
+  - generated critique instructions directly from VLM and edge-boundary hard-fail reasons and ran bounded edit-first regeneration attempts,
+  - recorded attempt-level before/after deltas and trigger reasons in provenance (`agenticRetry`) for deterministic auditability.
 
 ## P0 (Immediate: `0.3.0`)
 
@@ -49,15 +53,6 @@ Recent completion (2026-02-21):
   - Pipeline supports low-cost first pass and top-K promotion into high-fidelity refinement.
   - Promotion decisions and discarded candidates are recorded in provenance.
   - Benchmarks show reduced provider cost per approved asset for equivalent acceptance rate.
-
-### 4) Agentic Auto-Correction (Self-Healing Pipeline)
-
-- **Release target:** `0.3.0` to `0.4.0` bridge
-- **Why now:** Reduce human review load by actively reacting to VLM and edge-boundary failures.
-- **Acceptance criteria:**
-  - When a candidate hard-fails a VLM or Boundary gate, its critique string automatically drives an `edit-first` regeneration attempt.
-  - Generative loops have a configurable max retry limit.
-  - Provenance accurately captures auto-correction attempts and their deltas.
 
 ### 5) 2D Visual QA + Policy Follow-up Pack
 

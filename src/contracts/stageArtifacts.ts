@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import {
   AcceptanceSchema,
+  AgenticRetryBaseSchema,
   AuxiliaryMapsSchema,
   CoarseToFineBaseSchema,
   ControlModeSchema,
@@ -41,6 +42,10 @@ const generationPolicySchema = z.object({
     enabled: z.boolean(),
     promoteTopK: z.number().int().min(1),
     requireDraftAcceptance: z.boolean(),
+  }).optional(),
+  agenticRetry: AgenticRetryBaseSchema.extend({
+    enabled: z.boolean(),
+    maxRetries: z.number().int().min(0),
   }).optional(),
 });
 
@@ -228,9 +233,10 @@ const candidateScoreSchema = z.object({
   score: z.number(),
   passedAcceptance: z.boolean(),
   reasons: z.array(nonEmptyString),
-  stage: z.enum(["draft", "refine"]).optional(),
+  stage: z.enum(["draft", "refine", "autocorrect"]).optional(),
   promoted: z.boolean().optional(),
   sourceOutputPath: nonEmptyString.optional(),
+  autoCorrectAttempt: z.number().int().min(1).optional(),
   components: z.record(z.number()).optional(),
   metrics: z.record(z.number()).optional(),
   vlm: z
@@ -345,6 +351,30 @@ const stageArtifactSchemas = {
             ),
             skippedReason: nonEmptyString.optional(),
             warnings: z.array(nonEmptyString).optional(),
+          })
+          .optional(),
+        agenticRetry: z
+          .object({
+            enabled: z.boolean(),
+            maxRetries: z.number().int().min(0),
+            attempted: z.number().int().min(0),
+            succeeded: z.boolean(),
+            skippedReason: nonEmptyString.optional(),
+            attempts: z.array(
+              z.object({
+                attempt: z.number().int().min(1),
+                sourceOutputPath: nonEmptyString,
+                outputPath: nonEmptyString,
+                critique: nonEmptyString,
+                triggeredBy: z.array(nonEmptyString),
+                scoreBefore: z.number(),
+                scoreAfter: z.number(),
+                passedBefore: z.boolean(),
+                passedAfter: z.boolean(),
+                reasonsBefore: z.array(nonEmptyString),
+                reasonsAfter: z.array(nonEmptyString),
+              }),
+            ),
           })
           .optional(),
         styleReferenceLineage: z

@@ -40,6 +40,7 @@ export function toNormalizedGenerationPolicy(target: ManifestTarget): Normalized
     rateLimitPerMinute: target.generationPolicy?.rateLimitPerMinute,
     vlmGate: normalizeVlmGatePolicy(target.generationPolicy?.vlmGate),
     coarseToFine: normalizeCoarseToFinePolicy(target.generationPolicy?.coarseToFine),
+    agenticRetry: normalizeAgenticRetryPolicy(target.generationPolicy?.agenticRetry),
   };
 }
 
@@ -108,6 +109,24 @@ export function normalizeCoarseToFinePolicy(
     promoteTopK,
     ...(typeof minDraftScore === "number" ? { minDraftScore } : {}),
     requireDraftAcceptance: policy.requireDraftAcceptance ?? true,
+  };
+}
+
+export function normalizeAgenticRetryPolicy(
+  policy: NonNullable<ManifestTarget["generationPolicy"]>["agenticRetry"] | undefined,
+): NormalizedGenerationPolicy["agenticRetry"] {
+  if (!policy) {
+    return undefined;
+  }
+
+  const maxRetries =
+    typeof policy.maxRetries === "number" && Number.isFinite(policy.maxRetries)
+      ? Math.max(0, Math.round(policy.maxRetries))
+      : 1;
+
+  return {
+    enabled: policy.enabled ?? true,
+    maxRetries,
   };
 }
 

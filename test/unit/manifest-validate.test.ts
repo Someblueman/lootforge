@@ -202,6 +202,9 @@ describe("manifest normalization", () => {
               upscale: 2,
               denoiseStrength: 0.25,
             },
+            agenticRetry: {
+              maxRetries: 2,
+            },
           },
         },
       ],
@@ -221,6 +224,10 @@ describe("manifest normalization", () => {
       enabled: true,
       upscale: 2,
       denoiseStrength: 0.25,
+    });
+    expect(artifacts.targets[0].generationPolicy?.agenticRetry).toEqual({
+      enabled: true,
+      maxRetries: 2,
     });
   });
 

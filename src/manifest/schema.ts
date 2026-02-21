@@ -3,6 +3,7 @@ import { z } from "zod";
 import { TARGET_KINDS } from "../providers/types.js";
 import {
   AcceptanceSchema,
+  AgenticRetryBaseSchema,
   AuxiliaryMapsSchema,
   CoarseToFineBaseSchema,
   ControlModeSchema,
@@ -45,6 +46,7 @@ export const ManifestTargetReferenceListSchema = z.array(nonEmptyString);
 export const ManifestVlmGateSchema = VlmGateSchema;
 
 export const ManifestCoarseToFineSchema = CoarseToFineBaseSchema;
+export const ManifestAgenticRetrySchema = AgenticRetryBaseSchema;
 
 export const ManifestGenerationPolicySchema = z.object({
   size: nonEmptyString.optional(),
@@ -62,6 +64,7 @@ export const ManifestGenerationPolicySchema = z.object({
   rateLimitPerMinute: z.number().int().positive().optional(),
   vlmGate: ManifestVlmGateSchema.optional(),
   coarseToFine: ManifestCoarseToFineSchema.optional(),
+  agenticRetry: ManifestAgenticRetrySchema.optional(),
 });
 
 export const ManifestAcceptanceSchema = AcceptanceSchema;

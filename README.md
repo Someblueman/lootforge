@@ -508,6 +508,7 @@ Per target:
 - `generationPolicy.background: "transparent"` requires a provider that supports transparent outputs (unsupported providers now fail validation)
 - `generationPolicy.vlmGate?`: optional candidate gate (`threshold` defaults to `4` on a `0..5` scale, optional `rubric`)
 - `generationPolicy.coarseToFine?`: optional promotion controls (`enabled`, `promoteTopK`, `minDraftScore`, `requireDraftAcceptance`)
+- `generationPolicy.agenticRetry?`: optional self-healing edit-first loop controls (`enabled`, `maxRetries`)
 - `generationPolicy.draftQuality` / `generationPolicy.finalQuality`: optional quality split used by coarse-pass and refinement-pass generation
   - when coarse-to-fine is enabled, draft/intermediate promotion ranking uses local image metrics only; full VLM/soft-adapter scoring runs on final promoted refine candidates
 - directed-synthesis scaffolding:

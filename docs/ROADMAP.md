@@ -314,6 +314,10 @@ Completed 2026-02-20 in this release track:
   - added CLIP/LPIPS sibling-group outlier scoring with aggregate warning/outlier summaries in eval/review artifacts,
   - added `evaluationProfiles[].consistencyGroupScoring` controls (`warningThreshold`, `penaltyThreshold`, `penaltyWeight`) for deterministic ranking influence,
   - added selection-lock traceability fields (`evalFinalScore`, `groupSignalTrace`) so group-signal ranking deltas remain auditable.
+- Add bounded agentic auto-correction retries for VLM and edge-boundary hard-fails:
+  - added optional `generationPolicy.agenticRetry` controls (`enabled`, `maxRetries`) to drive bounded edit-first self-healing loops,
+  - auto-generated critique instructions from hard-fail signals (`vlm_gate_below_threshold`, alpha-boundary violations) and retried from selected candidate outputs,
+  - persisted attempt-level trigger/delta summaries in run provenance via `agenticRetry` records.
 
 Remaining queued items:
 

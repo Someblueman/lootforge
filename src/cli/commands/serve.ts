@@ -6,10 +6,12 @@ import { readArgValue } from "../parseArgs.js";
 
 const DEFAULT_SERVICE_HOST = "127.0.0.1";
 const DEFAULT_SERVICE_PORT = 8744;
+const DEFAULT_SERVICE_MAX_ACTIVE_JOBS = 2;
 
 export interface ServeCommandArgs {
   host: string;
   port: number;
+  maxActiveJobs: number;
   defaultOutDir?: string;
 }
 
@@ -18,25 +20,32 @@ export interface ServeCommandResult {
   port: number;
   url: string;
   apiVersion: string;
+  maxActiveJobs: number;
   defaultOutDir?: string;
 }
 
 export function parseServeCommandArgs(argv: string[]): ServeCommandArgs {
   const hostFlag = readArgValue(argv, "host");
   const portFlag = readArgValue(argv, "port");
+  const maxActiveJobsFlag = readArgValue(argv, "max-active-jobs");
   const outFlag = readArgValue(argv, "out");
 
   const envHost = process.env.LOOTFORGE_SERVICE_HOST?.trim();
   const envPort = process.env.LOOTFORGE_SERVICE_PORT?.trim();
+  const envMaxActiveJobs = process.env.LOOTFORGE_SERVICE_MAX_ACTIVE_JOBS?.trim();
   const envOut = process.env.LOOTFORGE_SERVICE_OUT?.trim();
 
   const host = normalizeHost(hostFlag ?? envHost ?? DEFAULT_SERVICE_HOST);
   const port = parsePort(portFlag ?? envPort ?? String(DEFAULT_SERVICE_PORT));
+  const maxActiveJobs = parseMaxActiveJobs(
+    maxActiveJobsFlag ?? envMaxActiveJobs ?? String(DEFAULT_SERVICE_MAX_ACTIVE_JOBS),
+  );
   const defaultOut = outFlag ?? envOut;
 
   return {
     host,
     port,
+    maxActiveJobs,
     defaultOutDir: defaultOut ? path.resolve(defaultOut) : undefined,
   };
 }
@@ -46,6 +55,7 @@ export async function runServeCommand(argv: string[]): Promise<ServeCommandResul
   const service = await startLootForgeService({
     host: args.host,
     port: args.port,
+    maxActiveJobs: args.maxActiveJobs,
     defaultOutDir: args.defaultOutDir,
   });
 
@@ -56,6 +66,7 @@ export async function runServeCommand(argv: string[]): Promise<ServeCommandResul
     port: service.port,
     url: service.baseUrl,
     apiVersion: SERVICE_API_VERSION,
+    maxActiveJobs: service.maxActiveJobs,
     ...(args.defaultOutDir ? { defaultOutDir: args.defaultOutDir } : {}),
   };
 }
@@ -78,6 +89,20 @@ function parsePort(value: string): number {
       code: "invalid_serve_port",
       exitCode: 1,
     });
+  }
+  return parsed;
+}
+
+function parseMaxActiveJobs(value: string): number {
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isInteger(parsed) || parsed < 1) {
+    throw new CliError(
+      `Invalid --max-active-jobs value "${value}". Use an integer greater than or equal to 1.`,
+      {
+        code: "invalid_serve_max_active_jobs",
+        exitCode: 1,
+      },
+    );
   }
   return parsed;
 }

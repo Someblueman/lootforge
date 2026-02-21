@@ -642,4 +642,143 @@ describe("eval + select integration", () => {
     };
     expect(lock.targets.every((target) => target.approved === false)).toBe(true);
   });
+
+  test("falls back to deterministic candidate selection when no candidate is preselected", async () => {
+    const tempRoot = await mkdtemp(path.join(os.tmpdir(), "lootforge-select-fallback-"));
+    const outDir = path.join(tempRoot, "work");
+    const evalReportPath = path.join(outDir, "checks", "eval-report.json");
+    const provenancePath = path.join(outDir, "provenance", "run.json");
+
+    await mkdir(path.dirname(evalReportPath), { recursive: true });
+    await mkdir(path.dirname(provenancePath), { recursive: true });
+
+    await writeFile(
+      evalReportPath,
+      `${JSON.stringify(
+        {
+          targets: [
+            {
+              targetId: "hero",
+              passedHardGates: true,
+              finalScore: 88,
+            },
+          ],
+        },
+        null,
+        2,
+      )}\n`,
+      "utf8",
+    );
+
+    await writeFile(
+      provenancePath,
+      `${JSON.stringify(
+        {
+          jobs: [
+            {
+              targetId: "hero",
+              provider: "openai",
+              model: "gpt-image-1",
+              inputHash: "hero-hash",
+              outputPath: path.join(outDir, "assets", "imagegen", "raw", "hero-default.png"),
+              candidateScores: [
+                {
+                  outputPath: path.join(outDir, "assets", "imagegen", "raw", "hero-z.png"),
+                  score: 99,
+                  passedAcceptance: false,
+                },
+                {
+                  outputPath: path.join(outDir, "assets", "imagegen", "raw", "hero-b.png"),
+                  score: 50,
+                  passedAcceptance: true,
+                },
+                {
+                  outputPath: path.join(outDir, "assets", "imagegen", "raw", "hero-a.png"),
+                  score: 50,
+                  passedAcceptance: true,
+                },
+              ],
+            },
+          ],
+        },
+        null,
+        2,
+      )}\n`,
+      "utf8",
+    );
+
+    const result = await runSelectPipeline({
+      outDir,
+      evalReportPath,
+      provenancePath,
+    });
+    const lock = JSON.parse(await readFile(result.selectionLockPath, "utf8")) as {
+      targets: {
+        targetId: string;
+        selectedOutputPath: string;
+        score?: number;
+      }[];
+    };
+    const hero = lock.targets.find((target) => target.targetId === "hero");
+    expect(hero?.selectedOutputPath).toBe(
+      path.join(outDir, "assets", "imagegen", "raw", "hero-a.png"),
+    );
+    expect(hero?.score).toBe(50);
+  });
+
+  test("reports a clear error when the eval report file is missing", async () => {
+    const tempRoot = await mkdtemp(path.join(os.tmpdir(), "lootforge-select-missing-eval-"));
+    const outDir = path.join(tempRoot, "work");
+    const missingEvalPath = path.join(outDir, "checks", "eval-report.json");
+    const provenancePath = path.join(outDir, "provenance", "run.json");
+
+    await mkdir(path.dirname(provenancePath), { recursive: true });
+    await writeFile(
+      provenancePath,
+      `${JSON.stringify(
+        {
+          jobs: [],
+        },
+        null,
+        2,
+      )}\n`,
+      "utf8",
+    );
+
+    await expect(
+      runSelectPipeline({
+        outDir,
+        evalReportPath: missingEvalPath,
+        provenancePath,
+      }),
+    ).rejects.toThrow(`Failed to read eval report at ${missingEvalPath}`);
+  });
+
+  test("reports a clear error when the provenance file is missing", async () => {
+    const tempRoot = await mkdtemp(path.join(os.tmpdir(), "lootforge-select-missing-provenance-"));
+    const outDir = path.join(tempRoot, "work");
+    const evalReportPath = path.join(outDir, "checks", "eval-report.json");
+    const missingProvenancePath = path.join(outDir, "provenance", "run.json");
+
+    await mkdir(path.dirname(evalReportPath), { recursive: true });
+    await writeFile(
+      evalReportPath,
+      `${JSON.stringify(
+        {
+          targets: [],
+        },
+        null,
+        2,
+      )}\n`,
+      "utf8",
+    );
+
+    await expect(
+      runSelectPipeline({
+        outDir,
+        evalReportPath,
+        provenancePath: missingProvenancePath,
+      }),
+    ).rejects.toThrow(`Failed to read provenance at ${missingProvenancePath}`);
+  });
 });

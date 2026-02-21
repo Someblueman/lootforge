@@ -3,6 +3,7 @@ import path from "node:path";
 import { type ManifestV2 } from "../../manifest/types.js";
 import { ensureDir, pathExists, writeJsonFile } from "../../shared/fs.js";
 import { resolveInitImagegenDir } from "../../shared/paths.js";
+import { readArgValue } from "../parseArgs.js";
 
 export interface InitCommandArgs {
   outFlag?: string;
@@ -164,21 +165,4 @@ function createDefaultManifest(): ManifestV2 {
       },
     ],
   };
-}
-
-function readArgValue(argv: string[], name: string): string | undefined {
-  const exact = `--${name}`;
-  const prefix = `${exact}=`;
-
-  for (let index = 0; index < argv.length; index += 1) {
-    const arg = argv[index];
-    if (arg.startsWith(prefix)) {
-      return arg.slice(prefix.length);
-    }
-    if (arg === exact) {
-      return argv[index + 1];
-    }
-  }
-
-  return undefined;
 }

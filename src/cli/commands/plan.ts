@@ -5,6 +5,7 @@ import { createPlanArtifacts, validateManifestSource } from "../../manifest/vali
 import { CliError } from "../../shared/errors.js";
 import { writeJsonFile, writeJsonLines } from "../../shared/fs.js";
 import { resolveManifestPath, resolveOutDir } from "../../shared/paths.js";
+import { readArgValue } from "../parseArgs.js";
 
 export interface PlanCommandArgs {
   manifestPath: string;
@@ -68,21 +69,4 @@ export async function runPlanCommand(argv: string[]): Promise<PlanCommandResult>
     nanoJobsPath,
     localJobsPath,
   };
-}
-
-function readArgValue(argv: string[], name: string): string | undefined {
-  const exact = `--${name}`;
-  const prefix = `${exact}=`;
-
-  for (let index = 0; index < argv.length; index += 1) {
-    const arg = argv[index];
-    if (arg.startsWith(prefix)) {
-      return arg.slice(prefix.length);
-    }
-    if (arg === exact) {
-      return argv[index + 1];
-    }
-  }
-
-  return undefined;
 }

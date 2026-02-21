@@ -1,6 +1,7 @@
 import path from "node:path";
 
 import { runReviewPipeline } from "../../pipeline/review.js";
+import { readArgValue } from "../parseArgs.js";
 
 export interface ReviewCommandResult {
   reviewHtmlPath: string;
@@ -22,21 +23,4 @@ export async function runReviewCommand(argv: string[]): Promise<ReviewCommandRes
     reviewHtmlPath: result.reviewHtmlPath,
     targetCount: result.targetCount,
   };
-}
-
-function readArgValue(argv: string[], name: string): string | undefined {
-  const exact = `--${name}`;
-  const prefix = `--${name}=`;
-
-  for (let index = 0; index < argv.length; index += 1) {
-    const arg = argv[index];
-    if (arg.startsWith(prefix)) {
-      return arg.slice(prefix.length);
-    }
-    if (arg === exact) {
-      return argv[index + 1];
-    }
-  }
-
-  return undefined;
 }

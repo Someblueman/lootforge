@@ -1,6 +1,7 @@
 import path from "node:path";
 
 import { runSelectPipeline } from "../../pipeline/select.js";
+import { readArgValue } from "../parseArgs.js";
 
 export interface SelectCommandResult {
   selectionLockPath: string;
@@ -26,21 +27,4 @@ export async function runSelectCommand(argv: string[]): Promise<SelectCommandRes
     approvedTargets: result.approvedTargets,
     totalTargets: result.totalTargets,
   };
-}
-
-function readArgValue(argv: string[], name: string): string | undefined {
-  const exact = `--${name}`;
-  const prefix = `--${name}=`;
-
-  for (let index = 0; index < argv.length; index += 1) {
-    const arg = argv[index];
-    if (arg.startsWith(prefix)) {
-      return arg.slice(prefix.length);
-    }
-    if (arg === exact) {
-      return argv[index + 1];
-    }
-  }
-
-  return undefined;
 }

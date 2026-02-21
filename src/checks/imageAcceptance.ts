@@ -28,6 +28,10 @@ export interface ImageAcceptanceMetrics {
   wrapGridRows?: number;
   wrapGridSeamScore?: number;
   wrapGridSeamStripPx?: number;
+  wrapGridTopologyComparisons?: number;
+  wrapGridTopologyMismatchRatio?: number;
+  wrapGridTopologyThreshold?: number;
+  wrapGridTopologyColorTolerance?: number;
   paletteCompliance?: number;
   distinctColors?: number;
   alphaBoundaryPixels?: number;
@@ -73,6 +77,14 @@ interface InspectedImage {
   hasTransparentPixels: boolean;
   raw: Buffer;
   channels: number;
+}
+
+type WrapGridTopologyMode = "self" | "one-to-one" | "many-to-many";
+
+interface WrapGridTopologyResult {
+  mode: WrapGridTopologyMode;
+  comparisons: number;
+  mismatchRatio: number;
 }
 
 async function inspectImage(imagePath: string): Promise<InspectedImage> {
@@ -225,6 +237,333 @@ function computeWrapGridSeamScore(
   }
 
   return total / count;
+}
+
+function evaluateWrapGridTopology(params: {
+  inspected: InspectedImage;
+  columns: number;
+  rows: number;
+  mode: WrapGridTopologyMode;
+  colorTolerance: number;
+}): WrapGridTopologyResult | undefined {
+  const { inspected, columns, rows } = params;
+  if (
+    columns <= 0 ||
+    rows <= 0 ||
+    inspected.width % columns !== 0 ||
+    inspected.height % rows !== 0
+  ) {
+    return undefined;
+  }
+
+  const cellWidth = inspected.width / columns;
+  const cellHeight = inspected.height / rows;
+  const colorTolerance = Math.max(0, Math.min(255, Math.round(params.colorTolerance)));
+
+  if (params.mode === "self") {
+    let comparisons = 0;
+    let mismatchTotal = 0;
+
+    for (let row = 0; row < rows; row += 1) {
+      for (let column = 0; column < columns; column += 1) {
+        const startX = column * cellWidth;
+        const startY = row * cellHeight;
+        mismatchTotal += compareEdgeMismatchRatio({
+          inspected,
+          startX,
+          startY,
+          cellWidth,
+          cellHeight,
+          leftEdge: "left",
+          rightEdge: "right",
+          colorTolerance,
+        });
+        mismatchTotal += compareEdgeMismatchRatio({
+          inspected,
+          startX,
+          startY,
+          cellWidth,
+          cellHeight,
+          leftEdge: "top",
+          rightEdge: "bottom",
+          colorTolerance,
+        });
+        comparisons += 2;
+      }
+    }
+
+    return {
+      mode: params.mode,
+      comparisons,
+      mismatchRatio: comparisons > 0 ? mismatchTotal / comparisons : 0,
+    };
+  }
+
+  if (params.mode === "one-to-one") {
+    let comparisons = 0;
+    let mismatchTotal = 0;
+
+    for (let row = 0; row < rows; row += 1) {
+      for (let column = 0; column < columns; column += 1) {
+        const startX = column * cellWidth;
+        const startY = row * cellHeight;
+
+        if (column + 1 < columns) {
+          mismatchTotal += compareEdgeMismatchRatio({
+            inspected,
+            startX,
+            startY,
+            cellWidth,
+            cellHeight,
+            leftEdge: "right",
+            rightEdge: "left",
+            rightStartX: (column + 1) * cellWidth,
+            rightStartY: startY,
+            colorTolerance,
+          });
+          comparisons += 1;
+        }
+
+        if (row + 1 < rows) {
+          mismatchTotal += compareEdgeMismatchRatio({
+            inspected,
+            startX,
+            startY,
+            cellWidth,
+            cellHeight,
+            leftEdge: "bottom",
+            rightEdge: "top",
+            rightStartX: startX,
+            rightStartY: (row + 1) * cellHeight,
+            colorTolerance,
+          });
+          comparisons += 1;
+        }
+      }
+    }
+
+    return {
+      mode: params.mode,
+      comparisons,
+      mismatchRatio: comparisons > 0 ? mismatchTotal / comparisons : 0,
+    };
+  }
+
+  let comparisons = 0;
+  let mismatched = 0;
+  const leftEdgeKeys = new Set<string>();
+  const topEdgeKeys = new Set<string>();
+  const rightEdges: string[] = [];
+  const bottomEdges: string[] = [];
+
+  for (let row = 0; row < rows; row += 1) {
+    for (let column = 0; column < columns; column += 1) {
+      const startX = column * cellWidth;
+      const startY = row * cellHeight;
+      leftEdgeKeys.add(
+        createEdgeSignature({
+          inspected,
+          startX,
+          startY,
+          cellWidth,
+          cellHeight,
+          edge: "left",
+          colorTolerance,
+        }),
+      );
+      topEdgeKeys.add(
+        createEdgeSignature({
+          inspected,
+          startX,
+          startY,
+          cellWidth,
+          cellHeight,
+          edge: "top",
+          colorTolerance,
+        }),
+      );
+      rightEdges.push(
+        createEdgeSignature({
+          inspected,
+          startX,
+          startY,
+          cellWidth,
+          cellHeight,
+          edge: "right",
+          colorTolerance,
+        }),
+      );
+      bottomEdges.push(
+        createEdgeSignature({
+          inspected,
+          startX,
+          startY,
+          cellWidth,
+          cellHeight,
+          edge: "bottom",
+          colorTolerance,
+        }),
+      );
+    }
+  }
+
+  for (const key of rightEdges) {
+    comparisons += 1;
+    if (!leftEdgeKeys.has(key)) {
+      mismatched += 1;
+    }
+  }
+
+  for (const key of bottomEdges) {
+    comparisons += 1;
+    if (!topEdgeKeys.has(key)) {
+      mismatched += 1;
+    }
+  }
+
+  return {
+    mode: params.mode,
+    comparisons,
+    mismatchRatio: comparisons > 0 ? mismatched / comparisons : 0,
+  };
+}
+
+function resolveWrapGridTopologyIssueCode(mode: WrapGridTopologyMode): string {
+  if (mode === "self") {
+    return "wrap_grid_topology_self_exceeded";
+  }
+  if (mode === "one-to-one") {
+    return "wrap_grid_topology_pair_exceeded";
+  }
+  return "wrap_grid_topology_compatibility_exceeded";
+}
+
+type Edge = "left" | "right" | "top" | "bottom";
+
+function compareEdgeMismatchRatio(params: {
+  inspected: InspectedImage;
+  startX: number;
+  startY: number;
+  cellWidth: number;
+  cellHeight: number;
+  leftEdge: Edge;
+  rightEdge: Edge;
+  rightStartX?: number;
+  rightStartY?: number;
+  colorTolerance: number;
+}): number {
+  const leftLength = edgeLength(params.leftEdge, params.cellWidth, params.cellHeight);
+  const rightLength = edgeLength(params.rightEdge, params.cellWidth, params.cellHeight);
+  if (leftLength !== rightLength || leftLength <= 0) {
+    return 1;
+  }
+
+  let mismatches = 0;
+  const rightStartX = params.rightStartX ?? params.startX;
+  const rightStartY = params.rightStartY ?? params.startY;
+  const colorTolerance = Math.max(0, Math.min(255, Math.round(params.colorTolerance)));
+
+  for (let offset = 0; offset < leftLength; offset += 1) {
+    const leftIndex = resolveEdgePixelIndex({
+      inspected: params.inspected,
+      startX: params.startX,
+      startY: params.startY,
+      cellWidth: params.cellWidth,
+      cellHeight: params.cellHeight,
+      edge: params.leftEdge,
+      offset,
+    });
+    const rightIndex = resolveEdgePixelIndex({
+      inspected: params.inspected,
+      startX: rightStartX,
+      startY: rightStartY,
+      cellWidth: params.cellWidth,
+      cellHeight: params.cellHeight,
+      edge: params.rightEdge,
+      offset,
+    });
+
+    let mismatched = false;
+    for (let channel = 0; channel < params.inspected.channels; channel += 1) {
+      if (
+        Math.abs(
+          params.inspected.raw[leftIndex + channel] - params.inspected.raw[rightIndex + channel],
+        ) > colorTolerance
+      ) {
+        mismatched = true;
+        break;
+      }
+    }
+
+    if (mismatched) {
+      mismatches += 1;
+    }
+  }
+
+  return mismatches / leftLength;
+}
+
+function createEdgeSignature(params: {
+  inspected: InspectedImage;
+  startX: number;
+  startY: number;
+  cellWidth: number;
+  cellHeight: number;
+  edge: Edge;
+  colorTolerance: number;
+}): string {
+  const length = edgeLength(params.edge, params.cellWidth, params.cellHeight);
+  const step = Math.max(1, Math.round(params.colorTolerance) + 1);
+  const segments: string[] = [];
+
+  for (let offset = 0; offset < length; offset += 1) {
+    const index = resolveEdgePixelIndex({
+      inspected: params.inspected,
+      startX: params.startX,
+      startY: params.startY,
+      cellWidth: params.cellWidth,
+      cellHeight: params.cellHeight,
+      edge: params.edge,
+      offset,
+    });
+    for (let channel = 0; channel < params.inspected.channels; channel += 1) {
+      const quantized = Math.floor(params.inspected.raw[index + channel] / step);
+      segments.push(quantized.toString(16).padStart(2, "0"));
+    }
+  }
+
+  return segments.join("");
+}
+
+function edgeLength(edge: Edge, cellWidth: number, cellHeight: number): number {
+  if (edge === "left" || edge === "right") {
+    return cellHeight;
+  }
+  return cellWidth;
+}
+
+function resolveEdgePixelIndex(params: {
+  inspected: InspectedImage;
+  startX: number;
+  startY: number;
+  cellWidth: number;
+  cellHeight: number;
+  edge: Edge;
+  offset: number;
+}): number {
+  const x =
+    params.edge === "left"
+      ? params.startX
+      : params.edge === "right"
+        ? params.startX + params.cellWidth - 1
+        : params.startX + params.offset;
+  const y =
+    params.edge === "top"
+      ? params.startY
+      : params.edge === "bottom"
+        ? params.startY + params.cellHeight - 1
+        : params.startY + params.offset;
+  return (y * params.inspected.width + x) * params.inspected.channels;
 }
 
 function collectDistinctColors(inspected: InspectedImage): Set<number> {
@@ -525,6 +864,40 @@ export async function evaluateImageAcceptance(
             imagePath,
             message: `Wrap-grid seam score ${seamScore.toFixed(2)} exceeds threshold ${threshold.toFixed(2)}.`,
           });
+        }
+      }
+
+      const topology = target.wrapGrid.topology;
+      if (topology) {
+        const threshold = topology.maxMismatchRatio ?? 0;
+        const colorTolerance = topology.colorTolerance ?? 0;
+        const topologyResult = evaluateWrapGridTopology({
+          inspected,
+          columns,
+          rows,
+          mode: topology.mode,
+          colorTolerance,
+        });
+        if (topologyResult) {
+          report.metrics = {
+            ...report.metrics,
+            wrapGridTopologyComparisons: topologyResult.comparisons,
+            wrapGridTopologyMismatchRatio: topologyResult.mismatchRatio,
+            wrapGridTopologyThreshold: threshold,
+            wrapGridTopologyColorTolerance: colorTolerance,
+          };
+
+          if (topologyResult.mismatchRatio > threshold) {
+            report.issues.push({
+              level: "error",
+              code: resolveWrapGridTopologyIssueCode(topologyResult.mode),
+              targetId: target.id,
+              imagePath,
+              message: `Wrap-grid topology (${topologyResult.mode}) mismatch ratio ${topologyResult.mismatchRatio.toFixed(
+                4,
+              )} exceeds threshold ${threshold.toFixed(4)}.`,
+            });
+          }
         }
       }
     }

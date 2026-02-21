@@ -229,6 +229,7 @@ export function normalizeWrapGridPolicy(
     wrapGrid.seamThreshold ?? target.seamThreshold ?? evalProfile.hardGates?.seamThreshold;
   const seamStripPx =
     wrapGrid.seamStripPx ?? target.seamStripPx ?? evalProfile.hardGates?.seamStripPx;
+  const topology = wrapGrid.topology;
 
   return {
     columns: Math.max(1, Math.round(wrapGrid.columns)),
@@ -236,6 +237,19 @@ export function normalizeWrapGridPolicy(
     ...(typeof seamThreshold === "number" ? { seamThreshold } : {}),
     ...(typeof seamStripPx === "number"
       ? { seamStripPx: Math.max(1, Math.round(seamStripPx)) }
+      : {}),
+    ...(topology
+      ? {
+          topology: {
+            mode: topology.mode,
+            ...(typeof topology.maxMismatchRatio === "number"
+              ? { maxMismatchRatio: Math.max(0, Math.min(1, topology.maxMismatchRatio)) }
+              : {}),
+            ...(typeof topology.colorTolerance === "number"
+              ? { colorTolerance: Math.max(0, Math.min(255, Math.round(topology.colorTolerance))) }
+              : {}),
+          },
+        }
       : {}),
   };
 }

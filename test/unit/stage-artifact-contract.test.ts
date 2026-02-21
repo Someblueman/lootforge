@@ -351,6 +351,12 @@ describe("stage artifact contracts", () => {
             out: "hero.png",
             imagePath: "/tmp/out/assets/imagegen/processed/images/hero.png",
             exists: true,
+            metrics: {
+              wrapGridTopologyComparisons: 8,
+              wrapGridTopologyMismatchRatio: 0.125,
+              wrapGridTopologyThreshold: 0.1,
+              wrapGridTopologyColorTolerance: 4,
+            },
             issues: [
               {
                 level: "error",
@@ -406,6 +412,8 @@ describe("stage artifact contracts", () => {
                 comparisons: 3,
                 maxSilhouetteDrift: 0.12,
                 maxAnchorDrift: 0.08,
+                maxIdentityDrift: 0.2,
+                maxPoseDrift: 0.3,
               },
             },
           },

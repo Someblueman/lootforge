@@ -46,6 +46,9 @@ Recent completion (2026-02-21):
   - added stage-weighted cost model utilities for run-level cost-per-approved analysis,
   - added integration benchmark coverage proving reduced cost-per-approved at equivalent acceptance using coarse-to-fine promotion,
   - added `npm run benchmark:coarse-to-fine` script to compare baseline/coarse provenance runs.
+- Implemented additional 2D visual QA gates for topology and animation drift:
+  - added wrap-grid topology modes (`self`, `one-to-one`, `many-to-many`) with explicit mismatch thresholds and eval diagnostics independent from seam metrics,
+  - added spritesheet continuity hard-gates for identity drift and pose drift (`spritesheetIdentityDriftMax`, `spritesheetPoseDriftMax`) with deterministic pack-invariant metrics and violations.
 
 ## P0 (Immediate: `0.3.0`)
 
@@ -55,8 +58,8 @@ Recent completion (2026-02-21):
 - **Why now:** Remaining visual QA gaps are still a source of production-quality drift.
 - **Acceptance criteria:**
   - Visual style-bible policy checks are machine-checkable (line/shading/UI geometry) with explicit validate/eval diagnostics.
-  - Sprite identity and optional pose adherence checks can score/reject animation-frame drift.
-  - Tile QA validates topology rules (self/one-to-one/many-to-many adjacency) separately from seam metrics.
+  - Sprite identity and optional pose adherence checks can score/reject animation-frame drift. (implemented 2026-02-21)
+  - Tile QA validates topology rules (self/one-to-one/many-to-many adjacency) separately from seam metrics. (implemented 2026-02-21)
   - Layered export and matting-assisted alpha QA are covered by deterministic artifact contracts and eval diagnostics.
 
 ## P1 (Next: `0.4.0`)

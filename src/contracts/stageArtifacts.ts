@@ -165,6 +165,8 @@ const plannedTargetSchema = z.object({
   packTextureBudgetMB: z.number().positive().optional(),
   spritesheetSilhouetteDriftMax: z.number().min(0).max(1).optional(),
   spritesheetAnchorDriftMax: z.number().min(0).max(1).optional(),
+  spritesheetIdentityDriftMax: z.number().min(0).max(1).optional(),
+  spritesheetPoseDriftMax: z.number().min(0).max(1).optional(),
   seamHeal: z
     .object({
       enabled: z.boolean().optional(),
@@ -178,6 +180,13 @@ const plannedTargetSchema = z.object({
       rows: z.number().int().positive(),
       seamThreshold: z.number().optional(),
       seamStripPx: z.number().int().positive().optional(),
+      topology: z
+        .object({
+          mode: z.enum(["self", "one-to-one", "many-to-many"]),
+          maxMismatchRatio: z.number().min(0).max(1).optional(),
+          colorTolerance: z.number().int().min(0).max(255).optional(),
+        })
+        .optional(),
     })
     .optional(),
   palette: PalettePolicyBaseSchema.optional(),
@@ -284,6 +293,8 @@ const packInvariantSummarySchema = z.object({
             comparisons: z.number().int().min(0),
             maxSilhouetteDrift: z.number(),
             maxAnchorDrift: z.number(),
+            maxIdentityDrift: z.number().optional(),
+            maxPoseDrift: z.number().optional(),
           }),
         )
         .optional(),
@@ -434,6 +445,10 @@ const stageArtifactSchemas = {
             wrapGridRows: z.number().optional(),
             wrapGridSeamScore: z.number().optional(),
             wrapGridSeamStripPx: z.number().optional(),
+            wrapGridTopologyComparisons: z.number().optional(),
+            wrapGridTopologyMismatchRatio: z.number().optional(),
+            wrapGridTopologyThreshold: z.number().optional(),
+            wrapGridTopologyColorTolerance: z.number().optional(),
             paletteCompliance: z.number().optional(),
             distinctColors: z.number().optional(),
             alphaBoundaryPixels: z.number().optional(),

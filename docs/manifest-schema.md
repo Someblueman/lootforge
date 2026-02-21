@@ -41,7 +41,7 @@ Manifest policy coverage gate:
   - `styleReferenceFrom[]?` (target-id style-reference chain policy)
 - `evaluationProfiles[]` (required, at least one)
   - `id`
-  - `hardGates?`: `{ requireAlpha?, maxFileSizeKB?, seamThreshold?, seamStripPx?, paletteComplianceMin?, alphaHaloRiskMax?, alphaStrayNoiseMax?, alphaEdgeSharpnessMin?, packTextureBudgetMB?, spritesheetSilhouetteDriftMax?, spritesheetAnchorDriftMax? }`
+  - `hardGates?`: `{ requireAlpha?, maxFileSizeKB?, seamThreshold?, seamStripPx?, paletteComplianceMin?, alphaHaloRiskMax?, alphaStrayNoiseMax?, alphaEdgeSharpnessMin?, packTextureBudgetMB?, spritesheetSilhouetteDriftMax?, spritesheetAnchorDriftMax?, spritesheetIdentityDriftMax?, spritesheetPoseDriftMax? }`
   - `consistencyGroupScoring?`: `{ warningThreshold?, penaltyThreshold?, penaltyWeight? }`
     - `warningThreshold`: normalized drift score threshold for group-level warning signals
     - `penaltyThreshold`: normalized drift score threshold where ranking penalties activate
@@ -82,7 +82,9 @@ Optional quality controls:
 - `scoringProfile?`: profile id from `scoringProfiles[]` (falls back to `evaluationProfileId` lookup)
 - `tileable`, `seamThreshold`, `seamStripPx`
 - `seamHeal?`: `{ enabled?, stripPx?, strength? }` (optional edge blending pass for tileable targets)
-- `wrapGrid?`: `{ columns, rows, seamThreshold?, seamStripPx? }` (per-cell wrap validation gates)
+- `wrapGrid?`: `{ columns, rows, seamThreshold?, seamStripPx?, topology? }` (per-cell wrap validation gates)
+  - `topology?`: `{ mode, maxMismatchRatio?, colorTolerance? }`
+  - `mode`: `self|one-to-one|many-to-many` adjacency validation, evaluated independently from seam score
 
 Generation + processing:
 
@@ -123,6 +125,8 @@ Generation + processing:
   - `packTextureBudgetMB` (`>0`, optional profile-level uncompressed texture budget)
   - `spritesheetSilhouetteDriftMax` (`0..1`, optional max adjacent-frame silhouette drift)
   - `spritesheetAnchorDriftMax` (`0..1`, optional max adjacent-frame anchor drift)
+  - `spritesheetIdentityDriftMax` (`0..1`, optional max adjacent-frame visual identity drift)
+  - `spritesheetPoseDriftMax` (`0..1`, optional max adjacent-frame pose/orientation drift)
 - consistency-group drift controls can be configured in `evaluationProfiles[].consistencyGroupScoring` and are normalized onto each planned target:
   - `warningThreshold` (`>0`, optional warning trigger for aggregate group diagnostics)
   - `penaltyThreshold` (`>0`, optional threshold for deterministic ranking penalty)
@@ -152,7 +156,7 @@ Pack invariants enforced during acceptance/eval:
 
 - runtime output uniqueness across non-catalog targets (case-insensitive normalized path)
 - spritesheet sheet/frame family and atlas-group integrity checks
-- continuity metrics per animation (`maxSilhouetteDrift`, `maxAnchorDrift`) with optional hard-gate thresholds
+- continuity metrics per animation (`maxSilhouetteDrift`, `maxAnchorDrift`, `maxIdentityDrift`, `maxPoseDrift`) with optional hard-gate thresholds
 - optional profile texture budget gate using estimated uncompressed bytes (`width * height * 4`)
 
 ## Example (minimal sprite)

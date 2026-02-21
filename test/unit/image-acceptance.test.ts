@@ -50,6 +50,26 @@ async function writeWrapGridSample(filePath: string, width: number, height: numb
   await sharp(raw, { raw: { width, height, channels } }).png().toFile(filePath);
 }
 
+async function writeUniformWrapGridSample(
+  filePath: string,
+  width: number,
+  height: number,
+  color: [number, number, number] = [120, 120, 120],
+): Promise<void> {
+  const channels = 4;
+  const raw = Buffer.alloc(width * height * channels, 0);
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const index = (y * width + x) * channels;
+      raw[index] = color[0];
+      raw[index + 1] = color[1];
+      raw[index + 2] = color[2];
+      raw[index + 3] = 255;
+    }
+  }
+  await sharp(raw, { raw: { width, height, channels } }).png().toFile(filePath);
+}
+
 async function writeBoundaryArtifactSample(filePath: string): Promise<void> {
   const width = 64;
   const height = 64;
@@ -92,6 +112,9 @@ async function writeSpriteFrameSample(params: {
   filePath: string;
   offsetX?: number;
   offsetY?: number;
+  rectWidth?: number;
+  rectHeight?: number;
+  color?: [number, number, number];
 }): Promise<void> {
   const width = 64;
   const height = 64;
@@ -99,15 +122,16 @@ async function writeSpriteFrameSample(params: {
   const raw = Buffer.alloc(width * height * channels, 0);
   const startX = 18 + (params.offsetX ?? 0);
   const startY = 18 + (params.offsetY ?? 0);
-  const endX = Math.min(width - 1, startX + 20);
-  const endY = Math.min(height - 1, startY + 20);
+  const endX = Math.min(width - 1, startX + (params.rectWidth ?? 20));
+  const endY = Math.min(height - 1, startY + (params.rectHeight ?? 20));
+  const color = params.color ?? [220, 220, 220];
 
   for (let y = Math.max(0, startY); y < endY; y += 1) {
     for (let x = Math.max(0, startX); x < endX; x += 1) {
       const index = (y * width + x) * channels;
-      raw[index] = 220;
-      raw[index + 1] = 220;
-      raw[index + 2] = 220;
+      raw[index] = color[0];
+      raw[index + 1] = color[1];
+      raw[index + 2] = color[2];
       raw[index + 3] = 255;
     }
   }
@@ -244,6 +268,141 @@ describe("image acceptance", () => {
     );
 
     expect(item.issues.some((issue) => issue.code === "wrap_grid_seam_exceeded")).toBe(true);
+  });
+
+  it("reports wrap-grid self-topology mismatches separately from seam metrics", async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "lootforge-wrap-grid-topology-self-"));
+    await mkdir(tempDir, { recursive: true });
+    const imagePath = path.join(tempDir, "hero.png");
+    await writeWrapGridSample(imagePath, 8, 4);
+
+    const item = await evaluateImageAcceptance(
+      makeTarget({
+        acceptance: {
+          size: "8x4",
+          alpha: false,
+          maxFileSizeKB: 64,
+        },
+        runtimeSpec: {
+          alphaRequired: false,
+        },
+        wrapGrid: {
+          columns: 2,
+          rows: 1,
+          topology: {
+            mode: "self",
+            maxMismatchRatio: 0.1,
+          },
+        },
+      }),
+      tempDir,
+    );
+
+    expect(item.metrics?.wrapGridTopologyComparisons).toBeGreaterThan(0);
+    expect(item.issues.some((issue) => issue.code === "wrap_grid_topology_self_exceeded")).toBe(
+      true,
+    );
+  });
+
+  it("reports wrap-grid one-to-one topology mismatches", async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "lootforge-wrap-grid-topology-pairs-"));
+    await mkdir(tempDir, { recursive: true });
+    const imagePath = path.join(tempDir, "hero.png");
+    await writeWrapGridSample(imagePath, 8, 4);
+
+    const item = await evaluateImageAcceptance(
+      makeTarget({
+        acceptance: {
+          size: "8x4",
+          alpha: false,
+          maxFileSizeKB: 64,
+        },
+        runtimeSpec: {
+          alphaRequired: false,
+        },
+        wrapGrid: {
+          columns: 2,
+          rows: 1,
+          topology: {
+            mode: "one-to-one",
+            maxMismatchRatio: 0.1,
+          },
+        },
+      }),
+      tempDir,
+    );
+
+    expect(item.issues.some((issue) => issue.code === "wrap_grid_topology_pair_exceeded")).toBe(
+      true,
+    );
+  });
+
+  it("reports wrap-grid many-to-many topology compatibility mismatches", async () => {
+    const tempDir = await mkdtemp(
+      path.join(os.tmpdir(), "lootforge-wrap-grid-topology-compatibility-"),
+    );
+    await mkdir(tempDir, { recursive: true });
+    const imagePath = path.join(tempDir, "hero.png");
+    await writeWrapGridSample(imagePath, 8, 4);
+
+    const item = await evaluateImageAcceptance(
+      makeTarget({
+        acceptance: {
+          size: "8x4",
+          alpha: false,
+          maxFileSizeKB: 64,
+        },
+        runtimeSpec: {
+          alphaRequired: false,
+        },
+        wrapGrid: {
+          columns: 2,
+          rows: 1,
+          topology: {
+            mode: "many-to-many",
+            maxMismatchRatio: 0.1,
+          },
+        },
+      }),
+      tempDir,
+    );
+
+    expect(
+      item.issues.some((issue) => issue.code === "wrap_grid_topology_compatibility_exceeded"),
+    ).toBe(true);
+  });
+
+  it("passes wrap-grid topology checks when mismatch ratio stays under threshold", async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "lootforge-wrap-grid-topology-pass-"));
+    await mkdir(tempDir, { recursive: true });
+    const imagePath = path.join(tempDir, "hero.png");
+    await writeUniformWrapGridSample(imagePath, 8, 4);
+
+    const item = await evaluateImageAcceptance(
+      makeTarget({
+        acceptance: {
+          size: "8x4",
+          alpha: false,
+          maxFileSizeKB: 64,
+        },
+        runtimeSpec: {
+          alphaRequired: false,
+        },
+        wrapGrid: {
+          columns: 2,
+          rows: 1,
+          topology: {
+            mode: "many-to-many",
+            maxMismatchRatio: 0,
+          },
+        },
+      }),
+      tempDir,
+    );
+
+    expect(
+      item.issues.some((issue) => issue.code === "wrap_grid_topology_compatibility_exceeded"),
+    ).toBe(false);
   });
 
   it("reports wrap-grid size mismatches", async () => {
@@ -524,5 +683,102 @@ describe("image acceptance", () => {
     expect(
       report.items[0]?.issues.some((issue) => issue.code === "pack_texture_budget_exceeded"),
     ).toBe(true);
+  });
+
+  it("reports spritesheet identity and pose drift violations", async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "lootforge-pack-identity-pose-"));
+    await mkdir(path.join(tempDir, "__frames"), { recursive: true });
+
+    await writeSpriteFrameSample({
+      filePath: path.join(tempDir, "__frames", "hero_walk_00.png"),
+      color: [220, 40, 40],
+      rectWidth: 24,
+      rectHeight: 10,
+    });
+    await writeSpriteFrameSample({
+      filePath: path.join(tempDir, "__frames", "hero_walk_01.png"),
+      color: [40, 220, 40],
+      rectWidth: 10,
+      rectHeight: 24,
+    });
+    await writeSpriteFrameSample({ filePath: path.join(tempDir, "hero-sheet.png") });
+
+    const report = await runImageAcceptanceChecks({
+      targets: [
+        makeTarget({
+          id: "hero.walk.0",
+          out: "__frames/hero_walk_00.png",
+          atlasGroup: "actors",
+          catalogDisabled: true,
+          evaluationProfileId: "sprite-quality",
+          spritesheetSilhouetteDriftMax: 1,
+          spritesheetAnchorDriftMax: 1,
+          spritesheetIdentityDriftMax: 0.05,
+          spritesheetPoseDriftMax: 0.2,
+          spritesheet: {
+            sheetTargetId: "hero.sheet",
+            animationName: "walk",
+            frameIndex: 0,
+            frameCount: 2,
+            pivot: { x: 0.5, y: 0.5 },
+          },
+        }),
+        makeTarget({
+          id: "hero.walk.1",
+          out: "__frames/hero_walk_01.png",
+          atlasGroup: "actors",
+          catalogDisabled: true,
+          evaluationProfileId: "sprite-quality",
+          spritesheetSilhouetteDriftMax: 1,
+          spritesheetAnchorDriftMax: 1,
+          spritesheetIdentityDriftMax: 0.05,
+          spritesheetPoseDriftMax: 0.2,
+          spritesheet: {
+            sheetTargetId: "hero.sheet",
+            animationName: "walk",
+            frameIndex: 1,
+            frameCount: 2,
+            pivot: { x: 0.5, y: 0.5 },
+          },
+        }),
+        makeTarget({
+          id: "hero.sheet",
+          out: "hero-sheet.png",
+          atlasGroup: "actors",
+          evaluationProfileId: "sprite-quality",
+          spritesheetSilhouetteDriftMax: 1,
+          spritesheetAnchorDriftMax: 1,
+          spritesheetIdentityDriftMax: 0.05,
+          spritesheetPoseDriftMax: 0.2,
+          generationDisabled: true,
+          spritesheet: {
+            sheetTargetId: "hero.sheet",
+            isSheet: true,
+            animations: [{ name: "walk", count: 2, pivot: { x: 0.5, y: 0.5 } }],
+          },
+        }),
+      ],
+      imagesDir: tempDir,
+      strict: false,
+    });
+
+    expect(
+      report.packInvariants?.issues.some(
+        (issue) => issue.code === "spritesheet_identity_drift_exceeded",
+      ),
+    ).toBe(true);
+    expect(
+      report.packInvariants?.issues.some(
+        (issue) => issue.code === "spritesheet_pose_drift_exceeded",
+      ),
+    ).toBe(true);
+    expect(
+      report.packInvariants?.metrics?.spritesheetContinuityByAnimation?.["hero.sheet:walk"]
+        ?.maxIdentityDrift,
+    ).toBeGreaterThan(0);
+    expect(
+      report.packInvariants?.metrics?.spritesheetContinuityByAnimation?.["hero.sheet:walk"]
+        ?.maxPoseDrift,
+    ).toBeGreaterThan(0);
   });
 });

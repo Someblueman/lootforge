@@ -491,6 +491,11 @@ describe("manifest normalization", () => {
           wrapGrid: {
             columns: 4,
             rows: 2,
+            topology: {
+              mode: "many-to-many",
+              maxMismatchRatio: 0.1,
+              colorTolerance: 8,
+            },
           },
           acceptance: {
             ...BASE_MANIFEST.targets[0].acceptance,
@@ -511,6 +516,11 @@ describe("manifest normalization", () => {
       rows: 2,
       seamThreshold: 10,
       seamStripPx: 3,
+      topology: {
+        mode: "many-to-many",
+        maxMismatchRatio: 0.1,
+        colorTolerance: 8,
+      },
     });
   });
 
@@ -528,6 +538,8 @@ describe("manifest normalization", () => {
             packTextureBudgetMB: 32,
             spritesheetSilhouetteDriftMax: 0.2,
             spritesheetAnchorDriftMax: 0.15,
+            spritesheetIdentityDriftMax: 0.25,
+            spritesheetPoseDriftMax: 0.4,
           },
         },
       ],
@@ -540,6 +552,8 @@ describe("manifest normalization", () => {
     expect(artifacts.targets[0].packTextureBudgetMB).toBe(32);
     expect(artifacts.targets[0].spritesheetSilhouetteDriftMax).toBe(0.2);
     expect(artifacts.targets[0].spritesheetAnchorDriftMax).toBe(0.15);
+    expect(artifacts.targets[0].spritesheetIdentityDriftMax).toBe(0.25);
+    expect(artifacts.targets[0].spritesheetPoseDriftMax).toBe(0.4);
   });
 
   it("rejects invalid pack-level hard-gate values", () => {
@@ -553,6 +567,8 @@ describe("manifest normalization", () => {
             packTextureBudgetMB: -1,
             spritesheetSilhouetteDriftMax: 1.2,
             spritesheetAnchorDriftMax: -0.1,
+            spritesheetIdentityDriftMax: 1.4,
+            spritesheetPoseDriftMax: -0.2,
           },
         },
       ],
@@ -570,7 +586,9 @@ describe("manifest normalization", () => {
         (issue) =>
           issue.path === "evaluationProfiles[0].hardGates.packTextureBudgetMB" ||
           issue.path === "evaluationProfiles[0].hardGates.spritesheetSilhouetteDriftMax" ||
-          issue.path === "evaluationProfiles[0].hardGates.spritesheetAnchorDriftMax",
+          issue.path === "evaluationProfiles[0].hardGates.spritesheetAnchorDriftMax" ||
+          issue.path === "evaluationProfiles[0].hardGates.spritesheetIdentityDriftMax" ||
+          issue.path === "evaluationProfiles[0].hardGates.spritesheetPoseDriftMax",
       ),
     ).toBe(true);
   });

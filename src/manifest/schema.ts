@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { TARGET_KINDS } from "../providers/types.js";
+import { TARGET_KINDS, WRAP_GRID_TOPOLOGY_MODES } from "../providers/types.js";
 import {
   AcceptanceSchema,
   AgenticRetryBaseSchema,
@@ -193,6 +193,13 @@ export const ManifestWrapGridSchema = z.object({
   rows: z.number().int().min(1).max(128),
   seamThreshold: z.number().min(0).max(255).optional(),
   seamStripPx: z.number().int().min(1).max(64).optional(),
+  topology: z
+    .object({
+      mode: z.enum(WRAP_GRID_TOPOLOGY_MODES),
+      maxMismatchRatio: z.number().min(0).max(1).optional(),
+      colorTolerance: z.number().int().min(0).max(255).optional(),
+    })
+    .optional(),
 });
 
 export const ManifestTargetSchema = z
@@ -342,6 +349,8 @@ export const ManifestEvaluationProfileSchema = z.object({
       packTextureBudgetMB: z.number().positive().optional(),
       spritesheetSilhouetteDriftMax: z.number().min(0).max(1).optional(),
       spritesheetAnchorDriftMax: z.number().min(0).max(1).optional(),
+      spritesheetIdentityDriftMax: z.number().min(0).max(1).optional(),
+      spritesheetPoseDriftMax: z.number().min(0).max(1).optional(),
     })
     .optional(),
   consistencyGroupScoring: z

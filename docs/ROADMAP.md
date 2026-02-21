@@ -322,6 +322,9 @@ Completed 2026-02-20 in this release track:
   - added stage-weighted run-cost benchmarking utilities and a comparison script (`npm run benchmark:coarse-to-fine`),
   - added integration benchmark coverage showing reduced cost-per-approved at equivalent acceptance for coarse-to-fine promotion flows,
   - retained promotion/discarded candidate provenance records as benchmark input artifacts.
+- Add deterministic topology and animation-drift QA follow-ups:
+  - added wrap-grid topology validation modes (`self`, `one-to-one`, `many-to-many`) with explicit mismatch-threshold diagnostics separate from seam scoring,
+  - added spritesheet continuity hard-gates for identity drift and pose drift with per-animation metrics (`maxIdentityDrift`, `maxPoseDrift`) in acceptance/eval artifacts.
 
 Remaining queued items:
 
@@ -331,11 +334,7 @@ Remaining queued items:
   - extend style constraints beyond palette (line weight, shading rules, UI geometry constraints),
   - enforce policy compliance in validate/eval with explicit per-target diagnostics.
 - Add sprite identity + pose adherence QA modules:
-  - add frame-to-frame identity drift scoring for animation families,
-  - add optional pose-target checks and rejection reasons for frame candidates.
-- Expand tile QA from seam-only checks to topology constraints:
-  - validate self/one-to-one/many-to-many adjacency compatibility from explicit tile rules,
-  - report topology violations separately from texture seam metrics for map assembly reliability.
+  - extend beyond current drift thresholds with optional target-specific pose directives when prompts require strict choreography.
 - Add layered export + matting-assisted alpha QA pipeline:
   - add first-class layered artifacts for sprite/UI/VFX workflows with deterministic export contracts,
   - add matting-derived transparency QA checks (halo/fringe/mask consistency) in eval/review diagnostics.

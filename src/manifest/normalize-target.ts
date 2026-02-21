@@ -305,6 +305,8 @@ export function normalizeTargetForGeneration(params: {
     packTextureBudgetMB: params.evalProfile.hardGates?.packTextureBudgetMB,
     spritesheetSilhouetteDriftMax: params.evalProfile.hardGates?.spritesheetSilhouetteDriftMax,
     spritesheetAnchorDriftMax: params.evalProfile.hardGates?.spritesheetAnchorDriftMax,
+    spritesheetIdentityDriftMax: params.evalProfile.hardGates?.spritesheetIdentityDriftMax,
+    spritesheetPoseDriftMax: params.evalProfile.hardGates?.spritesheetPoseDriftMax,
     ...(seamHeal ? { seamHeal } : {}),
     ...(wrapGrid ? { wrapGrid } : {}),
     ...(palette ? { palette } : {}),

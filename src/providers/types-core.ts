@@ -4,6 +4,7 @@ export const POST_PROCESS_ALGORITHMS = ["nearest", "lanczos3"] as const;
 export const TARGET_KINDS = ["sprite", "tile", "background", "effect", "spritesheet"] as const;
 export const CONTROL_MODES = ["canny", "depth", "openpose"] as const;
 export const GENERATION_MODES = ["text", "edit-first"] as const;
+export const WRAP_GRID_TOPOLOGY_MODES = ["self", "one-to-one", "many-to-many"] as const;
 
 export type ProviderName = (typeof PROVIDER_NAMES)[number];
 export type ProviderSelection = ProviderName | "auto";
@@ -19,6 +20,7 @@ export type NormalizedOutputFormat = "png" | "jpeg" | "webp";
 export type TargetKind = (typeof TARGET_KINDS)[number];
 export type ControlMode = (typeof CONTROL_MODES)[number];
 export type GenerationMode = (typeof GENERATION_MODES)[number];
+export type WrapGridTopologyMode = (typeof WRAP_GRID_TOPOLOGY_MODES)[number];
 export type PaletteMode = "exact" | "max-colors";
 
 export interface ProviderCapabilities {
@@ -259,6 +261,13 @@ export interface WrapGridPolicy {
   rows: number;
   seamThreshold?: number;
   seamStripPx?: number;
+  topology?: WrapGridTopologyPolicy;
+}
+
+export interface WrapGridTopologyPolicy {
+  mode: WrapGridTopologyMode;
+  maxMismatchRatio?: number;
+  colorTolerance?: number;
 }
 
 export interface PlannedTarget {
@@ -290,6 +299,8 @@ export interface PlannedTarget {
   packTextureBudgetMB?: number;
   spritesheetSilhouetteDriftMax?: number;
   spritesheetAnchorDriftMax?: number;
+  spritesheetIdentityDriftMax?: number;
+  spritesheetPoseDriftMax?: number;
   seamHeal?: SeamHealPolicy;
   wrapGrid?: WrapGridPolicy;
   palette?: PalettePolicy;

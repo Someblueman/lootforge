@@ -84,6 +84,8 @@ export interface ManifestEvaluationProfile {
     packTextureBudgetMB?: number;
     spritesheetSilhouetteDriftMax?: number;
     spritesheetAnchorDriftMax?: number;
+    spritesheetIdentityDriftMax?: number;
+    spritesheetPoseDriftMax?: number;
   };
   consistencyGroupScoring?: {
     warningThreshold?: number;

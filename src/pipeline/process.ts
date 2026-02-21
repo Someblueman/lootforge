@@ -498,21 +498,39 @@ async function processSingleTarget(params: {
     // stays deterministic by avoiding metadata passthrough.
   }
 
+  const usePaletteQuantization = typeof paletteColors === "number";
   const encodedMain = await sharp(outputBuffer)
     .png({
       compressionLevel: 9,
-      palette: typeof paletteColors === "number",
+      palette: usePaletteQuantization,
       colours: paletteColors,
       dither: quantizeConfig?.dither,
       effort: 8,
     })
     .toBuffer();
-  const decodedMain = await sharp(encodedMain, { failOn: "none" })
-    .ensureAlpha()
-    .raw()
-    .toBuffer({ resolveWithObject: true });
-  const mainRaw = decodedMain.data;
-  const mainRawInfo = decodedMain.info;
+
+  let mainRaw: Buffer;
+  let mainRawInfo: sharp.OutputInfo;
+
+  if (usePaletteQuantization) {
+    // Palette quantization changes pixel colors during PNG encode, so we must
+    // decode back to get the quantized raw pixel data for variant generation.
+    const decodedMain = await sharp(encodedMain, { failOn: "none" })
+      .ensureAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+    mainRaw = decodedMain.data;
+    mainRawInfo = decodedMain.info;
+  } else {
+    // No quantization: decode raw pixels directly from the pre-encode buffer,
+    // avoiding a wasteful decode of the compressed PNG.
+    const rawResult = await sharp(outputBuffer, { failOn: "none" })
+      .ensureAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+    mainRaw = rawResult.data;
+    mainRawInfo = rawResult.info;
+  }
 
   if (params.target.palette?.mode === "exact" && params.target.palette.strict === true) {
     const allowed = new Set(

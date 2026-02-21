@@ -10,14 +10,20 @@ import { startLootForgeService } from "../../src/service/server.js";
 const TINY_PNG_BASE64 =
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO5WcXwAAAAASUVORK5CYII=";
 
-async function startFakeLocalDiffusionService(): Promise<{
+async function startFakeLocalDiffusionService(options?: { delayMs?: number }): Promise<{
   baseUrl: string;
   close: () => Promise<void>;
 }> {
+  const delayMs = Math.max(0, options?.delayMs ?? 0);
   const server = createServer(async (req, res) => {
     if (req.method === "POST" && req.url === "/generate") {
       for await (const _chunk of req) {
         // drain request body
+      }
+      if (delayMs > 0) {
+        await new Promise<void>((resolve) => {
+          setTimeout(resolve, delayMs);
+        });
       }
       res.statusCode = 200;
       res.setHeader("content-type", "application/json; charset=utf-8");
@@ -65,6 +71,66 @@ async function closeServer(server: Server): Promise<void> {
     });
     server.closeAllConnections?.();
   });
+}
+
+function buildCanonicalGenerationRequest(params: {
+  requestId: string;
+  outDir: string;
+  localBaseUrl: string;
+  targetId: string;
+}): Record<string, unknown> {
+  return {
+    requestId: params.requestId,
+    request: {
+      outDir: params.outDir,
+      provider: "auto",
+      manifest: {
+        version: "next",
+        pack: {
+          id: `svc-pack-${params.targetId}`,
+          version: "0.1.0",
+        },
+        providers: {
+          default: "local",
+          local: {
+            model: "sdxl-controlnet",
+            baseUrl: params.localBaseUrl,
+          },
+        },
+        styleKits: [
+          {
+            id: "default-kit",
+            rulesPath: "style/default/style.md",
+            referenceImages: [],
+            lightingModel: "flat",
+          },
+        ],
+        consistencyGroups: [
+          {
+            id: "default-group",
+            styleKitId: "default-kit",
+            referenceImages: [],
+          },
+        ],
+        evaluationProfiles: [{ id: "quality" }],
+        targets: [
+          {
+            id: params.targetId,
+            kind: "sprite",
+            out: `${params.targetId}.png`,
+            styleKitId: "default-kit",
+            consistencyGroup: "default-group",
+            evaluationProfileId: "quality",
+            prompt: "hero",
+            generationPolicy: {
+              outputFormat: "png",
+              background: "transparent",
+            },
+          },
+        ],
+      },
+    },
+  };
 }
 
 describe("service mode", () => {
@@ -317,58 +383,14 @@ describe("service mode", () => {
         headers: {
           "content-type": "application/json",
         },
-        body: JSON.stringify({
-          requestId: "req-canonical-1",
-          request: {
+        body: JSON.stringify(
+          buildCanonicalGenerationRequest({
+            requestId: "req-canonical-1",
             outDir: workspace,
-            provider: "auto",
-            manifest: {
-              version: "next",
-              pack: {
-                id: "svc-pack",
-                version: "0.1.0",
-              },
-              providers: {
-                default: "local",
-                local: {
-                  model: "sdxl-controlnet",
-                  baseUrl: fakeLocal.baseUrl,
-                },
-              },
-              styleKits: [
-                {
-                  id: "default-kit",
-                  rulesPath: "style/default/style.md",
-                  referenceImages: [],
-                  lightingModel: "flat",
-                },
-              ],
-              consistencyGroups: [
-                {
-                  id: "default-group",
-                  styleKitId: "default-kit",
-                  referenceImages: [],
-                },
-              ],
-              evaluationProfiles: [{ id: "quality" }],
-              targets: [
-                {
-                  id: "svc-hero",
-                  kind: "sprite",
-                  out: "svc-hero.png",
-                  styleKitId: "default-kit",
-                  consistencyGroup: "default-group",
-                  evaluationProfileId: "quality",
-                  prompt: "hero",
-                  generationPolicy: {
-                    outputFormat: "png",
-                    background: "transparent",
-                  },
-                },
-              ],
-            },
-          },
-        }),
+            localBaseUrl: fakeLocal.baseUrl,
+            targetId: "svc-hero",
+          }),
+        ),
       });
       const canonicalPayload = (await canonicalResponse.json()) as {
         ok: boolean;
@@ -420,6 +442,80 @@ describe("service mode", () => {
       expect(canonicalBadResponse.status).toBe(400);
       expect(canonicalBadPayload.ok).toBe(false);
       expect(canonicalBadPayload.error?.code).toBe("invalid_canonical_generation_request");
+    } finally {
+      await Promise.all([service.close(), fakeLocal.close()]);
+    }
+  });
+
+  test("returns 429 when max active jobs is exceeded", async () => {
+    const tempRoot = await mkdtemp(path.join(os.tmpdir(), "lootforge-service-mode-busy-"));
+    const workspaceA = path.join(tempRoot, "workspace-a");
+    const workspaceB = path.join(tempRoot, "workspace-b");
+    const service = await startLootForgeService({
+      host: "127.0.0.1",
+      port: 0,
+      maxActiveJobs: 1,
+    });
+    const fakeLocal = await startFakeLocalDiffusionService({ delayMs: 300 });
+
+    try {
+      const firstRequest = fetch(`${service.baseUrl}/v1/generation/requests`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify(
+          buildCanonicalGenerationRequest({
+            requestId: "req-canonical-a",
+            outDir: workspaceA,
+            localBaseUrl: fakeLocal.baseUrl,
+            targetId: "svc-hero-a",
+          }),
+        ),
+      });
+
+      await new Promise<void>((resolve) => {
+        setTimeout(resolve, 25);
+      });
+
+      const secondRequest = fetch(`${service.baseUrl}/v1/generation/requests`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify(
+          buildCanonicalGenerationRequest({
+            requestId: "req-canonical-b",
+            outDir: workspaceB,
+            localBaseUrl: fakeLocal.baseUrl,
+            targetId: "svc-hero-b",
+          }),
+        ),
+      });
+
+      const [secondResponse, firstResponse] = await Promise.all([secondRequest, firstRequest]);
+      const secondPayload = (await secondResponse.json()) as {
+        ok: boolean;
+        operation?: string;
+        error?: {
+          code?: string;
+          message?: string;
+        };
+      };
+      const firstPayload = (await firstResponse.json()) as {
+        ok: boolean;
+        operation?: string;
+      };
+
+      expect(secondResponse.status).toBe(429);
+      expect(secondPayload.ok).toBe(false);
+      expect(secondPayload.operation).toBe("generation_request");
+      expect(secondPayload.error?.code).toBe("service_busy");
+      expect(typeof secondPayload.error?.message).toBe("string");
+
+      expect(firstResponse.status).toBe(200);
+      expect(firstPayload.ok).toBe(true);
+      expect(firstPayload.operation).toBe("generation_request");
     } finally {
       await Promise.all([service.close(), fakeLocal.close()]);
     }

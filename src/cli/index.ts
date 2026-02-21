@@ -114,7 +114,7 @@ export async function main(argv: string[]): Promise<number> {
     if (command === "serve") {
       const result = await runServeCommand(rest);
       process.stdout.write(
-        `Service mode listening on ${result.url} (API ${result.apiVersion})${result.defaultOutDir ? `, default out: ${result.defaultOutDir}` : ""}\n`,
+        `Service mode listening on ${result.url} (API ${result.apiVersion}, max active jobs: ${result.maxActiveJobs})${result.defaultOutDir ? `, default out: ${result.defaultOutDir}` : ""}\n`,
       );
       return 0;
     }
@@ -169,6 +169,7 @@ function writeUsage(stream: "stdout" | "stderr"): void {
       "  --runtimes <a,b,c>           Extra runtime manifests for package (phaser,pixi,unity)",
       "  --host <host>                Service bind host for serve (default 127.0.0.1)",
       "  --port <port>                Service bind port for serve (default 8744)",
+      "  --max-active-jobs <number>   Service max concurrent active tool jobs (default 2)",
       "",
     ].join("\n"),
   );

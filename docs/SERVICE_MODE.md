@@ -11,9 +11,11 @@ lootforge serve --host 127.0.0.1 --port 8744
 Optional defaults:
 
 - `--out <dir>`: default out directory injected when command payload omits `out`
+- `--max-active-jobs <number>`: max concurrent active tool executions before returning `429 service_busy` (default `2`)
 - `LOOTFORGE_SERVICE_HOST`
 - `LOOTFORGE_SERVICE_PORT`
 - `LOOTFORGE_SERVICE_OUT`
+- `LOOTFORGE_SERVICE_MAX_ACTIVE_JOBS`
 
 ## Endpoints (`v1`)
 
@@ -107,6 +109,20 @@ Failure:
     "code": "manifest_validation_failed",
     "message": "Manifest validation failed with 1 error(s).",
     "exitCode": 1
+  }
+}
+```
+
+Busy (`429`):
+
+```json
+{
+  "ok": false,
+  "apiVersion": "v1",
+  "tool": "generate",
+  "error": {
+    "code": "service_busy",
+    "message": "Service is busy (2/2 active jobs). Retry later."
   }
 }
 ```

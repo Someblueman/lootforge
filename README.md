@@ -366,6 +366,7 @@ Key flags:
 - `--host <host>` optional (default `127.0.0.1`)
 - `--port <port>` optional (default `8744`)
 - `--out <dir>` optional default output root used when request payload omits `out`
+- `--max-active-jobs <number>` optional concurrent active tool limit before returning `429 service_busy` (default `2`)
 
 Core endpoints:
 
@@ -375,6 +376,10 @@ Core endpoints:
 - `POST /v1/tools/:name`
 - `POST /v1/:name` (alias)
 - `POST /v1/generation/requests` (canonical request -> `plan` + `generate` mapping)
+
+Notes:
+
+- Service mode applies active-job backpressure and returns `429` with `error.code = "service_busy"` when at capacity.
 
 Example:
 

@@ -27,6 +27,7 @@ import { isRecord } from "../shared/typeGuards.js";
 export const SERVICE_API_VERSION = "v1";
 const API_PREFIX = `/${SERVICE_API_VERSION}`;
 const MAX_REQUEST_BODY_BYTES = 1024 * 1024;
+const DEFAULT_MAX_ACTIVE_JOBS = 2;
 
 type ServiceToolName =
   | "init"
@@ -79,6 +80,7 @@ export interface StartLootForgeServiceOptions {
   host: string;
   port: number;
   defaultOutDir?: string;
+  maxActiveJobs?: number;
   onListen?: (result: LootForgeService) => void;
 }
 
@@ -86,6 +88,7 @@ export interface LootForgeService {
   host: string;
   port: number;
   baseUrl: string;
+  maxActiveJobs: number;
   close: () => Promise<void>;
 }
 
@@ -104,6 +107,11 @@ class ServiceRequestError extends Error {
     this.status = options.status;
     this.code = options.code;
   }
+}
+
+interface ServiceExecutionState {
+  maxActiveJobs: number;
+  activeJobs: number;
 }
 
 const SERVICE_TOOLS: ServiceToolDefinition[] = [
@@ -259,8 +267,12 @@ export function getServiceToolDescriptors(): ServiceToolDescriptor[] {
 export async function startLootForgeService(
   options: StartLootForgeServiceOptions,
 ): Promise<LootForgeService> {
+  const executionState: ServiceExecutionState = {
+    maxActiveJobs: normalizeMaxActiveJobs(options.maxActiveJobs ?? DEFAULT_MAX_ACTIVE_JOBS),
+    activeJobs: 0,
+  };
   const server = createServer((req, res) => {
-    void handleRequest(req, res, options).catch((error: unknown) => {
+    void handleRequest(req, res, options, executionState).catch((error: unknown) => {
       console.error("Unhandled request error:", error);
       if (!res.headersSent) {
         res.statusCode = 500;
@@ -291,6 +303,7 @@ export async function startLootForgeService(
     host: options.host,
     port: boundPort,
     baseUrl: `http://${baseUrlHost}:${boundPort}`,
+    maxActiveJobs: executionState.maxActiveJobs,
     close: async () => {
       await closeServer(server);
     },
@@ -304,6 +317,7 @@ async function handleRequest(
   req: IncomingMessage,
   res: ServerResponse,
   options: StartLootForgeServiceOptions,
+  executionState: ServiceExecutionState,
 ): Promise<void> {
   const method = req.method ?? "GET";
   const requestUrl = new URL(req.url ?? "/", `http://${req.headers.host ?? "127.0.0.1"}`);
@@ -427,43 +441,58 @@ async function handleRequest(
   }
 
   if (method === "POST" && pathname === `${API_PREFIX}/generation/requests`) {
+    if (!tryAcquireExecutionSlot(executionState)) {
+      writeServiceBusyResponse(
+        res,
+        {
+          operation: "generation_request",
+        },
+        executionState,
+      );
+      return;
+    }
+
     try {
-      const body = await readJsonBody(req);
-      const result = await runCanonicalGenerationRequest(body, {
-        defaultOutDir: options.defaultOutDir,
-      });
-      writeJson(res, 200, {
-        ok: true,
-        apiVersion: SERVICE_API_VERSION,
-        operation: "generation_request",
-        result,
-      });
-    } catch (error) {
-      if (error instanceof CanonicalGenerationRequestError) {
-        writeJson(res, error.status, {
+      try {
+        const body = await readJsonBody(req);
+        const result = await runCanonicalGenerationRequest(body, {
+          defaultOutDir: options.defaultOutDir,
+        });
+        writeJson(res, 200, {
+          ok: true,
+          apiVersion: SERVICE_API_VERSION,
+          operation: "generation_request",
+          result,
+        });
+      } catch (error) {
+        if (error instanceof CanonicalGenerationRequestError) {
+          writeJson(res, error.status, {
+            ok: false,
+            apiVersion: SERVICE_API_VERSION,
+            operation: "generation_request",
+            error: {
+              code: error.code,
+              message: error.message,
+            },
+          });
+          return;
+        }
+
+        const status = error instanceof Error ? 422 : 500;
+        console.error(getErrorMessage(error));
+        writeJson(res, status, {
           ok: false,
           apiVersion: SERVICE_API_VERSION,
           operation: "generation_request",
           error: {
-            code: error.code,
-            message: error.message,
+            code: resolveErrorCode(error),
+            message: sanitizeErrorMessage(getErrorMessage(error)),
+            exitCode: getErrorExitCode(error, 1),
           },
         });
-        return;
       }
-
-      const status = error instanceof Error ? 422 : 500;
-      console.error(getErrorMessage(error));
-      writeJson(res, status, {
-        ok: false,
-        apiVersion: SERVICE_API_VERSION,
-        operation: "generation_request",
-        error: {
-          code: resolveErrorCode(error),
-          message: sanitizeErrorMessage(getErrorMessage(error)),
-          exitCode: getErrorExitCode(error, 1),
-        },
-      });
+    } finally {
+      releaseExecutionSlot(executionState);
     }
     return;
   }
@@ -507,44 +536,59 @@ async function handleRequest(
     return;
   }
 
+  if (!tryAcquireExecutionSlot(executionState)) {
+    writeServiceBusyResponse(
+      res,
+      {
+        tool: tool.name,
+      },
+      executionState,
+    );
+    return;
+  }
+
   try {
-    const body = await readJsonBody(req);
-    const payload = decodeToolExecutionPayload(body);
-    const argv = buildCommandArgv(tool, payload, options.defaultOutDir);
-    const result = await tool.run(argv);
-    writeJson(res, 200, {
-      ok: true,
-      apiVersion: SERVICE_API_VERSION,
-      tool: tool.name,
-      ...(payload.requestId !== undefined ? { requestId: payload.requestId } : {}),
-      result,
-    });
-  } catch (error) {
-    if (error instanceof ServiceRequestError) {
-      writeJson(res, error.status, {
+    try {
+      const body = await readJsonBody(req);
+      const payload = decodeToolExecutionPayload(body);
+      const argv = buildCommandArgv(tool, payload, options.defaultOutDir);
+      const result = await tool.run(argv);
+      writeJson(res, 200, {
+        ok: true,
+        apiVersion: SERVICE_API_VERSION,
+        tool: tool.name,
+        ...(payload.requestId !== undefined ? { requestId: payload.requestId } : {}),
+        result,
+      });
+    } catch (error) {
+      if (error instanceof ServiceRequestError) {
+        writeJson(res, error.status, {
+          ok: false,
+          apiVersion: SERVICE_API_VERSION,
+          tool: tool.name,
+          error: {
+            code: error.code,
+            message: error.message,
+          },
+        });
+        return;
+      }
+
+      const status = error instanceof Error ? 422 : 500;
+      console.error(getErrorMessage(error));
+      writeJson(res, status, {
         ok: false,
         apiVersion: SERVICE_API_VERSION,
         tool: tool.name,
         error: {
-          code: error.code,
-          message: error.message,
+          code: resolveErrorCode(error),
+          message: sanitizeErrorMessage(getErrorMessage(error)),
+          exitCode: getErrorExitCode(error, 1),
         },
       });
-      return;
     }
-
-    const status = error instanceof Error ? 422 : 500;
-    console.error(getErrorMessage(error));
-    writeJson(res, status, {
-      ok: false,
-      apiVersion: SERVICE_API_VERSION,
-      tool: tool.name,
-      error: {
-        code: resolveErrorCode(error),
-        message: sanitizeErrorMessage(getErrorMessage(error)),
-        exitCode: getErrorExitCode(error, 1),
-      },
-    });
+  } finally {
+    releaseExecutionSlot(executionState);
   }
 }
 
@@ -830,6 +874,51 @@ function resolveErrorCode(error: unknown): string {
     return String((error as { code?: string }).code);
   }
   return "tool_execution_failed";
+}
+
+function normalizeMaxActiveJobs(value: number): number {
+  if (!Number.isInteger(value) || value < 1) {
+    throw new Error(`Invalid maxActiveJobs value "${String(value)}". Use an integer >= 1.`);
+  }
+  return value;
+}
+
+function tryAcquireExecutionSlot(executionState: ServiceExecutionState): boolean {
+  if (executionState.activeJobs >= executionState.maxActiveJobs) {
+    return false;
+  }
+  executionState.activeJobs += 1;
+  return true;
+}
+
+function releaseExecutionSlot(executionState: ServiceExecutionState): void {
+  if (executionState.activeJobs <= 0) {
+    executionState.activeJobs = 0;
+    return;
+  }
+  executionState.activeJobs -= 1;
+}
+
+function writeServiceBusyResponse(
+  res: ServerResponse,
+  context:
+    | {
+        tool: ServiceToolName;
+      }
+    | {
+        operation: "generation_request";
+      },
+  executionState: ServiceExecutionState,
+): void {
+  writeJson(res, 429, {
+    ok: false,
+    apiVersion: SERVICE_API_VERSION,
+    ...context,
+    error: {
+      code: "service_busy",
+      message: `Service is busy (${executionState.activeJobs}/${executionState.maxActiveJobs} active jobs). Retry later.`,
+    },
+  });
 }
 
 async function closeServer(server: Server): Promise<void> {

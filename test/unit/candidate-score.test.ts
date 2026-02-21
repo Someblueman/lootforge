@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
@@ -314,6 +314,122 @@ describe("candidate scoring", () => {
       reason: "clean silhouette",
       evaluator: "command",
     });
+  });
+
+  it("skips soft adapters and VLM gates when explicitly disabled in scoring options", async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), "lootforge-candidate-score-skip-external-"));
+    await mkdir(dir, { recursive: true });
+
+    const flatPath = path.join(dir, "candidate-flat.png");
+    const noisyPath = path.join(dir, "candidate-noisy.png");
+    const clipScriptPath = path.join(dir, "clip-adapter.js");
+    const clipLogPath = path.join(dir, "clip-adapter.log");
+    const vlmScriptPath = path.join(dir, "vlm-gate.js");
+    const vlmLogPath = path.join(dir, "vlm-gate.log");
+
+    await sharp({
+      create: {
+        width: 64,
+        height: 64,
+        channels: 4,
+        background: { r: 220, g: 50, b: 50, alpha: 120 },
+      },
+    })
+      .png()
+      .toFile(flatPath);
+
+    const raw = Buffer.alloc(64 * 64 * 4);
+    for (let y = 0; y < 64; y += 1) {
+      for (let x = 0; x < 64; x += 1) {
+        const index = (y * 64 + x) * 4;
+        const v = (x + y) % 2 === 0 ? 255 : 0;
+        raw[index] = v;
+        raw[index + 1] = 255 - v;
+        raw[index + 2] = v;
+        raw[index + 3] = 255;
+      }
+    }
+    await sharp(raw, { raw: { width: 64, height: 64, channels: 4 } })
+      .png()
+      .toFile(noisyPath);
+
+    await writeFile(
+      clipScriptPath,
+      [
+        'const fs = require("node:fs");',
+        `const logPath = ${JSON.stringify(clipLogPath)};`,
+        'const payload = JSON.parse(fs.readFileSync(0, "utf8"));',
+        "fs.appendFileSync(logPath, `${payload.imagePath}\\n`);",
+        "process.stdout.write(JSON.stringify({ metrics: { alignment: 0.95 }, score: 300 }));",
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+
+    await writeFile(
+      vlmScriptPath,
+      [
+        'const fs = require("node:fs");',
+        `const logPath = ${JSON.stringify(vlmLogPath)};`,
+        'const payload = JSON.parse(fs.readFileSync(0, "utf8"));',
+        "fs.appendFileSync(logPath, `${payload.imagePath}\\n`);",
+        'process.stdout.write(JSON.stringify({ score: 0.5, reason: "deliberate fail" }));',
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+
+    await writeFile(clipLogPath, "", "utf8");
+    await writeFile(vlmLogPath, "", "utf8");
+
+    process.env.LOOTFORGE_ENABLE_CLIP_ADAPTER = "1";
+    process.env.LOOTFORGE_CLIP_ADAPTER_CMD = `${process.execPath} ${clipScriptPath}`;
+    process.env.LOOTFORGE_VLM_GATE_CMD = `${process.execPath} ${vlmScriptPath}`;
+
+    const target: PlannedTarget = {
+      id: "skip-external-target",
+      kind: "sprite",
+      out: "skip-external-target.png",
+      promptSpec: { primary: "skip external target" },
+      acceptance: {
+        size: "64x64",
+        alpha: true,
+        maxFileSizeKB: 256,
+      },
+      runtimeSpec: {
+        alphaRequired: true,
+      },
+      scoreWeights: {
+        clip: 3,
+      },
+      generationPolicy: {
+        outputFormat: "png",
+        background: "transparent",
+        vlmGate: {
+          threshold: 4,
+          rubric: "score composition",
+        },
+      },
+    };
+
+    const result = await scoreCandidateImages(target, [flatPath, noisyPath], {
+      outDir: dir,
+      includeSoftAdapters: false,
+      includeVlmGate: false,
+    });
+
+    expect(result.bestPath).toBe(noisyPath);
+    expect(result.scores.every((score) => score.vlm === undefined)).toBe(true);
+    expect(
+      result.scores.some((score) => (score.reasons ?? []).includes("vlm_gate_below_threshold")),
+    ).toBe(false);
+    expect(
+      result.scores.some((score) =>
+        Object.keys(score.components ?? {}).includes("clipAdapterScore"),
+      ),
+    ).toBe(false);
+    expect(await readFile(clipLogPath, "utf8")).toBe("");
+    expect(await readFile(vlmLogPath, "utf8")).toBe("");
   });
 
   it("rejects non-compliant candidates in strict exact palette mode", async () => {

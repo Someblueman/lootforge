@@ -53,14 +53,45 @@ describe("review pipeline", () => {
               },
             },
           },
+          consistencyGroupSummary: [
+            {
+              consistencyGroup: "hero-family",
+              targetCount: 2,
+              evaluatedTargetCount: 2,
+              warningTargetIds: ["hero-low"],
+              outlierTargetIds: ["hero-low"],
+              warningCount: 1,
+              outlierCount: 1,
+              maxScore: 3.2,
+              totalPenalty: 64,
+              metricMedians: {
+                clip: 0.91,
+                lpips: 0.12,
+              },
+            },
+          ],
           targets: [
             {
               targetId: "hero-low",
               out: "hero-low.png",
+              consistencyGroup: "hero-family",
               passedHardGates: true,
               finalScore: 10,
               candidateScore: 8,
               candidateReasons: ["low_readability"],
+              consistencyGroupOutlier: {
+                score: 3.2,
+                warningThreshold: 1.75,
+                threshold: 2.5,
+                penaltyThreshold: 2.5,
+                penaltyWeight: 20,
+                warned: true,
+                penalty: 64,
+                reasons: ["clip_outlier"],
+                metricDeltas: {
+                  clipDelta: 0.5,
+                },
+              },
             },
             {
               targetId: "hero-high",
@@ -128,6 +159,8 @@ describe("review pipeline", () => {
 
     expect(html).toContain("Score Details");
     expect(html).toContain("Pack Invariants");
+    expect(html).toContain("Consistency Group Warnings");
+    expect(html).toContain("Group hero-family");
     expect(html).toContain("Errors: 1");
     expect(html).toContain("pack_duplicate_runtime_out");
     expect(html).toContain("Texture budget sprite-quality");
@@ -135,6 +168,7 @@ describe("review pipeline", () => {
     expect(html).toContain("Candidate reasons (2)");
     expect(html).toContain("VLM candidate grades (2)");
     expect(html).toContain("Adapter score components (2)");
+    expect(html).toContain("Group outlier reasons (1)");
     expect(html).toContain("good_readability");
     expect(html).toContain("cropped weapon");
     expect(html).toContain("clip.rawScore");

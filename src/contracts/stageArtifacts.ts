@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import {
   AcceptanceSchema,
+  AgenticRetryBaseSchema,
   AuxiliaryMapsSchema,
   CoarseToFineBaseSchema,
   ControlModeSchema,
@@ -41,6 +42,10 @@ const generationPolicySchema = z.object({
     enabled: z.boolean(),
     promoteTopK: z.number().int().min(1),
     requireDraftAcceptance: z.boolean(),
+  }).optional(),
+  agenticRetry: AgenticRetryBaseSchema.extend({
+    enabled: z.boolean(),
+    maxRetries: z.number().int().min(0),
   }).optional(),
 });
 
@@ -111,6 +116,8 @@ const postProcessSchema = z.object({
           raw: z.boolean().optional(),
           pixel: z.boolean().optional(),
           styleRef: z.boolean().optional(),
+          layerColor: z.boolean().optional(),
+          layerMatte: z.boolean().optional(),
         })
         .optional(),
     })
@@ -129,12 +136,29 @@ const plannedTargetSchema = z.object({
   id: nonEmptyString,
   kind: nonEmptyString.optional(),
   out: nonEmptyString,
+  templateId: nonEmptyString.optional(),
+  dependsOn: z.array(nonEmptyString).optional(),
+  styleReferenceFrom: z.array(nonEmptyString).optional(),
   atlasGroup: z.union([nonEmptyString, z.null()]).optional(),
   styleKitId: nonEmptyString.optional(),
   styleReferenceImages: z.array(nonEmptyString).optional(),
   loraPath: nonEmptyString.optional(),
   loraStrength: z.number().min(0).max(2).optional(),
+  visualStylePolicy: z
+    .object({
+      lineContrastMin: z.number().min(0).max(1).optional(),
+      shadingBandCountMax: z.number().int().min(1).max(256).optional(),
+      uiRectilinearityMin: z.number().min(0).max(1).optional(),
+    })
+    .optional(),
   consistencyGroup: nonEmptyString.optional(),
+  consistencyGroupScoring: z
+    .object({
+      warningThreshold: z.number().positive().optional(),
+      penaltyThreshold: z.number().positive().optional(),
+      penaltyWeight: z.number().min(0).optional(),
+    })
+    .optional(),
   generationMode: GenerationModeSchema.optional(),
   evaluationProfileId: nonEmptyString.optional(),
   scoringProfile: nonEmptyString.optional(),
@@ -147,9 +171,14 @@ const plannedTargetSchema = z.object({
   alphaHaloRiskMax: z.number().min(0).max(1).optional(),
   alphaStrayNoiseMax: z.number().min(0).max(1).optional(),
   alphaEdgeSharpnessMin: z.number().min(0).max(1).optional(),
+  mattingHiddenRgbLeakMax: z.number().min(0).max(1).optional(),
+  mattingMaskConsistencyMin: z.number().min(0).max(1).optional(),
+  mattingSemiTransparencyRatioMax: z.number().min(0).max(1).optional(),
   packTextureBudgetMB: z.number().positive().optional(),
   spritesheetSilhouetteDriftMax: z.number().min(0).max(1).optional(),
   spritesheetAnchorDriftMax: z.number().min(0).max(1).optional(),
+  spritesheetIdentityDriftMax: z.number().min(0).max(1).optional(),
+  spritesheetPoseDriftMax: z.number().min(0).max(1).optional(),
   seamHeal: z
     .object({
       enabled: z.boolean().optional(),
@@ -163,6 +192,13 @@ const plannedTargetSchema = z.object({
       rows: z.number().int().positive(),
       seamThreshold: z.number().optional(),
       seamStripPx: z.number().int().positive().optional(),
+      topology: z
+        .object({
+          mode: z.enum(["self", "one-to-one", "many-to-many"]),
+          maxMismatchRatio: z.number().min(0).max(1).optional(),
+          colorTolerance: z.number().int().min(0).max(255).optional(),
+        })
+        .optional(),
     })
     .optional(),
   palette: PalettePolicyBaseSchema.optional(),
@@ -218,9 +254,10 @@ const candidateScoreSchema = z.object({
   score: z.number(),
   passedAcceptance: z.boolean(),
   reasons: z.array(nonEmptyString),
-  stage: z.enum(["draft", "refine"]).optional(),
+  stage: z.enum(["draft", "refine", "autocorrect"]).optional(),
   promoted: z.boolean().optional(),
   sourceOutputPath: nonEmptyString.optional(),
+  autoCorrectAttempt: z.number().int().min(1).optional(),
   components: z.record(z.number()).optional(),
   metrics: z.record(z.number()).optional(),
   vlm: z
@@ -268,6 +305,8 @@ const packInvariantSummarySchema = z.object({
             comparisons: z.number().int().min(0),
             maxSilhouetteDrift: z.number(),
             maxAnchorDrift: z.number(),
+            maxIdentityDrift: z.number().optional(),
+            maxPoseDrift: z.number().optional(),
           }),
         )
         .optional(),
@@ -337,6 +376,40 @@ const stageArtifactSchemas = {
             warnings: z.array(nonEmptyString).optional(),
           })
           .optional(),
+        agenticRetry: z
+          .object({
+            enabled: z.boolean(),
+            maxRetries: z.number().int().min(0),
+            attempted: z.number().int().min(0),
+            succeeded: z.boolean(),
+            skippedReason: nonEmptyString.optional(),
+            attempts: z.array(
+              z.object({
+                attempt: z.number().int().min(1),
+                sourceOutputPath: nonEmptyString,
+                outputPath: nonEmptyString,
+                critique: nonEmptyString,
+                triggeredBy: z.array(nonEmptyString),
+                scoreBefore: z.number(),
+                scoreAfter: z.number(),
+                passedBefore: z.boolean(),
+                passedAfter: z.boolean(),
+                reasonsBefore: z.array(nonEmptyString),
+                reasonsAfter: z.array(nonEmptyString),
+              }),
+            ),
+          })
+          .optional(),
+        styleReferenceLineage: z
+          .array(
+            z.object({
+              source: z.enum(["style-kit", "target-output"]),
+              reference: nonEmptyString,
+              sourceTargetId: nonEmptyString.optional(),
+              resolvedPath: nonEmptyString.optional(),
+            }),
+          )
+          .optional(),
         generationMode: GenerationModeSchema.optional(),
         edit: EditSchema.optional(),
         regenerationSource: regenerationSourceSchema.optional(),
@@ -384,6 +457,17 @@ const stageArtifactSchemas = {
             wrapGridRows: z.number().optional(),
             wrapGridSeamScore: z.number().optional(),
             wrapGridSeamStripPx: z.number().optional(),
+            wrapGridTopologyComparisons: z.number().optional(),
+            wrapGridTopologyMismatchRatio: z.number().optional(),
+            wrapGridTopologyThreshold: z.number().optional(),
+            wrapGridTopologyColorTolerance: z.number().optional(),
+            styleLineContrast: z.number().optional(),
+            styleShadingBandCount: z.number().optional(),
+            styleUiRectilinearity: z.number().optional(),
+            mattingMaskCoverage: z.number().optional(),
+            mattingSemiTransparencyRatio: z.number().optional(),
+            mattingMaskConsistency: z.number().optional(),
+            mattingHiddenRgbLeak: z.number().optional(),
             paletteCompliance: z.number().optional(),
             distinctColors: z.number().optional(),
             alphaBoundaryPixels: z.number().optional(),
@@ -433,11 +517,28 @@ const stageArtifactSchemas = {
       ),
     }),
     adapterWarnings: z.array(nonEmptyString),
+    consistencyGroupSummary: z
+      .array(
+        z.object({
+          consistencyGroup: nonEmptyString,
+          targetCount: z.number().int().min(0),
+          evaluatedTargetCount: z.number().int().min(0),
+          warningTargetIds: z.array(nonEmptyString),
+          outlierTargetIds: z.array(nonEmptyString),
+          warningCount: z.number().int().min(0),
+          outlierCount: z.number().int().min(0),
+          maxScore: z.number(),
+          totalPenalty: z.number().int().min(0),
+          metricMedians: z.record(z.number()),
+        }),
+      )
+      .optional(),
     packInvariants: packInvariantSummarySchema.optional(),
     targets: z.array(
       z.object({
         targetId: nonEmptyString,
         out: nonEmptyString,
+        consistencyGroup: nonEmptyString.optional(),
         passedHardGates: z.boolean(),
         hardGateErrors: z.array(nonEmptyString),
         hardGateWarnings: z.array(nonEmptyString),
@@ -475,6 +576,19 @@ const stageArtifactSchemas = {
         adapterScore: z.number().optional(),
         adapterScoreComponents: z.record(z.number()).optional(),
         adapterWarnings: z.array(nonEmptyString).optional(),
+        consistencyGroupOutlier: z
+          .object({
+            score: z.number(),
+            warningThreshold: z.number(),
+            threshold: z.number(),
+            penaltyThreshold: z.number(),
+            penaltyWeight: z.number(),
+            warned: z.boolean(),
+            penalty: z.number().int().min(0),
+            reasons: z.array(nonEmptyString),
+            metricDeltas: z.record(z.number()),
+          })
+          .optional(),
         finalScore: z.number(),
       }),
     ),
@@ -492,6 +606,20 @@ const stageArtifactSchemas = {
         provider: ProviderNameSchema.optional(),
         model: nonEmptyString.optional(),
         score: z.number().optional(),
+        evalFinalScore: z.number().optional(),
+        groupSignalTrace: z
+          .object({
+            consistencyGroup: nonEmptyString,
+            score: z.number(),
+            warningThreshold: z.number(),
+            penaltyThreshold: z.number(),
+            penaltyWeight: z.number(),
+            warned: z.boolean(),
+            penalty: z.number().int().min(0),
+            reasons: z.array(nonEmptyString),
+            metricDeltas: z.record(z.number()),
+          })
+          .optional(),
       }),
     ),
   }),

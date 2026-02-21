@@ -30,14 +30,24 @@ Manifest policy coverage gate:
   - `negativeRulesPath?`
   - `loraPath?`
   - `loraStrength?` (`0..2`, requires `loraPath`)
+  - `visualPolicy?`: `{ lineContrastMin?, shadingBandCountMax?, uiRectilinearityMin? }`
+    - machine-checkable style-bible constraints applied during acceptance/eval
 - `consistencyGroups[]` (optional)
   - `id`
   - `description?`
   - `styleKitId?`
   - `referenceImages[]`
+- `targetTemplates[]` (optional)
+  - `id`
+  - `dependsOn[]?` (target-id dependency policy)
+  - `styleReferenceFrom[]?` (target-id style-reference chain policy)
 - `evaluationProfiles[]` (required, at least one)
   - `id`
-  - `hardGates?`: `{ requireAlpha?, maxFileSizeKB?, seamThreshold?, seamStripPx?, paletteComplianceMin?, alphaHaloRiskMax?, alphaStrayNoiseMax?, alphaEdgeSharpnessMin?, packTextureBudgetMB?, spritesheetSilhouetteDriftMax?, spritesheetAnchorDriftMax? }`
+  - `hardGates?`: `{ requireAlpha?, maxFileSizeKB?, seamThreshold?, seamStripPx?, paletteComplianceMin?, alphaHaloRiskMax?, alphaStrayNoiseMax?, alphaEdgeSharpnessMin?, mattingHiddenRgbLeakMax?, mattingMaskConsistencyMin?, mattingSemiTransparencyRatioMax?, packTextureBudgetMB?, spritesheetSilhouetteDriftMax?, spritesheetAnchorDriftMax?, spritesheetIdentityDriftMax?, spritesheetPoseDriftMax? }`
+  - `consistencyGroupScoring?`: `{ warningThreshold?, penaltyThreshold?, penaltyWeight? }`
+    - `warningThreshold`: normalized drift score threshold for group-level warning signals
+    - `penaltyThreshold`: normalized drift score threshold where ranking penalties activate
+    - `penaltyWeight`: deterministic multiplier used for final-score penalty (`round(score * weight)`)
   - `scoreWeights?`: `{ readability?, fileSize?, consistency?, clip?, lpips?, ssim? }`
 - `scoringProfiles[]` (optional)
   - `id`
@@ -65,12 +75,18 @@ Required on every target:
 
 Optional quality controls:
 
+- `templateId?`: references `targetTemplates[].id` for reusable orchestration policy
+- `dependsOn?`: target-id dependencies used for deterministic execution staging
+- `styleReferenceFrom?`: target-id style-reference lineage for chaining generated assets
+  - when omitted, style-reference lineage defaults to `dependsOn`
 - `palette`: `{ mode: exact|max-colors, colors?, maxColors?, dither?, strict? }`
   - `strict` is supported only in `mode: "exact"` and enforces 100% visible-pixel palette compliance.
 - `scoringProfile?`: profile id from `scoringProfiles[]` (falls back to `evaluationProfileId` lookup)
 - `tileable`, `seamThreshold`, `seamStripPx`
 - `seamHeal?`: `{ enabled?, stripPx?, strength? }` (optional edge blending pass for tileable targets)
-- `wrapGrid?`: `{ columns, rows, seamThreshold?, seamStripPx? }` (per-cell wrap validation gates)
+- `wrapGrid?`: `{ columns, rows, seamThreshold?, seamStripPx?, topology? }` (per-cell wrap validation gates)
+  - `topology?`: `{ mode, maxMismatchRatio?, colorTolerance? }`
+  - `mode`: `self|one-to-one|many-to-many` adjacency validation, evaluated independently from seam score
 
 Generation + processing:
 
@@ -81,6 +97,8 @@ Generation + processing:
   - `generationPolicy.vlmGate?`: `{ threshold?, rubric? }`
   - `threshold` defaults to `4` (scored on `0..5`) when gate is configured
   - `generationPolicy.coarseToFine?`: `{ enabled?, promoteTopK?, minDraftScore?, requireDraftAcceptance? }`
+  - `generationPolicy.agenticRetry?`: `{ enabled?, maxRetries? }`
+    - when enabled, failed VLM/edge-boundary candidates can trigger bounded edit-first self-healing retries
   - optional quality split: `draftQuality` (coarse pass) and `finalQuality` (refinement pass)
 - `postProcess`
   - `postProcess.operations.smartCrop?`: `{ enabled?, mode?, padding? }`
@@ -89,6 +107,7 @@ Generation + processing:
     - favors nearest-neighbor semantics during resize when enabled
   - `postProcess.operations.emitVariants?`: `{ raw?, pixel?, styleRef? }`
     - writes explicit `__raw`, `__pixel`, and `__style_ref` processed artifacts when enabled
+    - layered export toggles: `layerColor?`, `layerMatte?` write `__layer_color` + `__layer_matte` artifacts
 - `acceptance`
 - `runtimeSpec`
 - `provider`, `model`, `edit`, `auxiliaryMaps`
@@ -101,6 +120,10 @@ Generation + processing:
   - `alphaHaloRiskMax` (`0..1`, lower is stricter)
   - `alphaStrayNoiseMax` (`0..1`, lower is stricter)
   - `alphaEdgeSharpnessMin` (`0..1`, higher is stricter)
+- matting-assisted alpha QA hard gates can be configured in `evaluationProfiles[].hardGates`:
+  - `mattingHiddenRgbLeakMax` (`0..1`, lower is stricter)
+  - `mattingMaskConsistencyMin` (`0..1`, higher is stricter)
+  - `mattingSemiTransparencyRatioMax` (`0..1`, lower is stricter)
 - score weighting defaults and overrides:
   - LootForge applies deterministic built-in score presets by target kind.
   - If a matching `scoringProfiles[]` entry is found (by `targets[].scoringProfile` or `evaluationProfileId`), profile weights override the built-in kind preset.
@@ -109,6 +132,12 @@ Generation + processing:
   - `packTextureBudgetMB` (`>0`, optional profile-level uncompressed texture budget)
   - `spritesheetSilhouetteDriftMax` (`0..1`, optional max adjacent-frame silhouette drift)
   - `spritesheetAnchorDriftMax` (`0..1`, optional max adjacent-frame anchor drift)
+  - `spritesheetIdentityDriftMax` (`0..1`, optional max adjacent-frame visual identity drift)
+  - `spritesheetPoseDriftMax` (`0..1`, optional max adjacent-frame pose/orientation drift)
+- consistency-group drift controls can be configured in `evaluationProfiles[].consistencyGroupScoring` and are normalized onto each planned target:
+  - `warningThreshold` (`>0`, optional warning trigger for aggregate group diagnostics)
+  - `penaltyThreshold` (`>0`, optional threshold for deterministic ranking penalty)
+  - `penaltyWeight` (`>=0`, optional multiplier for ranking influence)
 
 Provider runtime precedence for generate/regenerate:
 
@@ -134,8 +163,14 @@ Pack invariants enforced during acceptance/eval:
 
 - runtime output uniqueness across non-catalog targets (case-insensitive normalized path)
 - spritesheet sheet/frame family and atlas-group integrity checks
-- continuity metrics per animation (`maxSilhouetteDrift`, `maxAnchorDrift`) with optional hard-gate thresholds
+- continuity metrics per animation (`maxSilhouetteDrift`, `maxAnchorDrift`, `maxIdentityDrift`, `maxPoseDrift`) with optional hard-gate thresholds
 - optional profile texture budget gate using estimated uncompressed bytes (`width * height * 4`)
+
+Style-bible visual policy checks (from `styleKits[].visualPolicy`) in acceptance/eval:
+
+- `lineContrastMin`: rejects low-contrast outputs when measured line contrast is below threshold
+- `shadingBandCountMax`: rejects outputs whose visible-pixel luma bands exceed threshold
+- `uiRectilinearityMin`: rejects non-rectilinear silhouettes when bounding-box fill ratio is too low
 
 ## Example (minimal sprite)
 

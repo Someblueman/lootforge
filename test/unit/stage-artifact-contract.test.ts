@@ -27,6 +27,20 @@ describe("stage artifact contracts", () => {
             provider: "openai",
             model: "gpt-image-1",
             score: 42,
+            evalFinalScore: 18,
+            groupSignalTrace: {
+              consistencyGroup: "heroes",
+              score: 3.2,
+              warningThreshold: 1.75,
+              penaltyThreshold: 2.5,
+              penaltyWeight: 25,
+              warned: true,
+              penalty: 80,
+              reasons: ["clip_outlier"],
+              metricDeltas: {
+                clipDelta: 0.5,
+              },
+            },
           },
         ],
       },
@@ -56,10 +70,28 @@ describe("stage artifact contracts", () => {
           adapters: [],
         },
         adapterWarnings: [],
+        consistencyGroupSummary: [
+          {
+            consistencyGroup: "heroes",
+            targetCount: 3,
+            evaluatedTargetCount: 3,
+            warningTargetIds: ["hero-c"],
+            outlierTargetIds: ["hero-c"],
+            warningCount: 1,
+            outlierCount: 1,
+            maxScore: 3.2,
+            totalPenalty: 80,
+            metricMedians: {
+              clip: 0.91,
+              lpips: 0.12,
+            },
+          },
+        ],
         targets: [
           {
             targetId: "hero",
             out: "hero.png",
+            consistencyGroup: "heroes",
             passedHardGates: true,
             hardGateErrors: [],
             hardGateWarnings: [],
@@ -95,6 +127,19 @@ describe("stage artifact contracts", () => {
                 evaluator: "command",
               },
             ],
+            consistencyGroupOutlier: {
+              score: 3.2,
+              warningThreshold: 1.75,
+              threshold: 2.5,
+              penaltyThreshold: 2.5,
+              penaltyWeight: 25,
+              warned: true,
+              penalty: 80,
+              reasons: ["clip_outlier"],
+              metricDeltas: {
+                clipDelta: 0.5,
+              },
+            },
             finalScore: 42,
           },
         ],
@@ -104,6 +149,77 @@ describe("stage artifact contracts", () => {
 
     expect(result.targets[0]?.candidateVlm?.passed).toBe(true);
     expect(result.targets[0]?.candidateVlmGrades).toHaveLength(2);
+  });
+
+  it("accepts provenance-run artifacts with agentic retry attempt traces", () => {
+    const result = validateStageArtifact(
+      "provenance-run",
+      {
+        runId: "run-1",
+        inputHash: "hash-1",
+        startedAt: "2026-02-21T00:00:00.000Z",
+        finishedAt: "2026-02-21T00:00:05.000Z",
+        generatedAt: "2026-02-21T00:00:05.000Z",
+        jobs: [
+          {
+            jobId: "job-1",
+            provider: "openai",
+            model: "gpt-image-1",
+            targetId: "hero",
+            inputHash: "hash-hero",
+            startedAt: "2026-02-21T00:00:00.000Z",
+            finishedAt: "2026-02-21T00:00:05.000Z",
+            outputPath: "/tmp/out/assets/imagegen/raw/hero.png",
+            bytesWritten: 1024,
+            candidateScores: [
+              {
+                outputPath: "/tmp/out/assets/imagegen/raw/hero.png",
+                score: 10,
+                passedAcceptance: false,
+                reasons: ["vlm_gate_below_threshold"],
+                stage: "draft",
+                selected: false,
+              },
+              {
+                outputPath: "/tmp/out/assets/imagegen/raw/hero.autocorrect-1.png",
+                score: 42,
+                passedAcceptance: true,
+                reasons: [],
+                stage: "autocorrect",
+                autoCorrectAttempt: 1,
+                sourceOutputPath: "/tmp/out/assets/imagegen/raw/hero.png",
+                selected: true,
+              },
+            ],
+            agenticRetry: {
+              enabled: true,
+              maxRetries: 2,
+              attempted: 1,
+              succeeded: true,
+              attempts: [
+                {
+                  attempt: 1,
+                  sourceOutputPath: "/tmp/out/assets/imagegen/raw/hero.png",
+                  outputPath: "/tmp/out/assets/imagegen/raw/hero.autocorrect-1.png",
+                  critique: "Refine framing and remove edge halo artifacts.",
+                  triggeredBy: ["vlm_gate_below_threshold"],
+                  scoreBefore: 10,
+                  scoreAfter: 42,
+                  passedBefore: false,
+                  passedAfter: true,
+                  reasonsBefore: ["vlm_gate_below_threshold"],
+                  reasonsAfter: [],
+                },
+              ],
+            },
+          },
+        ],
+      },
+      "/tmp/out/provenance/run.json",
+    );
+
+    expect(result.jobs[0]?.agenticRetry?.attempted).toBe(1);
+    expect(result.jobs[0]?.candidateScores?.[1]?.stage).toBe("autocorrect");
   });
 
   it("accepts acceptance-report boundary quality metrics", () => {
@@ -135,6 +251,13 @@ describe("stage artifact contracts", () => {
               alphaHaloRisk: 0.02,
               alphaStrayNoise: 0.001,
               alphaEdgeSharpness: 0.94,
+              styleLineContrast: 0.18,
+              styleShadingBandCount: 8,
+              styleUiRectilinearity: 0.91,
+              mattingMaskCoverage: 0.25,
+              mattingSemiTransparencyRatio: 0.03,
+              mattingMaskConsistency: 0.88,
+              mattingHiddenRgbLeak: 0.01,
             },
             issues: [],
           },
@@ -158,6 +281,14 @@ describe("stage artifact contracts", () => {
             kind: "sprite",
             out: "hero.png",
             promptSpec: { primary: "hero sprite" },
+            visualStylePolicy: {
+              lineContrastMin: 0.1,
+              shadingBandCountMax: 12,
+              uiRectilinearityMin: 0.8,
+            },
+            mattingHiddenRgbLeakMax: 0.02,
+            mattingMaskConsistencyMin: 0.75,
+            mattingSemiTransparencyRatioMax: 0.2,
             generationPolicy: {
               size: "1024x1024",
               quality: "high",
@@ -183,6 +314,8 @@ describe("stage artifact contracts", () => {
                   raw: true,
                   styleRef: true,
                   pixel: true,
+                  layerColor: true,
+                  layerMatte: true,
                 },
               },
             },
@@ -193,6 +326,8 @@ describe("stage artifact contracts", () => {
     );
 
     expect(result.targets[0]?.postProcess?.operations?.emitVariants?.styleRef).toBe(true);
+    expect(result.targets[0]?.postProcess?.operations?.emitVariants?.layerColor).toBe(true);
+    expect(result.targets[0]?.postProcess?.operations?.emitVariants?.layerMatte).toBe(true);
     expect(result.targets[0]?.postProcess?.operations?.smartCrop?.mode).toBe("alpha-bounds");
   });
 
@@ -235,6 +370,12 @@ describe("stage artifact contracts", () => {
             out: "hero.png",
             imagePath: "/tmp/out/assets/imagegen/processed/images/hero.png",
             exists: true,
+            metrics: {
+              wrapGridTopologyComparisons: 8,
+              wrapGridTopologyMismatchRatio: 0.125,
+              wrapGridTopologyThreshold: 0.1,
+              wrapGridTopologyColorTolerance: 4,
+            },
             issues: [
               {
                 level: "error",
@@ -290,6 +431,8 @@ describe("stage artifact contracts", () => {
                 comparisons: 3,
                 maxSilhouetteDrift: 0.12,
                 maxAnchorDrift: 0.08,
+                maxIdentityDrift: 0.2,
+                maxPoseDrift: 0.3,
               },
             },
           },

@@ -1,8 +1,9 @@
 import { z } from "zod";
 
-import { TARGET_KINDS } from "../providers/types.js";
+import { TARGET_KINDS, WRAP_GRID_TOPOLOGY_MODES } from "../providers/types.js";
 import {
   AcceptanceSchema,
+  AgenticRetryBaseSchema,
   AuxiliaryMapsSchema,
   CoarseToFineBaseSchema,
   ControlModeSchema,
@@ -40,10 +41,12 @@ export const PromptSpecSchema = z.object({
 export const ManifestGenerationModeSchema = GenerationModeSchema;
 export const ManifestControlModeSchema = ControlModeSchema;
 export const ManifestTargetKindSchema = z.enum(TARGET_KINDS);
+export const ManifestTargetReferenceListSchema = z.array(nonEmptyString);
 
 export const ManifestVlmGateSchema = VlmGateSchema;
 
 export const ManifestCoarseToFineSchema = CoarseToFineBaseSchema;
+export const ManifestAgenticRetrySchema = AgenticRetryBaseSchema;
 
 export const ManifestGenerationPolicySchema = z.object({
   size: nonEmptyString.optional(),
@@ -61,6 +64,7 @@ export const ManifestGenerationPolicySchema = z.object({
   rateLimitPerMinute: z.number().int().positive().optional(),
   vlmGate: ManifestVlmGateSchema.optional(),
   coarseToFine: ManifestCoarseToFineSchema.optional(),
+  agenticRetry: ManifestAgenticRetrySchema.optional(),
 });
 
 export const ManifestAcceptanceSchema = AcceptanceSchema;
@@ -112,6 +116,8 @@ export const ManifestPostProcessOperationEmitVariantsSchema = z.object({
   raw: z.boolean().optional(),
   pixel: z.boolean().optional(),
   styleRef: z.boolean().optional(),
+  layerColor: z.boolean().optional(),
+  layerMatte: z.boolean().optional(),
 });
 
 export const ManifestPostProcessOperationsSchema = z.object({
@@ -189,6 +195,13 @@ export const ManifestWrapGridSchema = z.object({
   rows: z.number().int().min(1).max(128),
   seamThreshold: z.number().min(0).max(255).optional(),
   seamStripPx: z.number().int().min(1).max(64).optional(),
+  topology: z
+    .object({
+      mode: z.enum(WRAP_GRID_TOPOLOGY_MODES),
+      maxMismatchRatio: z.number().min(0).max(1).optional(),
+      colorTolerance: z.number().int().min(0).max(255).optional(),
+    })
+    .optional(),
 });
 
 export const ManifestTargetSchema = z
@@ -196,6 +209,9 @@ export const ManifestTargetSchema = z
     id: nonEmptyString,
     kind: nonEmptyString,
     out: nonEmptyString,
+    templateId: nonEmptyString.optional(),
+    dependsOn: ManifestTargetReferenceListSchema.optional(),
+    styleReferenceFrom: ManifestTargetReferenceListSchema.optional(),
     atlasGroup: nonEmptyString.optional(),
     styleKitId: nonEmptyString,
     consistencyGroup: nonEmptyString,
@@ -294,6 +310,13 @@ export const ManifestStyleKitSchema = z
     negativeRulesPath: nonEmptyString.optional(),
     loraPath: nonEmptyString.optional(),
     loraStrength: z.number().min(0).max(2).optional(),
+    visualPolicy: z
+      .object({
+        lineContrastMin: z.number().min(0).max(1).optional(),
+        shadingBandCountMax: z.number().int().min(1).max(256).optional(),
+        uiRectilinearityMin: z.number().min(0).max(1).optional(),
+      })
+      .optional(),
   })
   .superRefine((styleKit, ctx) => {
     if (typeof styleKit.loraStrength === "number" && !styleKit.loraPath) {
@@ -303,6 +326,19 @@ export const ManifestStyleKitSchema = z
         message: "loraPath is required when loraStrength is provided.",
       });
     }
+
+    if (
+      styleKit.visualPolicy &&
+      styleKit.visualPolicy.lineContrastMin === undefined &&
+      styleKit.visualPolicy.shadingBandCountMax === undefined &&
+      styleKit.visualPolicy.uiRectilinearityMin === undefined
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["visualPolicy"],
+        message: "visualPolicy must define at least one constraint.",
+      });
+    }
   });
 
 export const ManifestConsistencyGroupSchema = z.object({
@@ -310,6 +346,12 @@ export const ManifestConsistencyGroupSchema = z.object({
   description: nonEmptyString.optional(),
   styleKitId: nonEmptyString.optional(),
   referenceImages: z.array(nonEmptyString).default([]),
+});
+
+export const ManifestTargetTemplateSchema = z.object({
+  id: nonEmptyString,
+  dependsOn: ManifestTargetReferenceListSchema.optional(),
+  styleReferenceFrom: ManifestTargetReferenceListSchema.optional(),
 });
 
 export const ManifestScoreWeightsSchema = ScoreWeightsSchema;
@@ -326,9 +368,21 @@ export const ManifestEvaluationProfileSchema = z.object({
       alphaHaloRiskMax: z.number().min(0).max(1).optional(),
       alphaStrayNoiseMax: z.number().min(0).max(1).optional(),
       alphaEdgeSharpnessMin: z.number().min(0).max(1).optional(),
+      mattingHiddenRgbLeakMax: z.number().min(0).max(1).optional(),
+      mattingMaskConsistencyMin: z.number().min(0).max(1).optional(),
+      mattingSemiTransparencyRatioMax: z.number().min(0).max(1).optional(),
       packTextureBudgetMB: z.number().positive().optional(),
       spritesheetSilhouetteDriftMax: z.number().min(0).max(1).optional(),
       spritesheetAnchorDriftMax: z.number().min(0).max(1).optional(),
+      spritesheetIdentityDriftMax: z.number().min(0).max(1).optional(),
+      spritesheetPoseDriftMax: z.number().min(0).max(1).optional(),
+    })
+    .optional(),
+  consistencyGroupScoring: z
+    .object({
+      warningThreshold: z.number().positive().optional(),
+      penaltyThreshold: z.number().positive().optional(),
+      penaltyWeight: z.number().min(0).optional(),
     })
     .optional(),
   scoreWeights: ManifestScoreWeightsSchema.optional(),
@@ -366,6 +420,7 @@ export const ManifestV2Schema = z.object({
   pack: ManifestPackSchema,
   providers: ManifestProvidersSchema,
   styleKits: z.array(ManifestStyleKitSchema).min(1),
+  targetTemplates: z.array(ManifestTargetTemplateSchema).optional(),
   consistencyGroups: z.array(ManifestConsistencyGroupSchema).optional(),
   evaluationProfiles: z.array(ManifestEvaluationProfileSchema).min(1),
   scoringProfiles: z.array(ManifestScoringProfileSchema).optional(),

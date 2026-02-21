@@ -17,16 +17,19 @@ import {
   type ManifestEvaluationProfile,
   type ManifestScoringProfile,
   type ManifestTarget,
+  type ManifestTargetTemplate,
   type ManifestV2,
   type PlannedProviderJobSpec,
 } from "./types.js";
 import {
+  type ConsistencyGroupScoringPolicy,
   type PalettePolicy,
   type PlannedTarget,
   type PromptSpec,
   type ProviderName,
   type TargetKind,
   type TargetScoreWeights,
+  type VisualStylePolicy,
 } from "../providers/types.js";
 import { buildStructuredPrompt, normalizeGenerationPolicyForProvider } from "../providers/types.js";
 import { normalizeManifestAssetPath, normalizeTargetOutPath } from "../shared/paths.js";
@@ -182,6 +185,7 @@ export function resolveTargetScoring(params: {
 export function normalizeTargetForGeneration(params: {
   manifest: ManifestV2;
   target: ManifestTarget;
+  template?: ManifestTargetTemplate;
   defaultProvider: ProviderName;
   styleKit: ManifestV2["styleKits"][number];
   styleKitPaletteDefault?: PalettePolicy;
@@ -259,11 +263,26 @@ export function normalizeTargetForGeneration(params: {
     evalProfile: params.evalProfile,
     scoringProfileById: params.scoringProfileById,
   });
+  const consistencyGroupScoring = resolveConsistencyGroupScoring(params.evalProfile);
+  const visualStylePolicy = normalizeVisualStylePolicy(params.styleKit.visualPolicy);
+  const dependsOn = mergeOrchestrationTargetRefs(
+    params.template?.dependsOn,
+    params.target.dependsOn,
+  );
+  const explicitStyleReferenceFrom = mergeOrchestrationTargetRefs(
+    params.template?.styleReferenceFrom,
+    params.target.styleReferenceFrom,
+  );
+  const styleReferenceFrom =
+    explicitStyleReferenceFrom.length > 0 ? explicitStyleReferenceFrom : dependsOn;
 
   const normalized: PlannedTarget = {
     id,
     kind: params.target.kind.trim(),
     out,
+    ...(params.target.templateId ? { templateId: params.target.templateId } : {}),
+    ...(dependsOn.length > 0 ? { dependsOn } : {}),
+    ...(styleReferenceFrom.length > 0 ? { styleReferenceFrom } : {}),
     atlasGroup,
     styleKitId: params.target.styleKitId,
     ...(styleReferenceImages.length > 0 ? { styleReferenceImages } : {}),
@@ -271,7 +290,9 @@ export function normalizeTargetForGeneration(params: {
     ...(typeof params.styleKit.loraStrength === "number"
       ? { loraStrength: params.styleKit.loraStrength }
       : {}),
+    ...(visualStylePolicy ? { visualStylePolicy } : {}),
     consistencyGroup: params.target.consistencyGroup,
+    ...(consistencyGroupScoring ? { consistencyGroupScoring } : {}),
     generationMode: params.target.generationMode ?? "text",
     evaluationProfileId: params.target.evaluationProfileId,
     ...(scoring.profileId ? { scoringProfile: scoring.profileId } : {}),
@@ -284,9 +305,14 @@ export function normalizeTargetForGeneration(params: {
     alphaHaloRiskMax: params.evalProfile.hardGates?.alphaHaloRiskMax,
     alphaStrayNoiseMax: params.evalProfile.hardGates?.alphaStrayNoiseMax,
     alphaEdgeSharpnessMin: params.evalProfile.hardGates?.alphaEdgeSharpnessMin,
+    mattingHiddenRgbLeakMax: params.evalProfile.hardGates?.mattingHiddenRgbLeakMax,
+    mattingMaskConsistencyMin: params.evalProfile.hardGates?.mattingMaskConsistencyMin,
+    mattingSemiTransparencyRatioMax: params.evalProfile.hardGates?.mattingSemiTransparencyRatioMax,
     packTextureBudgetMB: params.evalProfile.hardGates?.packTextureBudgetMB,
     spritesheetSilhouetteDriftMax: params.evalProfile.hardGates?.spritesheetSilhouetteDriftMax,
     spritesheetAnchorDriftMax: params.evalProfile.hardGates?.spritesheetAnchorDriftMax,
+    spritesheetIdentityDriftMax: params.evalProfile.hardGates?.spritesheetIdentityDriftMax,
+    spritesheetPoseDriftMax: params.evalProfile.hardGates?.spritesheetPoseDriftMax,
     ...(seamHeal ? { seamHeal } : {}),
     ...(wrapGrid ? { wrapGrid } : {}),
     ...(palette ? { palette } : {}),
@@ -326,9 +352,54 @@ export function normalizeTargetForGeneration(params: {
   return normalized;
 }
 
+function resolveConsistencyGroupScoring(
+  evalProfile: ManifestEvaluationProfile,
+): ConsistencyGroupScoringPolicy | undefined {
+  const warningThreshold = evalProfile.consistencyGroupScoring?.warningThreshold;
+  const penaltyThreshold = evalProfile.consistencyGroupScoring?.penaltyThreshold;
+  const penaltyWeight = evalProfile.consistencyGroupScoring?.penaltyWeight;
+
+  if (
+    typeof warningThreshold !== "number" &&
+    typeof penaltyThreshold !== "number" &&
+    typeof penaltyWeight !== "number"
+  ) {
+    return undefined;
+  }
+
+  return {
+    ...(typeof warningThreshold === "number" ? { warningThreshold } : {}),
+    ...(typeof penaltyThreshold === "number" ? { penaltyThreshold } : {}),
+    ...(typeof penaltyWeight === "number" ? { penaltyWeight } : {}),
+  };
+}
+
+function normalizeVisualStylePolicy(
+  visualPolicy: ManifestV2["styleKits"][number]["visualPolicy"],
+): VisualStylePolicy | undefined {
+  if (!visualPolicy) {
+    return undefined;
+  }
+
+  const normalized: VisualStylePolicy = {
+    ...(typeof visualPolicy.lineContrastMin === "number"
+      ? { lineContrastMin: Math.max(0, Math.min(1, visualPolicy.lineContrastMin)) }
+      : {}),
+    ...(typeof visualPolicy.shadingBandCountMax === "number"
+      ? { shadingBandCountMax: Math.max(1, Math.round(visualPolicy.shadingBandCountMax)) }
+      : {}),
+    ...(typeof visualPolicy.uiRectilinearityMin === "number"
+      ? { uiRectilinearityMin: Math.max(0, Math.min(1, visualPolicy.uiRectilinearityMin)) }
+      : {}),
+  };
+
+  return Object.keys(normalized).length > 0 ? normalized : undefined;
+}
+
 export function expandSpritesheetTarget(params: {
   manifest: ManifestV2;
   target: ManifestTarget;
+  template?: ManifestTargetTemplate;
   defaultProvider: ProviderName;
   styleKit: ManifestV2["styleKits"][number];
   styleKitPaletteDefault?: PalettePolicy;
@@ -390,6 +461,7 @@ export function expandSpritesheetTarget(params: {
         normalizeTargetForGeneration({
           manifest: params.manifest,
           target: params.target,
+          template: params.template,
           defaultProvider: params.defaultProvider,
           styleKit: params.styleKit,
           styleKitPaletteDefault: params.styleKitPaletteDefault,
@@ -417,6 +489,7 @@ export function expandSpritesheetTarget(params: {
   const sheetTarget = normalizeTargetForGeneration({
     manifest: params.manifest,
     target: params.target,
+    template: params.template,
     defaultProvider: params.defaultProvider,
     styleKit: params.styleKit,
     styleKitPaletteDefault: params.styleKitPaletteDefault,
@@ -433,6 +506,30 @@ export function expandSpritesheetTarget(params: {
   });
 
   return [...frameTargets, sheetTarget];
+}
+
+function mergeOrchestrationTargetRefs(templateRefs?: string[], targetRefs?: string[]): string[] {
+  const merged = [
+    ...normalizeOrchestrationTargetRefs(templateRefs),
+    ...normalizeOrchestrationTargetRefs(targetRefs),
+  ];
+  const deduped: string[] = [];
+  const seen = new Set<string>();
+  for (const targetId of merged) {
+    if (seen.has(targetId)) {
+      continue;
+    }
+    seen.add(targetId);
+    deduped.push(targetId);
+  }
+  return deduped;
+}
+
+function normalizeOrchestrationTargetRefs(refs?: string[]): string[] {
+  if (!Array.isArray(refs)) {
+    return [];
+  }
+  return refs.map((targetId) => targetId.trim()).filter(Boolean);
 }
 
 export function resolveTargetModel(

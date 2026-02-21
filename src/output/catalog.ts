@@ -26,6 +26,14 @@ export interface CatalogTarget {
     specularFromLuma?: boolean;
     aoFromLuma?: boolean;
   };
+  postProcess?: {
+    operations?: {
+      emitVariants?: {
+        layerColor?: boolean;
+        layerMatte?: boolean;
+      };
+    };
+  };
 }
 
 export interface CatalogItem {
@@ -45,6 +53,10 @@ export interface CatalogItem {
     normalUrl?: string;
     specularUrl?: string;
     aoUrl?: string;
+  };
+  layers?: {
+    colorUrl?: string;
+    matteUrl?: string;
   };
 }
 
@@ -118,6 +130,19 @@ export async function buildCatalog(
               : {}),
           }
         : undefined;
+    const layers =
+      target.postProcess?.operations?.emitVariants &&
+      (target.postProcess.operations.emitVariants.layerColor ||
+        target.postProcess.operations.emitVariants.layerMatte)
+        ? {
+            ...(target.postProcess.operations.emitVariants.layerColor
+              ? { colorUrl: `${resolvedAssetBaseUrl}/images/${base}__layer_color${ext}` }
+              : {}),
+            ...(target.postProcess.operations.emitVariants.layerMatte
+              ? { matteUrl: `${resolvedAssetBaseUrl}/images/${base}__layer_matte${ext}` }
+              : {}),
+          }
+        : undefined;
 
     items.push({
       id: target.id,
@@ -137,6 +162,7 @@ export async function buildCatalog(
       sizeBytes,
       exists,
       ...(maps ? { maps } : {}),
+      ...(layers ? { layers } : {}),
     });
   }
 

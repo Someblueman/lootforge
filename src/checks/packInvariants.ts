@@ -29,6 +29,8 @@ export interface PackInvariantMetrics {
       comparisons: number;
       maxSilhouetteDrift: number;
       maxAnchorDrift: number;
+      maxIdentityDrift?: number;
+      maxPoseDrift?: number;
     }
   >;
 }
@@ -61,6 +63,7 @@ interface FrameInspection {
   width: number;
   height: number;
   silhouette: AlphaSilhouette | null;
+  colorHistogram: number[];
 }
 
 interface AlphaSilhouette {
@@ -71,6 +74,7 @@ interface AlphaSilhouette {
   area: number;
   centerX: number;
   centerY: number;
+  orientationRadians: number;
 }
 
 interface PackFamily {
@@ -368,6 +372,8 @@ async function enforceSpritesheetFamilyInvariants(params: {
     let comparisons = 0;
     let maxSilhouetteDrift = 0;
     let maxAnchorDrift = 0;
+    let maxIdentityDrift = 0;
+    let maxPoseDrift = 0;
 
     for (let index = 1; index < orderedFrames.length; index += 1) {
       const previous = inspectedFrames.get(orderedFrames[index - 1].id);
@@ -383,6 +389,10 @@ async function enforceSpritesheetFamilyInvariants(params: {
 
       const anchorDrift = computeAnchorDrift(previous, current);
       maxAnchorDrift = Math.max(maxAnchorDrift, anchorDrift);
+      const identityDrift = computeIdentityDrift(previous, current);
+      maxIdentityDrift = Math.max(maxIdentityDrift, identityDrift);
+      const poseDrift = computePoseDrift(previous, current);
+      maxPoseDrift = Math.max(maxPoseDrift, poseDrift);
       comparisons += 1;
     }
 
@@ -395,6 +405,8 @@ async function enforceSpritesheetFamilyInvariants(params: {
       comparisons,
       maxSilhouetteDrift: Number(maxSilhouetteDrift.toFixed(6)),
       maxAnchorDrift: Number(maxAnchorDrift.toFixed(6)),
+      maxIdentityDrift: Number(maxIdentityDrift.toFixed(6)),
+      maxPoseDrift: Number(maxPoseDrift.toFixed(6)),
     };
 
     const silhouetteThreshold = resolveMaxDriftThreshold([
@@ -431,6 +443,44 @@ async function enforceSpritesheetFamilyInvariants(params: {
         metrics: {
           measured: Number(maxAnchorDrift.toFixed(6)),
           threshold: Number(anchorThreshold.toFixed(6)),
+        },
+      });
+    }
+
+    const identityThreshold = resolveMaxDriftThreshold([
+      sheetTarget.spritesheetIdentityDriftMax,
+      ...orderedFrames.map((frame) => frame.spritesheetIdentityDriftMax),
+    ]);
+    if (typeof identityThreshold === "number" && maxIdentityDrift > identityThreshold) {
+      params.addIssue({
+        level: "error",
+        code: "spritesheet_identity_drift_exceeded",
+        message: `Spritesheet animation "${animationName}" in family "${family.id}" exceeded identity drift threshold (${maxIdentityDrift.toFixed(
+          4,
+        )} > ${identityThreshold.toFixed(4)}).`,
+        targetIds: [sheetTargetId, ...orderedFrames.map((frame) => frame.id)],
+        metrics: {
+          measured: Number(maxIdentityDrift.toFixed(6)),
+          threshold: Number(identityThreshold.toFixed(6)),
+        },
+      });
+    }
+
+    const poseThreshold = resolveMaxDriftThreshold([
+      sheetTarget.spritesheetPoseDriftMax,
+      ...orderedFrames.map((frame) => frame.spritesheetPoseDriftMax),
+    ]);
+    if (typeof poseThreshold === "number" && maxPoseDrift > poseThreshold) {
+      params.addIssue({
+        level: "error",
+        code: "spritesheet_pose_drift_exceeded",
+        message: `Spritesheet animation "${animationName}" in family "${family.id}" exceeded pose drift threshold (${maxPoseDrift.toFixed(
+          4,
+        )} > ${poseThreshold.toFixed(4)}).`,
+        targetIds: [sheetTargetId, ...orderedFrames.map((frame) => frame.id)],
+        metrics: {
+          measured: Number(maxPoseDrift.toFixed(6)),
+          threshold: Number(poseThreshold.toFixed(6)),
         },
       });
     }
@@ -484,6 +534,7 @@ async function inspectSpritesheetFrames(params: {
         width: raw.info.width,
         height: raw.info.height,
         silhouette,
+        colorHistogram: computeVisibleColorHistogram(raw.data, raw.info.channels),
       });
     } catch (error) {
       params.addIssue({
@@ -517,6 +568,11 @@ function extractAlphaSilhouette(
   let maxX = Number.NEGATIVE_INFINITY;
   let maxY = Number.NEGATIVE_INFINITY;
   let area = 0;
+  let sumX = 0;
+  let sumY = 0;
+  let sumXX = 0;
+  let sumYY = 0;
+  let sumXY = 0;
 
   for (let y = 0; y < height; y += 1) {
     for (let x = 0; x < width; x += 1) {
@@ -527,6 +583,11 @@ function extractAlphaSilhouette(
       }
 
       area += 1;
+      sumX += x;
+      sumY += y;
+      sumXX += x * x;
+      sumYY += y * y;
+      sumXY += x * y;
       if (x < minX) minX = x;
       if (y < minY) minY = y;
       if (x > maxX) maxX = x;
@@ -538,6 +599,13 @@ function extractAlphaSilhouette(
     return null;
   }
 
+  const meanX = sumX / area;
+  const meanY = sumY / area;
+  const covarianceXX = sumXX / area - meanX * meanX;
+  const covarianceYY = sumYY / area - meanY * meanY;
+  const covarianceXY = sumXY / area - meanX * meanY;
+  const orientationRadians = 0.5 * Math.atan2(2 * covarianceXY, covarianceXX - covarianceYY);
+
   return {
     minX,
     minY,
@@ -546,6 +614,7 @@ function extractAlphaSilhouette(
     area,
     centerX: (minX + maxX) / 2,
     centerY: (minY + maxY) / 2,
+    orientationRadians,
   };
 }
 
@@ -590,6 +659,68 @@ function computeAnchorDrift(left: FrameInspection, right: FrameInspection): numb
   const rightVectorY = rightAnchor.y - right.silhouette.centerY;
 
   return Math.hypot(leftVectorX - rightVectorX, leftVectorY - rightVectorY) / diagonal;
+}
+
+function computeIdentityDrift(left: FrameInspection, right: FrameInspection): number {
+  const distance = histogramDistance(left.colorHistogram, right.colorHistogram);
+  return Math.max(0, Math.min(1, distance / 2));
+}
+
+function computePoseDrift(left: FrameInspection, right: FrameInspection): number {
+  if (!left.silhouette || !right.silhouette) {
+    return 0;
+  }
+
+  const delta = angularDistance(
+    left.silhouette.orientationRadians,
+    right.silhouette.orientationRadians,
+  );
+  return Math.max(0, Math.min(1, delta / Math.PI));
+}
+
+function angularDistance(a: number, b: number): number {
+  let delta = Math.abs(a - b);
+  while (delta > Math.PI) {
+    delta -= Math.PI;
+  }
+  return Math.abs(delta);
+}
+
+function computeVisibleColorHistogram(raw: Buffer, channels: number, bins = 8): number[] {
+  const histogram = new Array<number>(bins * bins * bins).fill(0);
+  let visibleCount = 0;
+
+  const channelToBin = (value: number): number =>
+    Math.max(0, Math.min(bins - 1, Math.floor((value / 256) * bins)));
+
+  for (let index = 0; index < raw.length; index += channels) {
+    const alpha = channels >= 4 ? raw[index + 3] : 255;
+    if (alpha === 0) {
+      continue;
+    }
+
+    const rBin = channelToBin(raw[index]);
+    const gBin = channelToBin(raw[index + 1]);
+    const bBin = channelToBin(raw[index + 2]);
+    const histogramIndex = rBin * bins * bins + gBin * bins + bBin;
+    histogram[histogramIndex] += 1;
+    visibleCount += 1;
+  }
+
+  if (visibleCount === 0) {
+    return histogram;
+  }
+
+  return histogram.map((value) => value / visibleCount);
+}
+
+function histogramDistance(left: number[], right: number[]): number {
+  const length = Math.max(left.length, right.length);
+  let distance = 0;
+  for (let index = 0; index < length; index += 1) {
+    distance += Math.abs((left[index] ?? 0) - (right[index] ?? 0));
+  }
+  return distance;
 }
 
 function resolveAnchorPoint(frame: FrameInspection): { x: number; y: number } {

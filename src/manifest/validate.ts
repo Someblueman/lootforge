@@ -66,6 +66,9 @@ export function normalizeManifestTargets(
   options: NormalizeManifestTargetsOptions = {},
 ): PlannedTarget[] {
   const defaultProvider = manifest.providers.default ?? "openai";
+  const targetTemplateById = new Map(
+    (manifest.targetTemplates ?? []).map((template) => [template.id, template]),
+  );
   const styleKitById = new Map(manifest.styleKits.map((kit) => [kit.id, kit]));
   const styleKitPaletteDefaults = resolveStyleKitPaletteDefaults(
     manifest.styleKits,
@@ -85,6 +88,7 @@ export function normalizeManifestTargets(
   const targets: PlannedTarget[] = [];
 
   for (const target of manifest.targets) {
+    const template = target.templateId ? targetTemplateById.get(target.templateId) : undefined;
     const styleKit = styleKitById.get(target.styleKitId);
     const consistencyGroup = consistencyGroupById.get(target.consistencyGroup);
     const evalProfile = evaluationById.get(target.evaluationProfileId);
@@ -94,6 +98,10 @@ export function normalizeManifestTargets(
       throw new Error(
         `Target "${target.id}" references missing styleKitId "${target.styleKitId}".`,
       );
+    }
+
+    if (target.templateId && !template) {
+      throw new Error(`Target "${target.id}" references missing template "${target.templateId}".`);
     }
 
     if (!evalProfile) {
@@ -124,6 +132,7 @@ export function normalizeManifestTargets(
       const expanded = expandSpritesheetTarget({
         manifest,
         target,
+        template,
         defaultProvider,
         styleKit,
         styleKitPaletteDefault,
@@ -139,6 +148,7 @@ export function normalizeManifestTargets(
       normalizeTargetForGeneration({
         manifest,
         target,
+        template,
         defaultProvider,
         styleKit,
         styleKitPaletteDefault,
@@ -148,6 +158,8 @@ export function normalizeManifestTargets(
       }),
     );
   }
+
+  validatePlannedTargetOrchestration(targets);
 
   return targets;
 }
@@ -193,4 +205,112 @@ export function createPlanArtifacts(
 
 export function parseManifestProviderFlag(value: string | undefined): ProviderName | "auto" {
   return parseProviderSelection(value);
+}
+
+function validatePlannedTargetOrchestration(targets: PlannedTarget[]): void {
+  const targetsById = new Map(targets.map((target) => [target.id, target]));
+
+  for (const target of targets) {
+    for (const dependencyId of target.dependsOn ?? []) {
+      const dependencyTarget = targetsById.get(dependencyId);
+      if (!dependencyTarget) {
+        throw new Error(
+          `Target "${target.id}" depends on missing planned target "${dependencyId}".`,
+        );
+      }
+      if (dependencyId === target.id) {
+        throw new Error(`Target "${target.id}" cannot depend on itself.`);
+      }
+      if (dependencyTarget.generationDisabled === true) {
+        throw new Error(
+          `Target "${target.id}" depends on "${dependencyId}", but that target is generationDisabled.`,
+        );
+      }
+    }
+
+    for (const styleSourceTargetId of target.styleReferenceFrom ?? []) {
+      const styleSourceTarget = targetsById.get(styleSourceTargetId);
+      if (!styleSourceTarget) {
+        throw new Error(
+          `Target "${target.id}" chains style references from missing target "${styleSourceTargetId}".`,
+        );
+      }
+      if (styleSourceTargetId === target.id) {
+        throw new Error(`Target "${target.id}" cannot chain style references from itself.`);
+      }
+      if (styleSourceTarget.generationDisabled === true) {
+        throw new Error(
+          `Target "${target.id}" chains style references from "${styleSourceTargetId}", but that target is generationDisabled.`,
+        );
+      }
+    }
+  }
+
+  const generationEnabledTargets = targets.filter((target) => target.generationDisabled !== true);
+  const enabledIds = new Set(generationEnabledTargets.map((target) => target.id));
+  const adjacency = new Map<string, string[]>();
+  const inDegree = new Map<string, number>();
+
+  for (const target of generationEnabledTargets) {
+    inDegree.set(target.id, 0);
+    adjacency.set(target.id, []);
+  }
+
+  for (const target of generationEnabledTargets) {
+    const dependencies = dedupeTargetIdList(target.dependsOn ?? []);
+    for (const dependencyId of dependencies) {
+      if (!enabledIds.has(dependencyId)) {
+        throw new Error(
+          `Target "${target.id}" depends on "${dependencyId}", but it is not in the generation-enabled target set.`,
+        );
+      }
+      adjacency.get(dependencyId)?.push(target.id);
+      inDegree.set(target.id, (inDegree.get(target.id) ?? 0) + 1);
+    }
+  }
+
+  let queue = generationEnabledTargets
+    .map((target) => target.id)
+    .filter((targetId) => (inDegree.get(targetId) ?? 0) === 0)
+    .sort((left, right) => left.localeCompare(right));
+  let visited = 0;
+
+  while (queue.length > 0) {
+    const currentId = queue[0];
+    queue = queue.slice(1);
+    visited += 1;
+
+    const dependents = adjacency.get(currentId) ?? [];
+    for (const dependentId of dependents) {
+      const nextDegree = (inDegree.get(dependentId) ?? 0) - 1;
+      inDegree.set(dependentId, nextDegree);
+      if (nextDegree === 0) {
+        queue.push(dependentId);
+      }
+    }
+    queue.sort((left, right) => left.localeCompare(right));
+  }
+
+  if (visited !== generationEnabledTargets.length) {
+    const blockedTargetIds = generationEnabledTargets
+      .map((target) => target.id)
+      .filter((targetId) => (inDegree.get(targetId) ?? 0) > 0)
+      .sort((left, right) => left.localeCompare(right));
+    throw new Error(
+      `Dependency cycle detected across generation-enabled targets: ${blockedTargetIds.join(", ")}.`,
+    );
+  }
+}
+
+function dedupeTargetIdList(targetIds: string[]): string[] {
+  const deduped: string[] = [];
+  const seen = new Set<string>();
+  for (const targetId of targetIds) {
+    if (seen.has(targetId)) {
+      continue;
+    }
+    seen.add(targetId);
+    deduped.push(targetId);
+  }
+  return deduped;
 }

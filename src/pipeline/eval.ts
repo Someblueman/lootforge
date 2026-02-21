@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 
+import { computeConsistencyGroupOutliers } from "../checks/consistencyOutliers.js";
 import {
   type ImageAcceptanceItemReport,
   runImageAcceptanceChecks,
@@ -54,6 +55,7 @@ export interface EvalPipelineOptions {
 export interface EvalTargetResult {
   targetId: string;
   out: string;
+  consistencyGroup?: string;
   passedHardGates: boolean;
   hardGateErrors: string[];
   hardGateWarnings: string[];
@@ -85,6 +87,17 @@ export interface EvalTargetResult {
   adapterScore?: number;
   adapterScoreComponents?: Record<string, number>;
   adapterWarnings?: string[];
+  consistencyGroupOutlier?: {
+    score: number;
+    warningThreshold: number;
+    threshold: number;
+    penaltyThreshold: number;
+    penaltyWeight: number;
+    warned: boolean;
+    penalty: number;
+    reasons: string[];
+    metricDeltas: Record<string, number>;
+  };
   finalScore: number;
 }
 
@@ -115,6 +128,18 @@ export interface EvalReport {
     }[];
   };
   adapterWarnings: string[];
+  consistencyGroupSummary?: {
+    consistencyGroup: string;
+    targetCount: number;
+    evaluatedTargetCount: number;
+    warningTargetIds: string[];
+    outlierTargetIds: string[];
+    warningCount: number;
+    outlierCount: number;
+    maxScore: number;
+    totalPenalty: number;
+    metricMedians: Record<string, number>;
+  }[];
   packInvariants?: PackInvariantSummary;
   targets: EvalTargetResult[];
 }
@@ -271,10 +296,12 @@ export async function runEvalPipeline(options: EvalPipelineOptions): Promise<Eva
 
     const candidateScore = typeof candidate.score === "number" ? candidate.score : 0;
     const penalty = hardGateErrors.length * 1000;
+    const baseFinalScore = candidateScore + adapterScore - penalty;
 
     targetResults.push({
       targetId: item.targetId,
       out: item.out,
+      ...(target.consistencyGroup ? { consistencyGroup: target.consistencyGroup } : {}),
       passedHardGates: hardGateErrors.length === 0,
       hardGateErrors,
       hardGateWarnings,
@@ -288,8 +315,25 @@ export async function runEvalPipeline(options: EvalPipelineOptions): Promise<Eva
       ...(adapterScore !== 0 ? { adapterScore } : {}),
       ...(Object.keys(adapterScoreComponents).length > 0 ? { adapterScoreComponents } : {}),
       ...(adapterWarnings.length > 0 ? { adapterWarnings } : {}),
-      finalScore: candidateScore + adapterScore - penalty,
+      finalScore: baseFinalScore,
     });
+  }
+
+  const consistencyOutliers = computeConsistencyGroupOutliers(
+    targetResults.map((target) => ({
+      targetId: target.targetId,
+      consistencyGroup: target.consistencyGroup,
+      candidateMetrics: target.candidateMetrics,
+      consistencyGroupScoring: targetsById.get(target.targetId)?.consistencyGroupScoring,
+    })),
+  );
+  for (const targetResult of targetResults) {
+    const outlierScore = consistencyOutliers.byTargetId.get(targetResult.targetId);
+    if (!outlierScore) {
+      continue;
+    }
+    targetResult.consistencyGroupOutlier = outlierScore;
+    targetResult.finalScore -= outlierScore.penalty;
   }
 
   targetResults.sort((left, right) => left.targetId.localeCompare(right.targetId));
@@ -325,6 +369,9 @@ export async function runEvalPipeline(options: EvalPipelineOptions): Promise<Eva
       adapters: adapterHealthEntries,
     },
     adapterWarnings: reportAdapterWarnings,
+    ...(consistencyOutliers.groups.length > 0
+      ? { consistencyGroupSummary: consistencyOutliers.groups }
+      : {}),
     ...(acceptance.packInvariants ? { packInvariants: acceptance.packInvariants } : {}),
     targets: targetResults,
   };

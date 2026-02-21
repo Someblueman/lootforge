@@ -21,9 +21,10 @@ export interface ProvenanceJobRecord {
     score: number;
     passedAcceptance: boolean;
     reasons: string[];
-    stage?: "draft" | "refine";
+    stage?: "draft" | "refine" | "autocorrect";
     promoted?: boolean;
     sourceOutputPath?: string;
+    autoCorrectAttempt?: number;
     components?: Record<string, number>;
     metrics?: Record<string, number>;
     vlm?: {
@@ -60,6 +61,32 @@ export interface ProvenanceJobRecord {
     skippedReason?: string;
     warnings?: string[];
   };
+  agenticRetry?: {
+    enabled: boolean;
+    maxRetries: number;
+    attempted: number;
+    succeeded: boolean;
+    skippedReason?: string;
+    attempts: {
+      attempt: number;
+      sourceOutputPath: string;
+      outputPath: string;
+      critique: string;
+      triggeredBy: string[];
+      scoreBefore: number;
+      scoreAfter: number;
+      passedBefore: boolean;
+      passedAfter: boolean;
+      reasonsBefore: string[];
+      reasonsAfter: string[];
+    }[];
+  };
+  styleReferenceLineage?: {
+    source: "style-kit" | "target-output";
+    reference: string;
+    sourceTargetId?: string;
+    resolvedPath?: string;
+  }[];
   generationMode?: "text" | "edit-first";
   edit?: {
     mode?: "edit" | "iterate";

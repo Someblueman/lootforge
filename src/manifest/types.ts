@@ -13,6 +13,7 @@ import {
   type TargetKind,
   type TargetScoreWeights,
   type TargetEditSpec,
+  type VisualStylePolicy,
   type WrapGridPolicy,
 } from "../providers/types.js";
 
@@ -55,6 +56,7 @@ export interface ManifestStyleKit {
   negativeRulesPath?: string;
   loraPath?: string;
   loraStrength?: number;
+  visualPolicy?: VisualStylePolicy;
 }
 
 export interface ManifestConsistencyGroup {
@@ -62,6 +64,12 @@ export interface ManifestConsistencyGroup {
   description?: string;
   styleKitId?: string;
   referenceImages: string[];
+}
+
+export interface ManifestTargetTemplate {
+  id: string;
+  dependsOn?: string[];
+  styleReferenceFrom?: string[];
 }
 
 export interface ManifestEvaluationProfile {
@@ -75,9 +83,19 @@ export interface ManifestEvaluationProfile {
     alphaHaloRiskMax?: number;
     alphaStrayNoiseMax?: number;
     alphaEdgeSharpnessMin?: number;
+    mattingHiddenRgbLeakMax?: number;
+    mattingMaskConsistencyMin?: number;
+    mattingSemiTransparencyRatioMax?: number;
     packTextureBudgetMB?: number;
     spritesheetSilhouetteDriftMax?: number;
     spritesheetAnchorDriftMax?: number;
+    spritesheetIdentityDriftMax?: number;
+    spritesheetPoseDriftMax?: number;
+  };
+  consistencyGroupScoring?: {
+    warningThreshold?: number;
+    penaltyThreshold?: number;
+    penaltyWeight?: number;
   };
   scoreWeights?: TargetScoreWeights;
 }
@@ -143,6 +161,8 @@ export interface ManifestPostProcessOperations {
     raw?: boolean;
     pixel?: boolean;
     styleRef?: boolean;
+    layerColor?: boolean;
+    layerMatte?: boolean;
   };
 }
 
@@ -184,6 +204,9 @@ export interface ManifestTarget {
   id: string;
   kind: string;
   out: string;
+  templateId?: string;
+  dependsOn?: string[];
+  styleReferenceFrom?: string[];
   atlasGroup?: string;
   styleKitId: string;
   consistencyGroup: string;
@@ -216,6 +239,7 @@ export interface ManifestV2 {
   pack: ManifestPack;
   providers: ManifestProviders;
   styleKits: ManifestStyleKit[];
+  targetTemplates?: ManifestTargetTemplate[];
   consistencyGroups?: ManifestConsistencyGroup[];
   evaluationProfiles: ManifestEvaluationProfile[];
   scoringProfiles?: ManifestScoringProfile[];

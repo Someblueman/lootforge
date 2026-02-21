@@ -1,6 +1,6 @@
 # LootForge Public Release Roadmap
 
-Last updated: 2026-02-20
+Last updated: 2026-02-21
 
 ## Goal
 
@@ -306,30 +306,40 @@ Completed 2026-02-20 in this release track:
   - added `GET /v1/contracts/provider-capabilities` and `GET /v1/providers/capabilities` for wrapper capability discovery and runtime feature gating,
   - added provider/model query support for introspection (`provider`, `model`) with model-aware Nano edit capability differentiation,
   - added explicit directive-gating capability signals (`pixel`, `highRes`, `references`) with support modes and diagnostics.
+- Add template-driven pack orchestration layer with dependency-aware style-reference chaining:
+  - added manifest `targetTemplates[]` with target-level `templateId`, `dependsOn`, and `styleReferenceFrom`,
+  - added deterministic dependency-aware generate staging with unresolved/cycle validation,
+  - added per-job provenance `styleReferenceLineage` records for effective style-reference inputs.
+- Add consistency-group drift/outlier scoring with configurable warning and ranking influence controls:
+  - added CLIP/LPIPS sibling-group outlier scoring with aggregate warning/outlier summaries in eval/review artifacts,
+  - added `evaluationProfiles[].consistencyGroupScoring` controls (`warningThreshold`, `penaltyThreshold`, `penaltyWeight`) for deterministic ranking influence,
+  - added selection-lock traceability fields (`evalFinalScore`, `groupSignalTrace`) so group-signal ranking deltas remain auditable.
+- Add bounded agentic auto-correction retries for VLM and edge-boundary hard-fails:
+  - added optional `generationPolicy.agenticRetry` controls (`enabled`, `maxRetries`) to drive bounded edit-first self-healing loops,
+  - auto-generated critique instructions from hard-fail signals (`vlm_gate_below_threshold`, alpha-boundary violations) and retried from selected candidate outputs,
+  - persisted attempt-level trigger/delta summaries in run provenance via `agenticRetry` records.
+- Complete coarse-to-fine benchmark evidence and cost analysis tooling:
+  - added stage-weighted run-cost benchmarking utilities and a comparison script (`npm run benchmark:coarse-to-fine`),
+  - added integration benchmark coverage showing reduced cost-per-approved at equivalent acceptance for coarse-to-fine promotion flows,
+  - retained promotion/discarded candidate provenance records as benchmark input artifacts.
+- Add deterministic topology and animation-drift QA follow-ups:
+  - added wrap-grid topology validation modes (`self`, `one-to-one`, `many-to-many`) with explicit mismatch-threshold diagnostics separate from seam scoring,
+  - added spritesheet continuity hard-gates for identity drift and pose drift with per-animation metrics (`maxIdentityDrift`, `maxPoseDrift`) in acceptance/eval artifacts.
+- Add machine-checkable style-bible visual policy checks:
+  - added manifest style-policy contract (`styleKits[].visualPolicy`) for line contrast, shading complexity, and UI rectilinearity constraints,
+  - enforced deterministic acceptance/eval diagnostics with explicit metrics and hard rejection codes (`style_policy_*`).
+- Add layered export + matting-assisted alpha QA pipeline:
+  - added first-class layered artifacts (`__layer_color`, `__layer_matte`) for sprite/UI/VFX workflows with deterministic export contracts,
+  - added matting-derived transparency diagnostics (`maskCoverage`, `semiTransparencyRatio`, `maskConsistency`, `hiddenRgbLeak`) with optional hard-gate thresholds in acceptance/eval artifacts.
 
 Remaining queued items:
-
-- Add coarse-to-fine candidate promotion controls:
-  - run lower-cost candidate generation/scoring first,
-  - promote top-K candidates into high-fidelity refinement passes only when quality gates justify extra compute.
-- Add template-driven pack orchestration layer with dependency-aware style-reference chaining across generated assets.
-- Add consistency-group drift/outlier scoring using CLIP/LPIPS signals.
-- Add aggregate group-level review/eval warnings and ranking influence controls.
 
 #### 2D Investigation Follow-ups (Visual QA + Policy)
 
 - Add machine-checkable visual style-bible policy contracts:
-  - extend style constraints beyond palette (line weight, shading rules, UI geometry constraints),
-  - enforce policy compliance in validate/eval with explicit per-target diagnostics.
+  - extend beyond current baseline thresholds with richer style-assertion primitives when needed (for example, per-kind policy profiles).
 - Add sprite identity + pose adherence QA modules:
-  - add frame-to-frame identity drift scoring for animation families,
-  - add optional pose-target checks and rejection reasons for frame candidates.
-- Expand tile QA from seam-only checks to topology constraints:
-  - validate self/one-to-one/many-to-many adjacency compatibility from explicit tile rules,
-  - report topology violations separately from texture seam metrics for map assembly reliability.
-- Add layered export + matting-assisted alpha QA pipeline:
-  - add first-class layered artifacts for sprite/UI/VFX workflows with deterministic export contracts,
-  - add matting-derived transparency QA checks (halo/fringe/mask consistency) in eval/review diagnostics.
+  - extend beyond current drift thresholds with optional target-specific pose directives when prompts require strict choreography.
 
 ## Future (After Upcoming)
 

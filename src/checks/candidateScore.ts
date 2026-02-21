@@ -38,6 +38,8 @@ interface NormalizedScoreWeights {
 
 export interface ScoreCandidateImagesOptions {
   outDir?: string;
+  includeSoftAdapters?: boolean;
+  includeVlmGate?: boolean;
 }
 
 function targetRequiresAlpha(target: PlannedTarget): boolean {
@@ -291,13 +293,15 @@ export async function scoreCandidateImages(
   const center = centroidHistogram(inspections.map((inspection) => inspection.histogram));
   const scoreWeights = resolveScoreWeights(target);
   const outDir = options.outDir;
+  const includeSoftAdapters = options.includeSoftAdapters ?? true;
+  const includeVlmGate = options.includeVlmGate ?? true;
   const softAdapterByOutputPath = new Map<
     string,
     Awaited<ReturnType<typeof runEnabledSoftAdapters>>
   >();
   const vlmByOutputPath = new Map<string, NonNullable<CandidateScoreRecord["vlm"]>>();
 
-  if (outDir) {
+  if (outDir && includeSoftAdapters) {
     const softResults = await Promise.all(
       inspections.map(async (inspection) => ({
         outputPath: inspection.outputPath,
@@ -313,7 +317,7 @@ export async function scoreCandidateImages(
     }
   }
 
-  if (targetHasVlmGate(target)) {
+  if (targetHasVlmGate(target) && includeVlmGate) {
     if (!outDir) {
       throw new Error(
         `Target "${target.id}" configured generationPolicy.vlmGate, but candidate scoring did not receive outDir.`,

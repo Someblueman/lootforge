@@ -284,6 +284,176 @@ describe("eval adapters", () => {
     expect(result.report.targets[0].finalScore).toBe(40);
   });
 
+  it("applies consistency-group outlier penalties to final scores", async () => {
+    const tempRoot = await mkdtemp(path.join(os.tmpdir(), "lootforge-eval-consistency-group-"));
+    const outDir = path.join(tempRoot, "work");
+    const targetsIndexPath = path.join(outDir, "jobs", "targets-index.json");
+    const processedDir = path.join(outDir, "assets", "imagegen", "processed", "images");
+    const provenancePath = path.join(outDir, "provenance", "run.json");
+
+    await mkdir(path.dirname(targetsIndexPath), { recursive: true });
+    await mkdir(processedDir, { recursive: true });
+    await mkdir(path.dirname(provenancePath), { recursive: true });
+
+    for (const targetId of ["hero-a", "hero-b", "hero-c"]) {
+      await sharp({
+        create: {
+          width: 64,
+          height: 64,
+          channels: 4,
+          background: { r: 255, g: 0, b: 0, alpha: 0 },
+        },
+      })
+        .png()
+        .toFile(path.join(processedDir, `${targetId}.png`));
+    }
+
+    await writeFile(
+      targetsIndexPath,
+      `${JSON.stringify(
+        {
+          targets: [
+            {
+              id: "hero-a",
+              kind: "sprite",
+              out: "hero-a.png",
+              consistencyGroup: "heroes",
+              promptSpec: { primary: "hero a" },
+              generationPolicy: {
+                outputFormat: "png",
+                background: "transparent",
+              },
+              acceptance: { size: "64x64", alpha: true, maxFileSizeKB: 128 },
+              runtimeSpec: { alphaRequired: true },
+            },
+            {
+              id: "hero-b",
+              kind: "sprite",
+              out: "hero-b.png",
+              consistencyGroup: "heroes",
+              promptSpec: { primary: "hero b" },
+              generationPolicy: {
+                outputFormat: "png",
+                background: "transparent",
+              },
+              acceptance: { size: "64x64", alpha: true, maxFileSizeKB: 128 },
+              runtimeSpec: { alphaRequired: true },
+            },
+            {
+              id: "hero-c",
+              kind: "sprite",
+              out: "hero-c.png",
+              consistencyGroup: "heroes",
+              promptSpec: { primary: "hero c" },
+              generationPolicy: {
+                outputFormat: "png",
+                background: "transparent",
+              },
+              acceptance: { size: "64x64", alpha: true, maxFileSizeKB: 128 },
+              runtimeSpec: { alphaRequired: true },
+            },
+          ],
+        },
+        null,
+        2,
+      )}\n`,
+      "utf8",
+    );
+
+    await writeFile(
+      provenancePath,
+      `${JSON.stringify(
+        {
+          jobs: [
+            {
+              targetId: "hero-a",
+              provider: "openai",
+              model: "gpt-image-1",
+              inputHash: "a",
+              outputPath: path.join(outDir, "assets", "imagegen", "raw", "hero-a.png"),
+              candidateScores: [
+                {
+                  outputPath: path.join(outDir, "assets", "imagegen", "raw", "hero-a.png"),
+                  score: 100,
+                  passedAcceptance: true,
+                  selected: true,
+                  reasons: [],
+                  metrics: {
+                    "clip.rawScore": 90,
+                    "lpips.rawScore": 0.1,
+                  },
+                },
+              ],
+            },
+            {
+              targetId: "hero-b",
+              provider: "openai",
+              model: "gpt-image-1",
+              inputHash: "b",
+              outputPath: path.join(outDir, "assets", "imagegen", "raw", "hero-b.png"),
+              candidateScores: [
+                {
+                  outputPath: path.join(outDir, "assets", "imagegen", "raw", "hero-b.png"),
+                  score: 100,
+                  passedAcceptance: true,
+                  selected: true,
+                  reasons: [],
+                  metrics: {
+                    "clip.rawScore": 91,
+                    "lpips.rawScore": 0.11,
+                  },
+                },
+              ],
+            },
+            {
+              targetId: "hero-c",
+              provider: "openai",
+              model: "gpt-image-1",
+              inputHash: "c",
+              outputPath: path.join(outDir, "assets", "imagegen", "raw", "hero-c.png"),
+              candidateScores: [
+                {
+                  outputPath: path.join(outDir, "assets", "imagegen", "raw", "hero-c.png"),
+                  score: 100,
+                  passedAcceptance: true,
+                  selected: true,
+                  reasons: [],
+                  metrics: {
+                    "clip.rawScore": 20,
+                    "lpips.rawScore": 0.8,
+                  },
+                },
+              ],
+            },
+          ],
+        },
+        null,
+        2,
+      )}\n`,
+      "utf8",
+    );
+
+    const result = await runEvalPipeline({
+      outDir,
+      targetsIndexPath,
+      strict: true,
+    });
+
+    const heroC = result.report.targets.find((target) => target.targetId === "hero-c");
+    expect(heroC?.consistencyGroupOutlier?.warned).toBe(true);
+    expect(heroC?.consistencyGroupOutlier?.penalty).toBeGreaterThan(0);
+    expect(heroC?.finalScore).toBeLessThan(100);
+    expect(result.report.consistencyGroupSummary).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          consistencyGroup: "heroes",
+          warningTargetIds: ["hero-c"],
+          outlierTargetIds: ["hero-c"],
+        }),
+      ]),
+    );
+  });
+
   it("fails fast when adapter reference paths escape the output root", async () => {
     const fixture = await createEvalFixture(true);
     const clipScriptPath = path.join(fixture.outDir, "clip-adapter-safe.js");

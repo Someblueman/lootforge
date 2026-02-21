@@ -92,6 +92,29 @@ describe("manifest normalization", () => {
     expect(artifacts.targets[0].runtimeSpec?.anchorY).toBe(0.75);
   });
 
+  it("normalizes style-kit visual policy constraints onto planned targets", () => {
+    const manifest: ManifestV2 = {
+      ...BASE_MANIFEST,
+      styleKits: [
+        {
+          ...BASE_MANIFEST.styleKits[0],
+          visualPolicy: {
+            lineContrastMin: 0.12,
+            shadingBandCountMax: 10,
+            uiRectilinearityMin: 0.85,
+          },
+        },
+      ],
+    };
+
+    const artifacts = createPlanArtifacts(manifest, "/tmp/manifest.json");
+    expect(artifacts.targets[0].visualStylePolicy).toEqual({
+      lineContrastMin: 0.12,
+      shadingBandCountMax: 10,
+      uiRectilinearityMin: 0.85,
+    });
+  });
+
   it("applies manifest scoring profile overrides on top of per-kind defaults", () => {
     const manifest: ManifestV2 = {
       ...BASE_MANIFEST,
@@ -155,6 +178,29 @@ describe("manifest normalization", () => {
     });
   });
 
+  it("normalizes consistency-group scoring controls from evaluation profiles", () => {
+    const manifest: ManifestV2 = {
+      ...BASE_MANIFEST,
+      evaluationProfiles: [
+        {
+          ...BASE_MANIFEST.evaluationProfiles[0],
+          consistencyGroupScoring: {
+            warningThreshold: 1.5,
+            penaltyThreshold: 2.25,
+            penaltyWeight: 15,
+          },
+        },
+      ],
+    };
+
+    const artifacts = createPlanArtifacts(manifest, "/tmp/manifest.json");
+    expect(artifacts.targets[0].consistencyGroupScoring).toEqual({
+      warningThreshold: 1.5,
+      penaltyThreshold: 2.25,
+      penaltyWeight: 15,
+    });
+  });
+
   it("normalizes directed-synthesis scaffold fields onto planned targets", () => {
     const manifest: ManifestV2 = {
       ...BASE_MANIFEST,
@@ -179,6 +225,9 @@ describe("manifest normalization", () => {
               upscale: 2,
               denoiseStrength: 0.25,
             },
+            agenticRetry: {
+              maxRetries: 2,
+            },
           },
         },
       ],
@@ -198,6 +247,10 @@ describe("manifest normalization", () => {
       enabled: true,
       upscale: 2,
       denoiseStrength: 0.25,
+    });
+    expect(artifacts.targets[0].generationPolicy?.agenticRetry).toEqual({
+      enabled: true,
+      maxRetries: 2,
     });
   });
 
@@ -253,6 +306,85 @@ describe("manifest normalization", () => {
     });
     expect(artifacts.targets[0].generationPolicy?.draftQuality).toBe("medium");
     expect(artifacts.targets[0].generationPolicy?.finalQuality).toBe("high");
+  });
+
+  it("applies target template orchestration and defaults styleReferenceFrom from dependsOn", () => {
+    const manifest: ManifestV2 = {
+      ...BASE_MANIFEST,
+      targetTemplates: [
+        {
+          id: "variant-chain",
+          dependsOn: ["hero-base"],
+        },
+      ],
+      targets: [
+        {
+          ...BASE_MANIFEST.targets[0],
+          id: "hero-base",
+          out: "hero-base.png",
+        },
+        {
+          ...BASE_MANIFEST.targets[0],
+          id: "hero-variant",
+          out: "hero-variant.png",
+          templateId: "variant-chain",
+          dependsOn: ["hero-lighting"],
+        },
+        {
+          ...BASE_MANIFEST.targets[0],
+          id: "hero-lighting",
+          out: "hero-lighting.png",
+        },
+      ],
+    };
+
+    const artifacts = createPlanArtifacts(manifest, "/tmp/manifest.json");
+    const variant = artifacts.targets.find((target) => target.id === "hero-variant");
+    expect(variant?.templateId).toBe("variant-chain");
+    expect(variant?.dependsOn).toEqual(["hero-base", "hero-lighting"]);
+    expect(variant?.styleReferenceFrom).toEqual(["hero-base", "hero-lighting"]);
+  });
+
+  it("rejects missing dependency targets in orchestration planning", () => {
+    const manifest: ManifestV2 = {
+      ...BASE_MANIFEST,
+      targets: [
+        {
+          ...BASE_MANIFEST.targets[0],
+          id: "hero-variant",
+          out: "hero-variant.png",
+          dependsOn: ["missing-target"],
+        },
+      ],
+    };
+
+    expect(() => createPlanArtifacts(manifest, "/tmp/manifest.json")).toThrow(
+      /depends on missing planned target/i,
+    );
+  });
+
+  it("rejects dependency cycles in orchestration planning", () => {
+    const manifest: ManifestV2 = {
+      ...BASE_MANIFEST,
+      targets: [
+        {
+          ...BASE_MANIFEST.targets[0],
+          id: "hero-a",
+          out: "hero-a.png",
+          dependsOn: ["hero-b"],
+        },
+        {
+          ...BASE_MANIFEST.targets[0],
+          id: "hero-b",
+          out: "hero-b.png",
+          dependsOn: ["hero-a"],
+        },
+      ],
+    };
+
+    expect(() => createPlanArtifacts(manifest, "/tmp/manifest.json")).toThrow(
+      /dependency cycle detected/i,
+    );
   });
 
   it("defaults target palette from style-kit palette files when target palette is unset", async () => {
@@ -342,6 +474,8 @@ describe("manifest normalization", () => {
                 raw: true,
                 styleRef: true,
                 pixel: true,
+                layerColor: true,
+                layerMatte: true,
               },
             },
           },
@@ -363,6 +497,8 @@ describe("manifest normalization", () => {
       raw: true,
       styleRef: true,
       pixel: true,
+      layerColor: true,
+      layerMatte: true,
     });
   });
 
@@ -382,6 +518,11 @@ describe("manifest normalization", () => {
           wrapGrid: {
             columns: 4,
             rows: 2,
+            topology: {
+              mode: "many-to-many",
+              maxMismatchRatio: 0.1,
+              colorTolerance: 8,
+            },
           },
           acceptance: {
             ...BASE_MANIFEST.targets[0].acceptance,
@@ -402,6 +543,11 @@ describe("manifest normalization", () => {
       rows: 2,
       seamThreshold: 10,
       seamStripPx: 3,
+      topology: {
+        mode: "many-to-many",
+        maxMismatchRatio: 0.1,
+        colorTolerance: 8,
+      },
     });
   });
 
@@ -416,9 +562,14 @@ describe("manifest normalization", () => {
             alphaHaloRiskMax: 0.05,
             alphaStrayNoiseMax: 0.01,
             alphaEdgeSharpnessMin: 0.8,
+            mattingHiddenRgbLeakMax: 0.02,
+            mattingMaskConsistencyMin: 0.7,
+            mattingSemiTransparencyRatioMax: 0.35,
             packTextureBudgetMB: 32,
             spritesheetSilhouetteDriftMax: 0.2,
             spritesheetAnchorDriftMax: 0.15,
+            spritesheetIdentityDriftMax: 0.25,
+            spritesheetPoseDriftMax: 0.4,
           },
         },
       ],
@@ -428,9 +579,14 @@ describe("manifest normalization", () => {
     expect(artifacts.targets[0].alphaHaloRiskMax).toBe(0.05);
     expect(artifacts.targets[0].alphaStrayNoiseMax).toBe(0.01);
     expect(artifacts.targets[0].alphaEdgeSharpnessMin).toBe(0.8);
+    expect(artifacts.targets[0].mattingHiddenRgbLeakMax).toBe(0.02);
+    expect(artifacts.targets[0].mattingMaskConsistencyMin).toBe(0.7);
+    expect(artifacts.targets[0].mattingSemiTransparencyRatioMax).toBe(0.35);
     expect(artifacts.targets[0].packTextureBudgetMB).toBe(32);
     expect(artifacts.targets[0].spritesheetSilhouetteDriftMax).toBe(0.2);
     expect(artifacts.targets[0].spritesheetAnchorDriftMax).toBe(0.15);
+    expect(artifacts.targets[0].spritesheetIdentityDriftMax).toBe(0.25);
+    expect(artifacts.targets[0].spritesheetPoseDriftMax).toBe(0.4);
   });
 
   it("rejects invalid pack-level hard-gate values", () => {
@@ -444,6 +600,11 @@ describe("manifest normalization", () => {
             packTextureBudgetMB: -1,
             spritesheetSilhouetteDriftMax: 1.2,
             spritesheetAnchorDriftMax: -0.1,
+            spritesheetIdentityDriftMax: 1.4,
+            spritesheetPoseDriftMax: -0.2,
+            mattingHiddenRgbLeakMax: 1.2,
+            mattingMaskConsistencyMin: -0.1,
+            mattingSemiTransparencyRatioMax: -0.3,
           },
         },
       ],
@@ -461,7 +622,52 @@ describe("manifest normalization", () => {
         (issue) =>
           issue.path === "evaluationProfiles[0].hardGates.packTextureBudgetMB" ||
           issue.path === "evaluationProfiles[0].hardGates.spritesheetSilhouetteDriftMax" ||
-          issue.path === "evaluationProfiles[0].hardGates.spritesheetAnchorDriftMax",
+          issue.path === "evaluationProfiles[0].hardGates.spritesheetAnchorDriftMax" ||
+          issue.path === "evaluationProfiles[0].hardGates.spritesheetIdentityDriftMax" ||
+          issue.path === "evaluationProfiles[0].hardGates.spritesheetPoseDriftMax" ||
+          issue.path === "evaluationProfiles[0].hardGates.mattingHiddenRgbLeakMax" ||
+          issue.path === "evaluationProfiles[0].hardGates.mattingMaskConsistencyMin" ||
+          issue.path === "evaluationProfiles[0].hardGates.mattingSemiTransparencyRatioMax",
+      ),
+    ).toBe(true);
+  });
+
+  it("rejects empty or out-of-range style-kit visual policies", () => {
+    const manifest: ManifestV2 = {
+      ...BASE_MANIFEST,
+      styleKits: [
+        {
+          ...BASE_MANIFEST.styleKits[0],
+          visualPolicy: {
+            lineContrastMin: 1.2,
+          },
+        },
+        {
+          ...BASE_MANIFEST.styleKits[0],
+          id: "empty-style-policy",
+          visualPolicy: {},
+        },
+      ],
+      targets: [
+        {
+          ...BASE_MANIFEST.targets[0],
+          styleKitId: "empty-style-policy",
+        },
+      ],
+    };
+
+    const validation = validateManifestSource({
+      manifestPath: "/tmp/manifest.json",
+      raw: JSON.stringify(manifest),
+      data: manifest,
+    });
+
+    expect(validation.report.errors).toBeGreaterThan(0);
+    expect(
+      validation.report.issues.some(
+        (issue) =>
+          issue.path === "styleKits[0].visualPolicy.lineContrastMin" ||
+          issue.path === "styleKits[1].visualPolicy",
       ),
     ).toBe(true);
   });
@@ -666,6 +872,35 @@ describe("manifest normalization", () => {
     expect(
       validation.report.issues.some((issue) => issue.code === "duplicate_scoring_profile_id"),
     ).toBe(true);
+  });
+
+  it("rejects targets that reference missing target templates", () => {
+    const manifest: ManifestV2 = {
+      ...BASE_MANIFEST,
+      targetTemplates: [
+        {
+          id: "existing-template",
+          dependsOn: ["hero"],
+        },
+      ],
+      targets: [
+        {
+          ...BASE_MANIFEST.targets[0],
+          templateId: "missing-template",
+        },
+      ],
+    };
+
+    const validation = validateManifestSource({
+      manifestPath: "/tmp/manifest.json",
+      raw: JSON.stringify(manifest),
+      data: manifest,
+    });
+
+    expect(validation.report.errors).toBeGreaterThan(0);
+    expect(validation.report.issues.some((issue) => issue.code === "missing_target_template")).toBe(
+      true,
+    );
   });
 
   it("rejects unknown consistency groups when consistency groups are declared", () => {

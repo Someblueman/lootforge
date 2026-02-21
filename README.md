@@ -405,6 +405,9 @@ Runs hard/soft quality scoring and writes:
   - `errors`, `warnings`, and issue list
   - continuity metrics per animation (`maxSilhouetteDrift`, `maxAnchorDrift`)
   - texture budget metrics by evaluation profile
+- `eval-report.json` may include consistency-group drift summaries:
+  - `consistencyGroupSummary[]`: per-group warning/outlier counts, warned/outlier target ids, max outlier score, total ranking penalty, and metric medians
+  - `targets[].consistencyGroupOutlier`: per-target warning/penalty trace (`score`, thresholds, weight, reasons, metric deltas)
 
 Optional CLIP/LPIPS/SSIM adapter execution:
 
@@ -458,6 +461,9 @@ lootforge review --out assets/imagegen
 Builds lockfile selections from provenance + eval:
 
 - `<out>/locks/selection-lock.json`
+- includes optional group-signal traceability fields per target when present in eval:
+  - `evalFinalScore`
+  - `groupSignalTrace` (`consistencyGroup`, `score`, thresholds, weight, penalty, reasons)
 
 Example:
 
@@ -480,6 +486,7 @@ Top-level fields:
     - `loraPath?`, `loraStrength?` (`0..2`, requires `loraPath`)
 - `consistencyGroups[]` (optional)
 - `evaluationProfiles[]` (required)
+  - optional `consistencyGroupScoring?`: `warningThreshold`, `penaltyThreshold`, `penaltyWeight`
 - `atlas` options for packing defaults and per-group overrides
 - `targets[]` (required)
 
@@ -491,13 +498,21 @@ Top-level fields:
 Per target:
 
 - `id`, `kind`, `out`, `atlasGroup?`, `styleKitId`, `consistencyGroup`, `evaluationProfileId`
+- `templateId?`: optional lookup into top-level `targetTemplates[]` for reusable orchestration policy
+- `dependsOn?`: optional target-id list used to enforce dependency-aware generate ordering
+- `styleReferenceFrom?`: optional target-id list for style-reference chaining from previously generated targets
+  - when omitted, `dependsOn` is used as the default style-reference chain
 - `generationMode`: `text|edit-first`
 - `edit-first` mode requires a provider with `image-edits` support (`openai`, `local`, and `nano` when using an image-edit-capable Gemini model)
 - `edit.inputs[].path`: when used, must resolve inside the active `--out` root at runtime (`generate`, `eval`, and `regenerate`)
 - `generationPolicy.background: "transparent"` requires a provider that supports transparent outputs (unsupported providers now fail validation)
 - `generationPolicy.vlmGate?`: optional candidate gate (`threshold` defaults to `4` on a `0..5` scale, optional `rubric`)
 - `generationPolicy.coarseToFine?`: optional promotion controls (`enabled`, `promoteTopK`, `minDraftScore`, `requireDraftAcceptance`)
+- `generationPolicy.agenticRetry?`: optional self-healing edit-first loop controls (`enabled`, `maxRetries`)
 - `generationPolicy.draftQuality` / `generationPolicy.finalQuality`: optional quality split used by coarse-pass and refinement-pass generation
+  - when coarse-to-fine is enabled, draft/intermediate promotion ranking uses local image metrics only; full VLM/soft-adapter scoring runs on final promoted refine candidates
+  - benchmark helper: `npm run benchmark:coarse-to-fine -- --baseline <baseline-run.json> --coarse <coarse-run.json>`
+    - outputs stage-weighted cost-per-approved comparisons from provenance runs
 - directed-synthesis scaffolding:
   - `controlImage?` with `controlMode?` (`canny|depth|openpose`) must be provided together
   - `generationPolicy.highQuality?`
@@ -521,6 +536,10 @@ Per target:
   - `packTextureBudgetMB` (`>0`)
   - `spritesheetSilhouetteDriftMax` (`0..1`)
   - `spritesheetAnchorDriftMax` (`0..1`)
+- consistency-group warning and ranking influence controls are configured via `evaluationProfiles[].consistencyGroupScoring`:
+  - `warningThreshold` (`>0`)
+  - `penaltyThreshold` (`>0`)
+  - `penaltyWeight` (`>=0`)
 - `kind: "spritesheet"` targets define `animations` and are expanded/assembled by the pipeline
 
 Minimal example:

@@ -1,4 +1,5 @@
 import {
+  type AgenticRetryPolicy,
   type CoarseToFinePolicy,
   type GenerationMode,
   type GenerationPolicy,
@@ -81,6 +82,7 @@ export function getTargetGenerationPolicy(target: PlannedTarget): NormalizedGene
         : undefined,
     vlmGate: normalizeVlmGatePolicy(policy.vlmGate),
     coarseToFine: normalizeCoarseToFinePolicy(policy.coarseToFine),
+    agenticRetry: normalizeAgenticRetryPolicy(policy.agenticRetry),
   };
 }
 
@@ -147,6 +149,24 @@ function normalizeCoarseToFinePolicy(
     promoteTopK,
     ...(typeof minDraftScore === "number" ? { minDraftScore } : {}),
     requireDraftAcceptance: policy.requireDraftAcceptance ?? true,
+  };
+}
+
+function normalizeAgenticRetryPolicy(
+  policy: AgenticRetryPolicy | undefined,
+): NormalizedGenerationPolicy["agenticRetry"] {
+  if (!policy) {
+    return undefined;
+  }
+
+  const maxRetries =
+    typeof policy.maxRetries === "number" && Number.isFinite(policy.maxRetries)
+      ? Math.max(0, Math.round(policy.maxRetries))
+      : 1;
+
+  return {
+    enabled: policy.enabled ?? true,
+    maxRetries,
   };
 }
 

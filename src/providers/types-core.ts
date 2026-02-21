@@ -4,6 +4,7 @@ export const POST_PROCESS_ALGORITHMS = ["nearest", "lanczos3"] as const;
 export const TARGET_KINDS = ["sprite", "tile", "background", "effect", "spritesheet"] as const;
 export const CONTROL_MODES = ["canny", "depth", "openpose"] as const;
 export const GENERATION_MODES = ["text", "edit-first"] as const;
+export const WRAP_GRID_TOPOLOGY_MODES = ["self", "one-to-one", "many-to-many"] as const;
 
 export type ProviderName = (typeof PROVIDER_NAMES)[number];
 export type ProviderSelection = ProviderName | "auto";
@@ -19,6 +20,7 @@ export type NormalizedOutputFormat = "png" | "jpeg" | "webp";
 export type TargetKind = (typeof TARGET_KINDS)[number];
 export type ControlMode = (typeof CONTROL_MODES)[number];
 export type GenerationMode = (typeof GENERATION_MODES)[number];
+export type WrapGridTopologyMode = (typeof WRAP_GRID_TOPOLOGY_MODES)[number];
 export type PaletteMode = "exact" | "max-colors";
 
 export interface ProviderCapabilities {
@@ -101,6 +103,11 @@ export interface CoarseToFinePolicy {
   requireDraftAcceptance?: boolean;
 }
 
+export interface AgenticRetryPolicy {
+  enabled?: boolean;
+  maxRetries?: number;
+}
+
 export interface GenerationPolicy {
   size?: string;
   /** Accepts "transparent", "opaque", or any custom value. */
@@ -122,6 +129,7 @@ export interface GenerationPolicy {
   rateLimitPerMinute?: number;
   vlmGate?: VlmGatePolicy;
   coarseToFine?: CoarseToFinePolicy;
+  agenticRetry?: AgenticRetryPolicy;
 }
 
 export interface VlmGatePolicy {
@@ -176,6 +184,8 @@ export interface VariantOutputsOperation {
   raw?: boolean;
   pixel?: boolean;
   styleRef?: boolean;
+  layerColor?: boolean;
+  layerMatte?: boolean;
 }
 
 export interface PostProcessOperations {
@@ -236,6 +246,12 @@ export interface TargetScoreWeights {
   ssim?: number;
 }
 
+export interface ConsistencyGroupScoringPolicy {
+  warningThreshold?: number;
+  penaltyThreshold?: number;
+  penaltyWeight?: number;
+}
+
 export interface SeamHealPolicy {
   enabled?: boolean;
   stripPx?: number;
@@ -247,18 +263,36 @@ export interface WrapGridPolicy {
   rows: number;
   seamThreshold?: number;
   seamStripPx?: number;
+  topology?: WrapGridTopologyPolicy;
+}
+
+export interface WrapGridTopologyPolicy {
+  mode: WrapGridTopologyMode;
+  maxMismatchRatio?: number;
+  colorTolerance?: number;
+}
+
+export interface VisualStylePolicy {
+  lineContrastMin?: number;
+  shadingBandCountMax?: number;
+  uiRectilinearityMin?: number;
 }
 
 export interface PlannedTarget {
   id: string;
   kind?: string;
   out: string;
+  templateId?: string;
+  dependsOn?: string[];
+  styleReferenceFrom?: string[];
   atlasGroup?: string | null;
   styleKitId?: string;
   styleReferenceImages?: string[];
   loraPath?: string;
   loraStrength?: number;
   consistencyGroup?: string;
+  consistencyGroupScoring?: ConsistencyGroupScoringPolicy;
+  visualStylePolicy?: VisualStylePolicy;
   generationMode?: GenerationMode;
   evaluationProfileId?: string;
   scoringProfile?: string;
@@ -271,9 +305,14 @@ export interface PlannedTarget {
   alphaHaloRiskMax?: number;
   alphaStrayNoiseMax?: number;
   alphaEdgeSharpnessMin?: number;
+  mattingHiddenRgbLeakMax?: number;
+  mattingMaskConsistencyMin?: number;
+  mattingSemiTransparencyRatioMax?: number;
   packTextureBudgetMB?: number;
   spritesheetSilhouetteDriftMax?: number;
   spritesheetAnchorDriftMax?: number;
+  spritesheetIdentityDriftMax?: number;
+  spritesheetPoseDriftMax?: number;
   seamHeal?: SeamHealPolicy;
   wrapGrid?: WrapGridPolicy;
   palette?: PalettePolicy;
@@ -356,6 +395,10 @@ export interface NormalizedGenerationPolicy {
     minDraftScore?: number;
     requireDraftAcceptance: boolean;
   };
+  agenticRetry?: {
+    enabled: boolean;
+    maxRetries: number;
+  };
 }
 
 export interface PolicyNormalizationIssue {
@@ -400,9 +443,10 @@ export interface CandidateScoreRecord {
   score: number;
   passedAcceptance: boolean;
   reasons: string[];
-  stage?: "draft" | "refine";
+  stage?: "draft" | "refine" | "autocorrect";
   promoted?: boolean;
   sourceOutputPath?: string;
+  autoCorrectAttempt?: number;
   components?: Record<string, number>;
   metrics?: Record<string, number>;
   vlm?: CandidateVlmScore;
@@ -456,6 +500,32 @@ export interface ProviderRunResult {
     skippedReason?: string;
     warnings?: string[];
   };
+  agenticRetry?: {
+    enabled: boolean;
+    maxRetries: number;
+    attempted: number;
+    succeeded: boolean;
+    skippedReason?: string;
+    attempts: {
+      attempt: number;
+      sourceOutputPath: string;
+      outputPath: string;
+      critique: string;
+      triggeredBy: string[];
+      scoreBefore: number;
+      scoreAfter: number;
+      passedBefore: boolean;
+      passedAfter: boolean;
+      reasonsBefore: string[];
+      reasonsAfter: string[];
+    }[];
+  };
+  styleReferenceLineage?: {
+    source: "style-kit" | "target-output";
+    reference: string;
+    sourceTargetId?: string;
+    resolvedPath?: string;
+  }[];
   generationMode?: GenerationMode;
   edit?: TargetEditSpec;
   regenerationSource?: RegenerationSource;

@@ -40,6 +40,7 @@ export function toNormalizedGenerationPolicy(target: ManifestTarget): Normalized
     rateLimitPerMinute: target.generationPolicy?.rateLimitPerMinute,
     vlmGate: normalizeVlmGatePolicy(target.generationPolicy?.vlmGate),
     coarseToFine: normalizeCoarseToFinePolicy(target.generationPolicy?.coarseToFine),
+    agenticRetry: normalizeAgenticRetryPolicy(target.generationPolicy?.agenticRetry),
   };
 }
 
@@ -108,6 +109,24 @@ export function normalizeCoarseToFinePolicy(
     promoteTopK,
     ...(typeof minDraftScore === "number" ? { minDraftScore } : {}),
     requireDraftAcceptance: policy.requireDraftAcceptance ?? true,
+  };
+}
+
+export function normalizeAgenticRetryPolicy(
+  policy: NonNullable<ManifestTarget["generationPolicy"]>["agenticRetry"] | undefined,
+): NormalizedGenerationPolicy["agenticRetry"] {
+  if (!policy) {
+    return undefined;
+  }
+
+  const maxRetries =
+    typeof policy.maxRetries === "number" && Number.isFinite(policy.maxRetries)
+      ? Math.max(0, Math.round(policy.maxRetries))
+      : 1;
+
+  return {
+    enabled: policy.enabled ?? true,
+    maxRetries,
   };
 }
 
@@ -218,15 +237,21 @@ export function normalizeEmitVariantsOperation(operation: {
   raw?: boolean;
   pixel?: boolean;
   styleRef?: boolean;
+  layerColor?: boolean;
+  layerMatte?: boolean;
 }): {
   raw?: boolean;
   pixel?: boolean;
   styleRef?: boolean;
+  layerColor?: boolean;
+  layerMatte?: boolean;
 } {
   return {
     ...(typeof operation.raw === "boolean" ? { raw: operation.raw } : {}),
     ...(typeof operation.pixel === "boolean" ? { pixel: operation.pixel } : {}),
     ...(typeof operation.styleRef === "boolean" ? { styleRef: operation.styleRef } : {}),
+    ...(typeof operation.layerColor === "boolean" ? { layerColor: operation.layerColor } : {}),
+    ...(typeof operation.layerMatte === "boolean" ? { layerMatte: operation.layerMatte } : {}),
   };
 }
 

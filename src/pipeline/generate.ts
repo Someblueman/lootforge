@@ -1125,6 +1125,9 @@ function mergeScoredCandidateSets(
 }
 
 function ensureSingleSelectedScore(set: ScoredCandidateSet): ScoredCandidateSet {
+  if (set.scores.length === 0) {
+    return set;
+  }
   const selectedPath = set.scores[0].outputPath;
 
   const scores = set.scores.map((score) => ({

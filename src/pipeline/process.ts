@@ -721,17 +721,18 @@ async function assembleSpritesheetTarget(params: {
       frameTarget.out,
       `spritesheet frame for target "${frameTarget.id}"`,
     );
-    const image = sharp(framePath, { failOn: "none" });
-    const metadata = await image.metadata();
-    if (!metadata.width || !metadata.height) {
+    const result = await sharp(framePath, { failOn: "none" })
+      .png()
+      .toBuffer({ resolveWithObject: true });
+    const { width, height } = result.info;
+    if (!width || !height) {
       continue;
     }
-    const buffer = await image.png().toBuffer();
     frameBuffers.push({
       target: frameTarget,
-      buffer,
-      width: metadata.width,
-      height: metadata.height,
+      buffer: result.data,
+      width,
+      height,
     });
   }
 

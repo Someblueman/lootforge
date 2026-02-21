@@ -170,6 +170,202 @@ describe("eval + select integration", () => {
     expect(await exists(selectResult.selectionLockPath)).toBe(true);
   });
 
+  test("writes consistency-group signal trace into selection lock targets", async () => {
+    const tempRoot = await mkdtemp(path.join(os.tmpdir(), "lootforge-eval-select-group-signal-"));
+    const outDir = path.join(tempRoot, "work");
+    const targetsIndexPath = path.join(outDir, "jobs", "targets-index.json");
+    const processedDir = path.join(outDir, "assets", "imagegen", "processed", "images");
+    const provenancePath = path.join(outDir, "provenance", "run.json");
+
+    await mkdir(path.dirname(targetsIndexPath), { recursive: true });
+    await mkdir(processedDir, { recursive: true });
+    await mkdir(path.dirname(provenancePath), { recursive: true });
+
+    for (const targetId of ["hero-a", "hero-b", "hero-c"]) {
+      await sharp({
+        create: {
+          width: 64,
+          height: 64,
+          channels: 4,
+          background: { r: 255, g: 0, b: 0, alpha: 0 },
+        },
+      })
+        .png()
+        .toFile(path.join(processedDir, `${targetId}.png`));
+    }
+
+    await writeFile(
+      targetsIndexPath,
+      `${JSON.stringify(
+        {
+          targets: [
+            {
+              id: "hero-a",
+              kind: "sprite",
+              out: "hero-a.png",
+              consistencyGroup: "heroes",
+              consistencyGroupScoring: {
+                warningThreshold: 1.5,
+                penaltyThreshold: 2,
+                penaltyWeight: 10,
+              },
+              promptSpec: { primary: "hero a" },
+              generationPolicy: {
+                outputFormat: "png",
+                background: "transparent",
+              },
+              acceptance: { size: "64x64", alpha: true, maxFileSizeKB: 128 },
+              runtimeSpec: { alphaRequired: true },
+            },
+            {
+              id: "hero-b",
+              kind: "sprite",
+              out: "hero-b.png",
+              consistencyGroup: "heroes",
+              consistencyGroupScoring: {
+                warningThreshold: 1.5,
+                penaltyThreshold: 2,
+                penaltyWeight: 10,
+              },
+              promptSpec: { primary: "hero b" },
+              generationPolicy: {
+                outputFormat: "png",
+                background: "transparent",
+              },
+              acceptance: { size: "64x64", alpha: true, maxFileSizeKB: 128 },
+              runtimeSpec: { alphaRequired: true },
+            },
+            {
+              id: "hero-c",
+              kind: "sprite",
+              out: "hero-c.png",
+              consistencyGroup: "heroes",
+              consistencyGroupScoring: {
+                warningThreshold: 1.5,
+                penaltyThreshold: 2,
+                penaltyWeight: 10,
+              },
+              promptSpec: { primary: "hero c" },
+              generationPolicy: {
+                outputFormat: "png",
+                background: "transparent",
+              },
+              acceptance: { size: "64x64", alpha: true, maxFileSizeKB: 128 },
+              runtimeSpec: { alphaRequired: true },
+            },
+          ],
+        },
+        null,
+        2,
+      )}\n`,
+      "utf8",
+    );
+
+    await writeFile(
+      provenancePath,
+      `${JSON.stringify(
+        {
+          jobs: [
+            {
+              targetId: "hero-a",
+              provider: "openai",
+              model: "gpt-image-1",
+              inputHash: "a",
+              outputPath: path.join(outDir, "assets", "imagegen", "raw", "hero-a.png"),
+              candidateScores: [
+                {
+                  outputPath: path.join(outDir, "assets", "imagegen", "raw", "hero-a.png"),
+                  score: 100,
+                  passedAcceptance: true,
+                  selected: true,
+                  reasons: [],
+                  metrics: {
+                    "clip.rawScore": 90,
+                    "lpips.rawScore": 0.1,
+                  },
+                },
+              ],
+            },
+            {
+              targetId: "hero-b",
+              provider: "openai",
+              model: "gpt-image-1",
+              inputHash: "b",
+              outputPath: path.join(outDir, "assets", "imagegen", "raw", "hero-b.png"),
+              candidateScores: [
+                {
+                  outputPath: path.join(outDir, "assets", "imagegen", "raw", "hero-b.png"),
+                  score: 100,
+                  passedAcceptance: true,
+                  selected: true,
+                  reasons: [],
+                  metrics: {
+                    "clip.rawScore": 91,
+                    "lpips.rawScore": 0.11,
+                  },
+                },
+              ],
+            },
+            {
+              targetId: "hero-c",
+              provider: "openai",
+              model: "gpt-image-1",
+              inputHash: "c",
+              outputPath: path.join(outDir, "assets", "imagegen", "raw", "hero-c.png"),
+              candidateScores: [
+                {
+                  outputPath: path.join(outDir, "assets", "imagegen", "raw", "hero-c.png"),
+                  score: 100,
+                  passedAcceptance: true,
+                  selected: true,
+                  reasons: [],
+                  metrics: {
+                    "clip.rawScore": 20,
+                    "lpips.rawScore": 0.8,
+                  },
+                },
+              ],
+            },
+          ],
+        },
+        null,
+        2,
+      )}\n`,
+      "utf8",
+    );
+
+    const evalResult = await runEvalPipeline({
+      outDir,
+      targetsIndexPath,
+      strict: true,
+    });
+    const selectResult = await runSelectPipeline({
+      outDir,
+      evalReportPath: evalResult.reportPath,
+      provenancePath,
+    });
+
+    const lock = JSON.parse(await readFile(selectResult.selectionLockPath, "utf8")) as {
+      targets: {
+        targetId: string;
+        score?: number;
+        evalFinalScore?: number;
+        groupSignalTrace?: {
+          consistencyGroup: string;
+          warned: boolean;
+          penalty: number;
+        };
+      }[];
+    };
+    const heroC = lock.targets.find((target) => target.targetId === "hero-c");
+    expect(heroC?.groupSignalTrace).toMatchObject({
+      consistencyGroup: "heroes",
+      warned: true,
+    });
+    expect(heroC?.groupSignalTrace?.penalty).toBeGreaterThan(0);
+    expect(heroC?.evalFinalScore).toBeLessThan(heroC?.score ?? 0);
+  });
+
   test("fails strict eval when pack invariant hard errors exist", async () => {
     const tempRoot = await mkdtemp(path.join(os.tmpdir(), "lootforge-eval-pack-strict-"));
     const outDir = path.join(tempRoot, "work");

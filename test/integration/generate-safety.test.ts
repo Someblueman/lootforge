@@ -778,7 +778,7 @@ describe("generate pipeline safety", () => {
         'const fs = require("node:fs");',
         `const logPath = ${JSON.stringify(vlmLogPath)};`,
         'const payload = JSON.parse(fs.readFileSync(0, "utf8"));',
-        'fs.appendFileSync(logPath, `${payload.imagePath}\\n`);',
+        "fs.appendFileSync(logPath, `${payload.imagePath}\\n`);",
         'process.stdout.write(JSON.stringify({ score: 4.8, reason: "pass" }));',
         "",
       ].join("\n"),

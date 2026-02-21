@@ -14,19 +14,29 @@ const OUTLIER_METRICS: OutlierMetricConfig[] = [
   },
 ];
 
-const DEFAULT_OUTLIER_THRESHOLD = 2.5;
-const DEFAULT_PENALTY_MULTIPLIER = 25;
+const DEFAULT_WARNING_THRESHOLD = 1.75;
+const DEFAULT_PENALTY_THRESHOLD = 2.5;
+const DEFAULT_PENALTY_WEIGHT = 25;
 const MIN_SCALE = 1e-6;
 
 export interface ConsistencyOutlierInputTarget {
   targetId: string;
   consistencyGroup?: string;
   candidateMetrics?: Record<string, number>;
+  consistencyGroupScoring?: {
+    warningThreshold?: number;
+    penaltyThreshold?: number;
+    penaltyWeight?: number;
+  };
 }
 
 export interface ConsistencyOutlierTargetScore {
   score: number;
+  warningThreshold: number;
   threshold: number;
+  penaltyThreshold: number;
+  penaltyWeight: number;
+  warned: boolean;
   penalty: number;
   reasons: string[];
   metricDeltas: Record<string, number>;
@@ -36,7 +46,12 @@ export interface ConsistencyOutlierGroupSummary {
   consistencyGroup: string;
   targetCount: number;
   evaluatedTargetCount: number;
+  warningTargetIds: string[];
   outlierTargetIds: string[];
+  warningCount: number;
+  outlierCount: number;
+  maxScore: number;
+  totalPenalty: number;
   metricMedians: Record<string, number>;
 }
 
@@ -48,12 +63,14 @@ export interface ConsistencyOutlierScoring {
 export function computeConsistencyGroupOutliers(
   targets: ConsistencyOutlierInputTarget[],
   options?: {
-    threshold?: number;
-    penaltyMultiplier?: number;
+    warningThreshold?: number;
+    penaltyThreshold?: number;
+    penaltyWeight?: number;
   },
 ): ConsistencyOutlierScoring {
-  const threshold = options?.threshold ?? DEFAULT_OUTLIER_THRESHOLD;
-  const penaltyMultiplier = options?.penaltyMultiplier ?? DEFAULT_PENALTY_MULTIPLIER;
+  const defaultWarningThreshold = options?.warningThreshold ?? DEFAULT_WARNING_THRESHOLD;
+  const defaultPenaltyThreshold = options?.penaltyThreshold ?? DEFAULT_PENALTY_THRESHOLD;
+  const defaultPenaltyWeight = options?.penaltyWeight ?? DEFAULT_PENALTY_WEIGHT;
   const byTargetId = new Map<string, ConsistencyOutlierTargetScore>();
   const groups: ConsistencyOutlierGroupSummary[] = [];
 
@@ -107,13 +124,21 @@ export function computeConsistencyGroupOutliers(
       metricMedians[metricName] = series.median;
     }
 
+    const warningTargetIds: string[] = [];
     const outlierTargetIds: string[] = [];
+    let maxScore = 0;
+    let totalPenalty = 0;
     let evaluatedTargetCount = 0;
     for (const target of groupTargets) {
       const reasons: string[] = [];
       const metricDeltas: Record<string, number> = {};
       let signalCount = 0;
       let normalizedDriftSum = 0;
+      const warningThreshold =
+        target.consistencyGroupScoring?.warningThreshold ?? defaultWarningThreshold;
+      const penaltyThreshold =
+        target.consistencyGroupScoring?.penaltyThreshold ?? defaultPenaltyThreshold;
+      const penaltyWeight = target.consistencyGroupScoring?.penaltyWeight ?? defaultPenaltyWeight;
 
       for (const [metricName, series] of metricSeries.entries()) {
         const value = series.byTargetId.get(target.targetId);
@@ -125,8 +150,10 @@ export function computeConsistencyGroupOutliers(
         const normalizedDrift = delta / series.scale;
         metricDeltas[`${metricName}Delta`] = delta;
         normalizedDriftSum += normalizedDrift;
-        if (normalizedDrift >= threshold) {
-          reasons.push(`${metricName}_outlier`);
+        if (normalizedDrift >= warningThreshold) {
+          reasons.push(
+            normalizedDrift >= penaltyThreshold ? `${metricName}_outlier` : `${metricName}_warning`,
+          );
         }
       }
 
@@ -136,13 +163,23 @@ export function computeConsistencyGroupOutliers(
 
       evaluatedTargetCount += 1;
       const score = normalizedDriftSum / signalCount;
-      const penalty = score >= threshold ? Math.round(score * penaltyMultiplier) : 0;
+      const warned = score >= warningThreshold;
+      const penalty = score >= penaltyThreshold ? Math.round(score * penaltyWeight) : 0;
+      if (warned) {
+        warningTargetIds.push(target.targetId);
+      }
       if (penalty > 0) {
         outlierTargetIds.push(target.targetId);
       }
+      maxScore = Math.max(maxScore, score);
+      totalPenalty += penalty;
       byTargetId.set(target.targetId, {
         score,
-        threshold,
+        warningThreshold,
+        threshold: penaltyThreshold,
+        penaltyThreshold,
+        penaltyWeight,
+        warned,
         penalty,
         reasons,
         metricDeltas,
@@ -153,7 +190,12 @@ export function computeConsistencyGroupOutliers(
       consistencyGroup,
       targetCount: groupTargets.length,
       evaluatedTargetCount,
+      warningTargetIds: warningTargetIds.sort((left, right) => left.localeCompare(right)),
       outlierTargetIds: outlierTargetIds.sort((left, right) => left.localeCompare(right)),
+      warningCount: warningTargetIds.length,
+      outlierCount: outlierTargetIds.length,
+      maxScore,
+      totalPenalty,
       metricMedians,
     });
   }

@@ -236,6 +236,12 @@ export interface TargetScoreWeights {
   ssim?: number;
 }
 
+export interface ConsistencyGroupScoringPolicy {
+  warningThreshold?: number;
+  penaltyThreshold?: number;
+  penaltyWeight?: number;
+}
+
 export interface SeamHealPolicy {
   enabled?: boolean;
   stripPx?: number;
@@ -262,6 +268,7 @@ export interface PlannedTarget {
   loraPath?: string;
   loraStrength?: number;
   consistencyGroup?: string;
+  consistencyGroupScoring?: ConsistencyGroupScoringPolicy;
   generationMode?: GenerationMode;
   evaluationProfileId?: string;
   scoringProfile?: string;

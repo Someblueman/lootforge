@@ -7,8 +7,20 @@ import { resolveStagePathLayout } from "../shared/paths.js";
 interface EvalReportShape {
   targets?: {
     targetId: string;
+    consistencyGroup?: string;
     passedHardGates: boolean;
     finalScore?: number;
+    consistencyGroupOutlier?: {
+      score: number;
+      warningThreshold: number;
+      threshold: number;
+      penaltyThreshold: number;
+      penaltyWeight: number;
+      warned: boolean;
+      penalty: number;
+      reasons: string[];
+      metricDeltas: Record<string, number>;
+    };
   }[];
 }
 
@@ -43,6 +55,18 @@ export interface SelectionLockTarget {
   provider?: string;
   model?: string;
   score?: number;
+  evalFinalScore?: number;
+  groupSignalTrace?: {
+    consistencyGroup: string;
+    score: number;
+    warningThreshold: number;
+    penaltyThreshold: number;
+    penaltyWeight: number;
+    warned: boolean;
+    penalty: number;
+    reasons: string[];
+    metricDeltas: Record<string, number>;
+  };
 }
 
 export interface SelectionLockFile {
@@ -101,26 +125,48 @@ export async function runSelectPipeline(
 
     const selected =
       (job.candidateScores ?? []).find((candidate) => candidate.selected) ??
-      [...(job.candidateScores ?? [])].sort((a, b) => {
-        const leftPassed = a.passedAcceptance !== false;
-        const rightPassed = b.passedAcceptance !== false;
-        if (leftPassed !== rightPassed) {
-          return leftPassed ? -1 : 1;
-        }
-        if (a.score !== b.score) {
-          return b.score - a.score;
-        }
-        return a.outputPath.localeCompare(b.outputPath);
-      })[0];
+      [...(job.candidateScores ?? [])]
+        .sort((a, b) => {
+          const leftPassed = a.passedAcceptance !== false;
+          const rightPassed = b.passedAcceptance !== false;
+          if (leftPassed !== rightPassed) {
+            return leftPassed ? -1 : 1;
+          }
+          if (a.score !== b.score) {
+            return b.score - a.score;
+          }
+          return a.outputPath.localeCompare(b.outputPath);
+        })
+        .at(0);
+    const selectedOutputPath = selected?.outputPath ?? job.outputPath;
+    const selectedScore = typeof selected?.score === "number" ? selected.score : undefined;
 
     targets.push({
       targetId: job.targetId,
       approved: evalTarget.passedHardGates,
       inputHash: job.inputHash,
-      selectedOutputPath: selected.outputPath || job.outputPath,
+      selectedOutputPath,
       provider: job.provider,
       model: job.model,
-      score: selected.score,
+      ...(typeof selectedScore === "number" ? { score: selectedScore } : {}),
+      ...(typeof evalTarget.finalScore === "number"
+        ? { evalFinalScore: evalTarget.finalScore }
+        : {}),
+      ...(evalTarget.consistencyGroup && evalTarget.consistencyGroupOutlier
+        ? {
+            groupSignalTrace: {
+              consistencyGroup: evalTarget.consistencyGroup,
+              score: evalTarget.consistencyGroupOutlier.score,
+              warningThreshold: evalTarget.consistencyGroupOutlier.warningThreshold,
+              penaltyThreshold: evalTarget.consistencyGroupOutlier.penaltyThreshold,
+              penaltyWeight: evalTarget.consistencyGroupOutlier.penaltyWeight,
+              warned: evalTarget.consistencyGroupOutlier.warned,
+              penalty: evalTarget.consistencyGroupOutlier.penalty,
+              reasons: evalTarget.consistencyGroupOutlier.reasons,
+              metricDeltas: evalTarget.consistencyGroupOutlier.metricDeltas,
+            },
+          }
+        : {}),
     });
   }
 

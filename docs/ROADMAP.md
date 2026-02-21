@@ -310,14 +310,16 @@ Completed 2026-02-20 in this release track:
   - added manifest `targetTemplates[]` with target-level `templateId`, `dependsOn`, and `styleReferenceFrom`,
   - added deterministic dependency-aware generate staging with unresolved/cycle validation,
   - added per-job provenance `styleReferenceLineage` records for effective style-reference inputs.
+- Add consistency-group drift/outlier scoring with configurable warning and ranking influence controls:
+  - added CLIP/LPIPS sibling-group outlier scoring with aggregate warning/outlier summaries in eval/review artifacts,
+  - added `evaluationProfiles[].consistencyGroupScoring` controls (`warningThreshold`, `penaltyThreshold`, `penaltyWeight`) for deterministic ranking influence,
+  - added selection-lock traceability fields (`evalFinalScore`, `groupSignalTrace`) so group-signal ranking deltas remain auditable.
 
 Remaining queued items:
 
 - Add coarse-to-fine candidate promotion controls:
   - run lower-cost candidate generation/scoring first,
   - promote top-K candidates into high-fidelity refinement passes only when quality gates justify extra compute.
-- Add consistency-group drift/outlier scoring using CLIP/LPIPS signals.
-- Add aggregate group-level review/eval warnings and ranking influence controls.
 
 #### 2D Investigation Follow-ups (Visual QA + Policy)
 

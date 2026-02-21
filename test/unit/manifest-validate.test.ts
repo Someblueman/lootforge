@@ -155,6 +155,29 @@ describe("manifest normalization", () => {
     });
   });
 
+  it("normalizes consistency-group scoring controls from evaluation profiles", () => {
+    const manifest: ManifestV2 = {
+      ...BASE_MANIFEST,
+      evaluationProfiles: [
+        {
+          ...BASE_MANIFEST.evaluationProfiles[0],
+          consistencyGroupScoring: {
+            warningThreshold: 1.5,
+            penaltyThreshold: 2.25,
+            penaltyWeight: 15,
+          },
+        },
+      ],
+    };
+
+    const artifacts = createPlanArtifacts(manifest, "/tmp/manifest.json");
+    expect(artifacts.targets[0].consistencyGroupScoring).toEqual({
+      warningThreshold: 1.5,
+      penaltyThreshold: 2.25,
+      penaltyWeight: 15,
+    });
+  });
+
   it("normalizes directed-synthesis scaffold fields onto planned targets", () => {
     const manifest: ManifestV2 = {
       ...BASE_MANIFEST,

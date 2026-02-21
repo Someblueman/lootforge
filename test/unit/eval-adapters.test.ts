@@ -440,12 +440,14 @@ describe("eval adapters", () => {
     });
 
     const heroC = result.report.targets.find((target) => target.targetId === "hero-c");
+    expect(heroC?.consistencyGroupOutlier?.warned).toBe(true);
     expect(heroC?.consistencyGroupOutlier?.penalty).toBeGreaterThan(0);
     expect(heroC?.finalScore).toBeLessThan(100);
     expect(result.report.consistencyGroupSummary).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           consistencyGroup: "heroes",
+          warningTargetIds: ["hero-c"],
           outlierTargetIds: ["hero-c"],
         }),
       ]),

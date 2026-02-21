@@ -575,7 +575,10 @@ function resolveWrapGridValidationSize(
 }
 
 function mergeTargetReferenceLists(primary?: string[], secondary?: string[]): string[] {
-  const merged = [...normalizeTargetReferenceList(primary), ...normalizeTargetReferenceList(secondary)];
+  const merged = [
+    ...normalizeTargetReferenceList(primary),
+    ...normalizeTargetReferenceList(secondary),
+  ];
   const deduped: string[] = [];
   const seen = new Set<string>();
   for (const targetId of merged) {

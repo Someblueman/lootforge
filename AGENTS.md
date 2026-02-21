@@ -17,7 +17,7 @@
 ## Required Validation
 
 - Run before opening PRs:
-  - `npm run typecheck`
+  - `npm run check`
   - `npm test`
   - `npm run build`
 

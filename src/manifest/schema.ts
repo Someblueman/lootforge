@@ -341,6 +341,13 @@ export const ManifestEvaluationProfileSchema = z.object({
       spritesheetAnchorDriftMax: z.number().min(0).max(1).optional(),
     })
     .optional(),
+  consistencyGroupScoring: z
+    .object({
+      warningThreshold: z.number().positive().optional(),
+      penaltyThreshold: z.number().positive().optional(),
+      penaltyWeight: z.number().min(0).optional(),
+    })
+    .optional(),
   scoreWeights: ManifestScoreWeightsSchema.optional(),
 });
 

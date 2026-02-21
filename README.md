@@ -405,6 +405,9 @@ Runs hard/soft quality scoring and writes:
   - `errors`, `warnings`, and issue list
   - continuity metrics per animation (`maxSilhouetteDrift`, `maxAnchorDrift`)
   - texture budget metrics by evaluation profile
+- `eval-report.json` may include consistency-group drift summaries:
+  - `consistencyGroupSummary[]`: per-group warning/outlier counts, warned/outlier target ids, max outlier score, total ranking penalty, and metric medians
+  - `targets[].consistencyGroupOutlier`: per-target warning/penalty trace (`score`, thresholds, weight, reasons, metric deltas)
 
 Optional CLIP/LPIPS/SSIM adapter execution:
 
@@ -458,6 +461,9 @@ lootforge review --out assets/imagegen
 Builds lockfile selections from provenance + eval:
 
 - `<out>/locks/selection-lock.json`
+- includes optional group-signal traceability fields per target when present in eval:
+  - `evalFinalScore`
+  - `groupSignalTrace` (`consistencyGroup`, `score`, thresholds, weight, penalty, reasons)
 
 Example:
 
@@ -480,6 +486,7 @@ Top-level fields:
     - `loraPath?`, `loraStrength?` (`0..2`, requires `loraPath`)
 - `consistencyGroups[]` (optional)
 - `evaluationProfiles[]` (required)
+  - optional `consistencyGroupScoring?`: `warningThreshold`, `penaltyThreshold`, `penaltyWeight`
 - `atlas` options for packing defaults and per-group overrides
 - `targets[]` (required)
 
@@ -526,6 +533,10 @@ Per target:
   - `packTextureBudgetMB` (`>0`)
   - `spritesheetSilhouetteDriftMax` (`0..1`)
   - `spritesheetAnchorDriftMax` (`0..1`)
+- consistency-group warning and ranking influence controls are configured via `evaluationProfiles[].consistencyGroupScoring`:
+  - `warningThreshold` (`>0`)
+  - `penaltyThreshold` (`>0`)
+  - `penaltyWeight` (`>=0`)
 - `kind: "spritesheet"` targets define `animations` and are expanded/assembled by the pipeline
 
 Minimal example:

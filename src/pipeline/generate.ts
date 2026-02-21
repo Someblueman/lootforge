@@ -2,7 +2,10 @@
 import { access, cp, mkdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
 
-import { scoreCandidateImages, type ScoreCandidateImagesOptions } from "../checks/candidateScore.js";
+import {
+  scoreCandidateImages,
+  type ScoreCandidateImagesOptions,
+} from "../checks/candidateScore.js";
 import { writeRunProvenance } from "../output/provenance.js";
 import {
   createProviderRegistry,
@@ -457,9 +460,7 @@ function buildTaskExecutionStages(tasks: TargetTask[]): TargetTask[][] {
       }
     }
 
-    currentStage = Array.from(nextStageCandidates).sort((left, right) =>
-      left.localeCompare(right),
-    );
+    currentStage = Array.from(nextStageCandidates).sort((left, right) => left.localeCompare(right));
   }
 
   if (visited !== tasks.length) {
@@ -467,7 +468,9 @@ function buildTaskExecutionStages(tasks: TargetTask[]): TargetTask[][] {
       .map((task) => task.target.id)
       .filter((targetId) => (inDegree.get(targetId) ?? 0) > 0)
       .sort((left, right) => left.localeCompare(right));
-    throw new Error(`Dependency cycle detected in generation targets: ${blockedTargets.join(", ")}.`);
+    throw new Error(
+      `Dependency cycle detected in generation targets: ${blockedTargets.join(", ")}.`,
+    );
   }
 
   return stages;
@@ -617,12 +620,12 @@ async function runTaskWithFallback(params: {
           provider: providerName,
           outputPath: job.outPath,
           bytesWritten: fileStat.size,
-            candidateOutputs: draftCandidates.candidateOutputs,
-            candidateScores: draftCandidates.scores,
-            ...(styleReferenceLineage ? { styleReferenceLineage } : {}),
-            generationMode: params.task.target.generationMode,
-            edit: params.task.target.edit,
-            regenerationSource: params.task.target.regenerationSource,
+          candidateOutputs: draftCandidates.candidateOutputs,
+          candidateScores: draftCandidates.scores,
+          ...(styleReferenceLineage ? { styleReferenceLineage } : {}),
+          generationMode: params.task.target.generationMode,
+          edit: params.task.target.edit,
+          regenerationSource: params.task.target.regenerationSource,
         };
       } catch (error) {
         lastError = provider.normalizeError(error);

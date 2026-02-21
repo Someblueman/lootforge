@@ -85,6 +85,11 @@ export interface ManifestEvaluationProfile {
     spritesheetSilhouetteDriftMax?: number;
     spritesheetAnchorDriftMax?: number;
   };
+  consistencyGroupScoring?: {
+    warningThreshold?: number;
+    penaltyThreshold?: number;
+    penaltyWeight?: number;
+  };
   scoreWeights?: TargetScoreWeights;
 }
 

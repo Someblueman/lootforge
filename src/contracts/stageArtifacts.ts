@@ -138,6 +138,13 @@ const plannedTargetSchema = z.object({
   loraPath: nonEmptyString.optional(),
   loraStrength: z.number().min(0).max(2).optional(),
   consistencyGroup: nonEmptyString.optional(),
+  consistencyGroupScoring: z
+    .object({
+      warningThreshold: z.number().positive().optional(),
+      penaltyThreshold: z.number().positive().optional(),
+      penaltyWeight: z.number().min(0).optional(),
+    })
+    .optional(),
   generationMode: GenerationModeSchema.optional(),
   evaluationProfileId: nonEmptyString.optional(),
   scoringProfile: nonEmptyString.optional(),
@@ -452,7 +459,12 @@ const stageArtifactSchemas = {
           consistencyGroup: nonEmptyString,
           targetCount: z.number().int().min(0),
           evaluatedTargetCount: z.number().int().min(0),
+          warningTargetIds: z.array(nonEmptyString),
           outlierTargetIds: z.array(nonEmptyString),
+          warningCount: z.number().int().min(0),
+          outlierCount: z.number().int().min(0),
+          maxScore: z.number(),
+          totalPenalty: z.number().int().min(0),
           metricMedians: z.record(z.number()),
         }),
       )
@@ -503,7 +515,11 @@ const stageArtifactSchemas = {
         consistencyGroupOutlier: z
           .object({
             score: z.number(),
+            warningThreshold: z.number(),
             threshold: z.number(),
+            penaltyThreshold: z.number(),
+            penaltyWeight: z.number(),
+            warned: z.boolean(),
             penalty: z.number().int().min(0),
             reasons: z.array(nonEmptyString),
             metricDeltas: z.record(z.number()),
@@ -526,6 +542,20 @@ const stageArtifactSchemas = {
         provider: ProviderNameSchema.optional(),
         model: nonEmptyString.optional(),
         score: z.number().optional(),
+        evalFinalScore: z.number().optional(),
+        groupSignalTrace: z
+          .object({
+            consistencyGroup: nonEmptyString,
+            score: z.number(),
+            warningThreshold: z.number(),
+            penaltyThreshold: z.number(),
+            penaltyWeight: z.number(),
+            warned: z.boolean(),
+            penalty: z.number().int().min(0),
+            reasons: z.array(nonEmptyString),
+            metricDeltas: z.record(z.number()),
+          })
+          .optional(),
       }),
     ),
   }),

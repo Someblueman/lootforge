@@ -89,7 +89,11 @@ export interface EvalTargetResult {
   adapterWarnings?: string[];
   consistencyGroupOutlier?: {
     score: number;
+    warningThreshold: number;
     threshold: number;
+    penaltyThreshold: number;
+    penaltyWeight: number;
+    warned: boolean;
     penalty: number;
     reasons: string[];
     metricDeltas: Record<string, number>;
@@ -128,7 +132,12 @@ export interface EvalReport {
     consistencyGroup: string;
     targetCount: number;
     evaluatedTargetCount: number;
+    warningTargetIds: string[];
     outlierTargetIds: string[];
+    warningCount: number;
+    outlierCount: number;
+    maxScore: number;
+    totalPenalty: number;
     metricMedians: Record<string, number>;
   }[];
   packInvariants?: PackInvariantSummary;
@@ -315,6 +324,7 @@ export async function runEvalPipeline(options: EvalPipelineOptions): Promise<Eva
       targetId: target.targetId,
       consistencyGroup: target.consistencyGroup,
       candidateMetrics: target.candidateMetrics,
+      consistencyGroupScoring: targetsById.get(target.targetId)?.consistencyGroupScoring,
     })),
   );
   for (const targetResult of targetResults) {

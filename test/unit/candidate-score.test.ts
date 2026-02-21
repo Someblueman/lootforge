@@ -359,7 +359,7 @@ describe("candidate scoring", () => {
         'const fs = require("node:fs");',
         `const logPath = ${JSON.stringify(clipLogPath)};`,
         'const payload = JSON.parse(fs.readFileSync(0, "utf8"));',
-        'fs.appendFileSync(logPath, `${payload.imagePath}\\n`);',
+        "fs.appendFileSync(logPath, `${payload.imagePath}\\n`);",
         "process.stdout.write(JSON.stringify({ metrics: { alignment: 0.95 }, score: 300 }));",
         "",
       ].join("\n"),
@@ -372,8 +372,8 @@ describe("candidate scoring", () => {
         'const fs = require("node:fs");',
         `const logPath = ${JSON.stringify(vlmLogPath)};`,
         'const payload = JSON.parse(fs.readFileSync(0, "utf8"));',
-        'fs.appendFileSync(logPath, `${payload.imagePath}\\n`);',
-        "process.stdout.write(JSON.stringify({ score: 0.5, reason: \"deliberate fail\" }));",
+        "fs.appendFileSync(logPath, `${payload.imagePath}\\n`);",
+        'process.stdout.write(JSON.stringify({ score: 0.5, reason: "deliberate fail" }));',
         "",
       ].join("\n"),
       "utf8",
@@ -424,7 +424,9 @@ describe("candidate scoring", () => {
       result.scores.some((score) => (score.reasons ?? []).includes("vlm_gate_below_threshold")),
     ).toBe(false);
     expect(
-      result.scores.some((score) => Object.keys(score.components ?? {}).includes("clipAdapterScore")),
+      result.scores.some((score) =>
+        Object.keys(score.components ?? {}).includes("clipAdapterScore"),
+      ),
     ).toBe(false);
     expect(await readFile(clipLogPath, "utf8")).toBe("");
     expect(await readFile(vlmLogPath, "utf8")).toBe("");

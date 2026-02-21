@@ -42,6 +42,10 @@ Manifest policy coverage gate:
 - `evaluationProfiles[]` (required, at least one)
   - `id`
   - `hardGates?`: `{ requireAlpha?, maxFileSizeKB?, seamThreshold?, seamStripPx?, paletteComplianceMin?, alphaHaloRiskMax?, alphaStrayNoiseMax?, alphaEdgeSharpnessMin?, packTextureBudgetMB?, spritesheetSilhouetteDriftMax?, spritesheetAnchorDriftMax? }`
+  - `consistencyGroupScoring?`: `{ warningThreshold?, penaltyThreshold?, penaltyWeight? }`
+    - `warningThreshold`: normalized drift score threshold for group-level warning signals
+    - `penaltyThreshold`: normalized drift score threshold where ranking penalties activate
+    - `penaltyWeight`: deterministic multiplier used for final-score penalty (`round(score * weight)`)
   - `scoreWeights?`: `{ readability?, fileSize?, consistency?, clip?, lpips?, ssim? }`
 - `scoringProfiles[]` (optional)
   - `id`
@@ -117,6 +121,10 @@ Generation + processing:
   - `packTextureBudgetMB` (`>0`, optional profile-level uncompressed texture budget)
   - `spritesheetSilhouetteDriftMax` (`0..1`, optional max adjacent-frame silhouette drift)
   - `spritesheetAnchorDriftMax` (`0..1`, optional max adjacent-frame anchor drift)
+- consistency-group drift controls can be configured in `evaluationProfiles[].consistencyGroupScoring` and are normalized onto each planned target:
+  - `warningThreshold` (`>0`, optional warning trigger for aggregate group diagnostics)
+  - `penaltyThreshold` (`>0`, optional threshold for deterministic ranking penalty)
+  - `penaltyWeight` (`>=0`, optional multiplier for ranking influence)
 
 Provider runtime precedence for generate/regenerate:
 

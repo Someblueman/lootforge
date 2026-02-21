@@ -22,6 +22,7 @@ import {
   type PlannedProviderJobSpec,
 } from "./types.js";
 import {
+  type ConsistencyGroupScoringPolicy,
   type PalettePolicy,
   type PlannedTarget,
   type PromptSpec,
@@ -261,6 +262,7 @@ export function normalizeTargetForGeneration(params: {
     evalProfile: params.evalProfile,
     scoringProfileById: params.scoringProfileById,
   });
+  const consistencyGroupScoring = resolveConsistencyGroupScoring(params.evalProfile);
   const dependsOn = mergeOrchestrationTargetRefs(
     params.template?.dependsOn,
     params.target.dependsOn,
@@ -287,6 +289,7 @@ export function normalizeTargetForGeneration(params: {
       ? { loraStrength: params.styleKit.loraStrength }
       : {}),
     consistencyGroup: params.target.consistencyGroup,
+    ...(consistencyGroupScoring ? { consistencyGroupScoring } : {}),
     generationMode: params.target.generationMode ?? "text",
     evaluationProfileId: params.target.evaluationProfileId,
     ...(scoring.profileId ? { scoringProfile: scoring.profileId } : {}),
@@ -339,6 +342,28 @@ export function normalizeTargetForGeneration(params: {
   }
 
   return normalized;
+}
+
+function resolveConsistencyGroupScoring(
+  evalProfile: ManifestEvaluationProfile,
+): ConsistencyGroupScoringPolicy | undefined {
+  const warningThreshold = evalProfile.consistencyGroupScoring?.warningThreshold;
+  const penaltyThreshold = evalProfile.consistencyGroupScoring?.penaltyThreshold;
+  const penaltyWeight = evalProfile.consistencyGroupScoring?.penaltyWeight;
+
+  if (
+    typeof warningThreshold !== "number" &&
+    typeof penaltyThreshold !== "number" &&
+    typeof penaltyWeight !== "number"
+  ) {
+    return undefined;
+  }
+
+  return {
+    ...(typeof warningThreshold === "number" ? { warningThreshold } : {}),
+    ...(typeof penaltyThreshold === "number" ? { penaltyThreshold } : {}),
+    ...(typeof penaltyWeight === "number" ? { penaltyWeight } : {}),
+  };
 }
 
 export function expandSpritesheetTarget(params: {
@@ -453,10 +478,7 @@ export function expandSpritesheetTarget(params: {
   return [...frameTargets, sheetTarget];
 }
 
-function mergeOrchestrationTargetRefs(
-  templateRefs?: string[],
-  targetRefs?: string[],
-): string[] {
+function mergeOrchestrationTargetRefs(templateRefs?: string[], targetRefs?: string[]): string[] {
   const merged = [
     ...normalizeOrchestrationTargetRefs(templateRefs),
     ...normalizeOrchestrationTargetRefs(targetRefs),

@@ -33,13 +33,17 @@ describe("consistency group outlier scoring", () => {
 
     const outlier = result.byTargetId.get("hero-c-outlier");
     expect(outlier).toBeDefined();
+    expect(outlier?.warned).toBe(true);
     expect(outlier?.penalty).toBeGreaterThan(0);
     expect(outlier?.reasons.length).toBeGreaterThan(0);
     expect(result.groups).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           consistencyGroup: "heroes",
+          warningTargetIds: ["hero-c-outlier"],
           outlierTargetIds: ["hero-c-outlier"],
+          warningCount: 1,
+          outlierCount: 1,
         }),
       ]),
     );
@@ -69,5 +73,47 @@ describe("consistency group outlier scoring", () => {
         }),
       ]),
     );
+  });
+
+  it("applies per-target warning threshold and penalty weight overrides", () => {
+    const result = computeConsistencyGroupOutliers([
+      {
+        targetId: "a",
+        consistencyGroup: "heroes",
+        candidateMetrics: {
+          "clip.rawScore": 90,
+          "lpips.rawScore": 0.1,
+        },
+      },
+      {
+        targetId: "b",
+        consistencyGroup: "heroes",
+        candidateMetrics: {
+          "clip.rawScore": 91,
+          "lpips.rawScore": 0.12,
+        },
+      },
+      {
+        targetId: "c",
+        consistencyGroup: "heroes",
+        consistencyGroupScoring: {
+          warningThreshold: 1,
+          penaltyThreshold: 1,
+          penaltyWeight: 2,
+        },
+        candidateMetrics: {
+          "clip.rawScore": 20,
+          "lpips.rawScore": 0.8,
+        },
+      },
+    ]);
+
+    const target = result.byTargetId.get("c");
+    expect(target).toBeDefined();
+    expect(target?.warningThreshold).toBe(1);
+    expect(target?.penaltyThreshold).toBe(1);
+    expect(target?.penaltyWeight).toBe(2);
+    expect(target?.warned).toBe(true);
+    expect(target?.penalty).toBe(Math.round((target?.score ?? 0) * 2));
   });
 });

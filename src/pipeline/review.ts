@@ -5,6 +5,18 @@ import { resolveStagePathLayout } from "../shared/paths.js";
 
 interface EvalReportShape {
   generatedAt?: string;
+  consistencyGroupSummary?: {
+    consistencyGroup: string;
+    targetCount: number;
+    evaluatedTargetCount: number;
+    warningTargetIds: string[];
+    outlierTargetIds: string[];
+    warningCount: number;
+    outlierCount: number;
+    maxScore: number;
+    totalPenalty: number;
+    metricMedians: Record<string, number>;
+  }[];
   packInvariants?: {
     errors: number;
     warnings: number;
@@ -72,7 +84,11 @@ interface EvalReportShape {
     adapterWarnings?: string[];
     consistencyGroupOutlier?: {
       score: number;
+      warningThreshold: number;
       threshold: number;
+      penaltyThreshold: number;
+      penaltyWeight: number;
+      warned: boolean;
       penalty: number;
       reasons: string[];
       metricDeltas: Record<string, number>;
@@ -107,6 +123,7 @@ export async function runReviewPipeline(
 
   const html = renderReviewHtml({
     generatedAt: report.generatedAt ?? new Date().toISOString(),
+    consistencyGroupSummary: report.consistencyGroupSummary,
     packInvariants: report.packInvariants,
     targets,
   });
@@ -126,6 +143,7 @@ export async function runReviewPipeline(
 
 function renderReviewHtml(params: {
   generatedAt: string;
+  consistencyGroupSummary?: EvalReportShape["consistencyGroupSummary"];
   packInvariants?: EvalReportShape["packInvariants"];
   targets: {
     targetId: string;
@@ -164,7 +182,11 @@ function renderReviewHtml(params: {
     adapterWarnings?: string[];
     consistencyGroupOutlier?: {
       score: number;
+      warningThreshold: number;
       threshold: number;
+      penaltyThreshold: number;
+      penaltyWeight: number;
+      warned: boolean;
       penalty: number;
       reasons: string[];
       metricDeltas: Record<string, number>;
@@ -189,6 +211,7 @@ function renderReviewHtml(params: {
     })
     .join("\n");
   const packInvariantSection = renderPackInvariantSummary(params.packInvariants);
+  const consistencyGroupSection = renderConsistencyGroupSummary(params.consistencyGroupSummary);
 
   return `<!doctype html>
 <html lang="en">
@@ -328,6 +351,7 @@ function renderReviewHtml(params: {
   <main>
     <h1>LootForge Evaluation Review</h1>
     <p class="meta">Generated at ${escapeHtml(params.generatedAt)} · Targets: ${params.targets.length}</p>
+    ${consistencyGroupSection}
     ${packInvariantSection}
     <div class="table-wrap">
       <table>
@@ -407,6 +431,29 @@ function renderPackInvariantSummary(packInvariants: EvalReportShape["packInvaria
 </section>`;
 }
 
+function renderConsistencyGroupSummary(groups: EvalReportShape["consistencyGroupSummary"]): string {
+  if (!groups || groups.length === 0) {
+    return "";
+  }
+
+  const lines = groups
+    .slice()
+    .sort((left, right) => left.consistencyGroup.localeCompare(right.consistencyGroup))
+    .map((group) => {
+      const warned = group.warningTargetIds.join(", ") || "none";
+      const outliers = group.outlierTargetIds.join(", ") || "none";
+      return `Group ${group.consistencyGroup}: targets=${group.targetCount}, evaluated=${group.evaluatedTargetCount}, warnings=${group.warningCount}, outliers=${group.outlierCount}, maxScore=${group.maxScore.toFixed(
+        4,
+      )}, totalPenalty=${group.totalPenalty}, warnedTargets=${warned}, outlierTargets=${outliers}`;
+    });
+
+  return `<section class="pack-invariants">
+  <h2>Consistency Group Warnings</h2>
+  <p>Aggregate drift warning/outlier summary by consistency group.</p>
+  ${renderList(lines)}
+</section>`;
+}
+
 function renderScoreDetails(target: {
   candidateScore?: number;
   finalScore?: number;
@@ -439,7 +486,11 @@ function renderScoreDetails(target: {
   consistencyGroup?: string;
   consistencyGroupOutlier?: {
     score: number;
+    warningThreshold: number;
     threshold: number;
+    penaltyThreshold: number;
+    penaltyWeight: number;
+    warned: boolean;
     penalty: number;
     reasons: string[];
     metricDeltas: Record<string, number>;
@@ -475,9 +526,13 @@ function renderScoreDetails(target: {
     sections.push(
       `<div class="score-headline"><strong>Group outlier:</strong> ${formatScore(
         target.consistencyGroupOutlier.score,
-      )} (threshold ${formatScore(target.consistencyGroupOutlier.threshold)}, penalty ${formatScore(
+      )} (warning ${formatScore(target.consistencyGroupOutlier.warningThreshold)}, threshold ${formatScore(
+        target.consistencyGroupOutlier.penaltyThreshold,
+      )}, weight ${formatScore(target.consistencyGroupOutlier.penaltyWeight)}, penalty ${formatScore(
         target.consistencyGroupOutlier.penalty,
-      )})${target.consistencyGroup ? ` · group=${escapeHtml(target.consistencyGroup)}` : ""}</div>`,
+      )})${target.consistencyGroupOutlier.warned ? " · WARN" : ""}${
+        target.consistencyGroup ? ` · group=${escapeHtml(target.consistencyGroup)}` : ""
+      }</div>`,
     );
   } else if (target.consistencyGroup) {
     sections.push(

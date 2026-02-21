@@ -101,9 +101,7 @@ export function normalizeManifestTargets(
     }
 
     if (target.templateId && !template) {
-      throw new Error(
-        `Target "${target.id}" references missing template "${target.templateId}".`,
-      );
+      throw new Error(`Target "${target.id}" references missing template "${target.templateId}".`);
     }
 
     if (!evalProfile) {

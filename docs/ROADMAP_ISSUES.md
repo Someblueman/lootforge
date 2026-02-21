@@ -34,6 +34,10 @@ Recent completion (2026-02-21):
   - added group-level CLIP/LPIPS outlier scoring across sibling targets with robust median/MAD-style normalization,
   - emitted per-target diagnostics (`score`, `penalty`, reasons, metric deltas) in eval/review artifacts,
   - applied deterministic outlier penalties to final ranking scores and emitted aggregate group summaries.
+- Implemented aggregate consistency-group warning controls and selection traceability:
+  - added `evaluationProfiles[].consistencyGroupScoring` controls for warning threshold, penalty threshold, and penalty weight,
+  - emitted aggregate group warning/outlier summaries (counts, warned/outlier target ids, max score, total penalty) in eval/review artifacts,
+  - added selection-lock trace fields (`evalFinalScore`, `groupSignalTrace`) so group-level ranking effects are auditable in downstream decisions.
 
 ## P0 (Immediate: `0.3.0`)
 
@@ -45,15 +49,6 @@ Recent completion (2026-02-21):
   - Pipeline supports low-cost first pass and top-K promotion into high-fidelity refinement.
   - Promotion decisions and discarded candidates are recorded in provenance.
   - Benchmarks show reduced provider cost per approved asset for equivalent acceptance rate.
-
-### 3) Aggregate Group-Level Warnings + Ranking Influence Controls
-
-- **Release target:** `0.3.0`
-- **Why now:** Teams need pack-level visibility and tunable influence of coherence signals.
-- **Acceptance criteria:**
-  - Eval/review artifacts emit aggregate group-level warning summaries.
-  - Manifest/evaluation profiles can configure group-warning thresholds and ranking influence weights.
-  - Selection outputs trace how group-level signals affected candidate decisions.
 
 ### 4) Agentic Auto-Correction (Self-Healing Pipeline)
 

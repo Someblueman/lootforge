@@ -270,6 +270,12 @@ export interface WrapGridTopologyPolicy {
   colorTolerance?: number;
 }
 
+export interface VisualStylePolicy {
+  lineContrastMin?: number;
+  shadingBandCountMax?: number;
+  uiRectilinearityMin?: number;
+}
+
 export interface PlannedTarget {
   id: string;
   kind?: string;
@@ -284,6 +290,7 @@ export interface PlannedTarget {
   loraStrength?: number;
   consistencyGroup?: string;
   consistencyGroupScoring?: ConsistencyGroupScoringPolicy;
+  visualStylePolicy?: VisualStylePolicy;
   generationMode?: GenerationMode;
   evaluationProfileId?: string;
   scoringProfile?: string;

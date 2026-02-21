@@ -13,6 +13,7 @@ import {
   type TargetKind,
   type TargetScoreWeights,
   type TargetEditSpec,
+  type VisualStylePolicy,
   type WrapGridPolicy,
 } from "../providers/types.js";
 
@@ -55,6 +56,7 @@ export interface ManifestStyleKit {
   negativeRulesPath?: string;
   loraPath?: string;
   loraStrength?: number;
+  visualPolicy?: VisualStylePolicy;
 }
 
 export interface ManifestConsistencyGroup {

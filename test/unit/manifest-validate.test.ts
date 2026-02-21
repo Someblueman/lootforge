@@ -92,6 +92,29 @@ describe("manifest normalization", () => {
     expect(artifacts.targets[0].runtimeSpec?.anchorY).toBe(0.75);
   });
 
+  it("normalizes style-kit visual policy constraints onto planned targets", () => {
+    const manifest: ManifestV2 = {
+      ...BASE_MANIFEST,
+      styleKits: [
+        {
+          ...BASE_MANIFEST.styleKits[0],
+          visualPolicy: {
+            lineContrastMin: 0.12,
+            shadingBandCountMax: 10,
+            uiRectilinearityMin: 0.85,
+          },
+        },
+      ],
+    };
+
+    const artifacts = createPlanArtifacts(manifest, "/tmp/manifest.json");
+    expect(artifacts.targets[0].visualStylePolicy).toEqual({
+      lineContrastMin: 0.12,
+      shadingBandCountMax: 10,
+      uiRectilinearityMin: 0.85,
+    });
+  });
+
   it("applies manifest scoring profile overrides on top of per-kind defaults", () => {
     const manifest: ManifestV2 = {
       ...BASE_MANIFEST,
@@ -589,6 +612,46 @@ describe("manifest normalization", () => {
           issue.path === "evaluationProfiles[0].hardGates.spritesheetAnchorDriftMax" ||
           issue.path === "evaluationProfiles[0].hardGates.spritesheetIdentityDriftMax" ||
           issue.path === "evaluationProfiles[0].hardGates.spritesheetPoseDriftMax",
+      ),
+    ).toBe(true);
+  });
+
+  it("rejects empty or out-of-range style-kit visual policies", () => {
+    const manifest: ManifestV2 = {
+      ...BASE_MANIFEST,
+      styleKits: [
+        {
+          ...BASE_MANIFEST.styleKits[0],
+          visualPolicy: {
+            lineContrastMin: 1.2,
+          },
+        },
+        {
+          ...BASE_MANIFEST.styleKits[0],
+          id: "empty-style-policy",
+          visualPolicy: {},
+        },
+      ],
+      targets: [
+        {
+          ...BASE_MANIFEST.targets[0],
+          styleKitId: "empty-style-policy",
+        },
+      ],
+    };
+
+    const validation = validateManifestSource({
+      manifestPath: "/tmp/manifest.json",
+      raw: JSON.stringify(manifest),
+      data: manifest,
+    });
+
+    expect(validation.report.errors).toBeGreaterThan(0);
+    expect(
+      validation.report.issues.some(
+        (issue) =>
+          issue.path === "styleKits[0].visualPolicy.lineContrastMin" ||
+          issue.path === "styleKits[1].visualPolicy",
       ),
     ).toBe(true);
   });

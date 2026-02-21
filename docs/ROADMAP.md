@@ -325,14 +325,16 @@ Completed 2026-02-20 in this release track:
 - Add deterministic topology and animation-drift QA follow-ups:
   - added wrap-grid topology validation modes (`self`, `one-to-one`, `many-to-many`) with explicit mismatch-threshold diagnostics separate from seam scoring,
   - added spritesheet continuity hard-gates for identity drift and pose drift with per-animation metrics (`maxIdentityDrift`, `maxPoseDrift`) in acceptance/eval artifacts.
+- Add machine-checkable style-bible visual policy checks:
+  - added manifest style-policy contract (`styleKits[].visualPolicy`) for line contrast, shading complexity, and UI rectilinearity constraints,
+  - enforced deterministic acceptance/eval diagnostics with explicit metrics and hard rejection codes (`style_policy_*`).
 
 Remaining queued items:
 
 #### 2D Investigation Follow-ups (Visual QA + Policy)
 
 - Add machine-checkable visual style-bible policy contracts:
-  - extend style constraints beyond palette (line weight, shading rules, UI geometry constraints),
-  - enforce policy compliance in validate/eval with explicit per-target diagnostics.
+  - extend beyond current baseline thresholds with richer style-assertion primitives when needed (for example, per-kind policy profiles).
 - Add sprite identity + pose adherence QA modules:
   - extend beyond current drift thresholds with optional target-specific pose directives when prompts require strict choreography.
 - Add layered export + matting-assisted alpha QA pipeline:

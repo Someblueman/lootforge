@@ -308,6 +308,13 @@ export const ManifestStyleKitSchema = z
     negativeRulesPath: nonEmptyString.optional(),
     loraPath: nonEmptyString.optional(),
     loraStrength: z.number().min(0).max(2).optional(),
+    visualPolicy: z
+      .object({
+        lineContrastMin: z.number().min(0).max(1).optional(),
+        shadingBandCountMax: z.number().int().min(1).max(256).optional(),
+        uiRectilinearityMin: z.number().min(0).max(1).optional(),
+      })
+      .optional(),
   })
   .superRefine((styleKit, ctx) => {
     if (typeof styleKit.loraStrength === "number" && !styleKit.loraPath) {
@@ -315,6 +322,19 @@ export const ManifestStyleKitSchema = z
         code: z.ZodIssueCode.custom,
         path: ["loraPath"],
         message: "loraPath is required when loraStrength is provided.",
+      });
+    }
+
+    if (
+      styleKit.visualPolicy &&
+      styleKit.visualPolicy.lineContrastMin === undefined &&
+      styleKit.visualPolicy.shadingBandCountMax === undefined &&
+      styleKit.visualPolicy.uiRectilinearityMin === undefined
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["visualPolicy"],
+        message: "visualPolicy must define at least one constraint.",
       });
     }
   });

@@ -32,6 +32,9 @@ export interface ImageAcceptanceMetrics {
   wrapGridTopologyMismatchRatio?: number;
   wrapGridTopologyThreshold?: number;
   wrapGridTopologyColorTolerance?: number;
+  styleLineContrast?: number;
+  styleShadingBandCount?: number;
+  styleUiRectilinearity?: number;
   paletteCompliance?: number;
   distinctColors?: number;
   alphaBoundaryPixels?: number;
@@ -85,6 +88,12 @@ interface WrapGridTopologyResult {
   mode: WrapGridTopologyMode;
   comparisons: number;
   mismatchRatio: number;
+}
+
+interface VisualStyleMetrics {
+  lineContrast: number;
+  shadingBandCount: number;
+  uiRectilinearity: number;
 }
 
 async function inspectImage(imagePath: string): Promise<InspectedImage> {
@@ -436,6 +445,80 @@ function resolveWrapGridTopologyIssueCode(mode: WrapGridTopologyMode): string {
     return "wrap_grid_topology_pair_exceeded";
   }
   return "wrap_grid_topology_compatibility_exceeded";
+}
+
+function computeVisualStyleMetrics(inspected: InspectedImage): VisualStyleMetrics {
+  const bins = 32;
+  const histogram = new Array<number>(bins).fill(0);
+  let visiblePixels = 0;
+  let minX = Number.POSITIVE_INFINITY;
+  let minY = Number.POSITIVE_INFINITY;
+  let maxX = Number.NEGATIVE_INFINITY;
+  let maxY = Number.NEGATIVE_INFINITY;
+
+  let contrastTotal = 0;
+  let contrastCount = 0;
+
+  const lumaAt = (index: number): number =>
+    0.2126 * inspected.raw[index] +
+    0.7152 * inspected.raw[index + 1] +
+    0.0722 * inspected.raw[index + 2];
+
+  const alphaAt = (index: number): number =>
+    inspected.channels >= 4 ? inspected.raw[index + 3] : 255;
+
+  for (let y = 0; y < inspected.height; y += 1) {
+    for (let x = 0; x < inspected.width; x += 1) {
+      const index = (y * inspected.width + x) * inspected.channels;
+      if (alphaAt(index) === 0) {
+        continue;
+      }
+
+      visiblePixels += 1;
+      if (x < minX) minX = x;
+      if (y < minY) minY = y;
+      if (x > maxX) maxX = x;
+      if (y > maxY) maxY = y;
+
+      const luma = lumaAt(index);
+      const bin = Math.max(0, Math.min(bins - 1, Math.floor((luma / 256) * bins)));
+      histogram[bin] += 1;
+
+      if (x + 1 < inspected.width) {
+        const rightIndex = index + inspected.channels;
+        if (alphaAt(rightIndex) > 0) {
+          contrastTotal += Math.abs(luma - lumaAt(rightIndex));
+          contrastCount += 1;
+        }
+      }
+
+      if (y + 1 < inspected.height) {
+        const bottomIndex = index + inspected.width * inspected.channels;
+        if (alphaAt(bottomIndex) > 0) {
+          contrastTotal += Math.abs(luma - lumaAt(bottomIndex));
+          contrastCount += 1;
+        }
+      }
+    }
+  }
+
+  const lineContrast = contrastCount > 0 ? contrastTotal / (contrastCount * 255) : 0;
+  const shadingBandCount = histogram.filter((count) => count > 0).length;
+
+  if (visiblePixels === 0) {
+    return {
+      lineContrast,
+      shadingBandCount,
+      uiRectilinearity: 0,
+    };
+  }
+
+  const bboxArea = Math.max(1, (maxX - minX + 1) * (maxY - minY + 1));
+  return {
+    lineContrast,
+    shadingBandCount,
+    uiRectilinearity: visiblePixels / bboxArea,
+  };
 }
 
 type Edge = "left" | "right" | "top" | "bottom";
@@ -804,6 +887,55 @@ export async function evaluateImageAcceptance(
         targetId: target.id,
         imagePath,
         message: `Alpha edge sharpness ${boundaryMetrics.edgeSharpness.toFixed(4)} is below threshold ${target.alphaEdgeSharpnessMin.toFixed(4)}.`,
+      });
+    }
+  }
+
+  if (target.visualStylePolicy) {
+    const visualStyleMetrics = computeVisualStyleMetrics(inspected);
+    report.metrics = {
+      ...report.metrics,
+      styleLineContrast: visualStyleMetrics.lineContrast,
+      styleShadingBandCount: visualStyleMetrics.shadingBandCount,
+      styleUiRectilinearity: visualStyleMetrics.uiRectilinearity,
+    };
+
+    if (
+      typeof target.visualStylePolicy.lineContrastMin === "number" &&
+      visualStyleMetrics.lineContrast < target.visualStylePolicy.lineContrastMin
+    ) {
+      report.issues.push({
+        level: "error",
+        code: "style_policy_line_contrast_below_min",
+        targetId: target.id,
+        imagePath,
+        message: `Line contrast ${visualStyleMetrics.lineContrast.toFixed(4)} is below style policy minimum ${target.visualStylePolicy.lineContrastMin.toFixed(4)}.`,
+      });
+    }
+
+    if (
+      typeof target.visualStylePolicy.shadingBandCountMax === "number" &&
+      visualStyleMetrics.shadingBandCount > target.visualStylePolicy.shadingBandCountMax
+    ) {
+      report.issues.push({
+        level: "error",
+        code: "style_policy_shading_band_count_exceeded",
+        targetId: target.id,
+        imagePath,
+        message: `Shading band count ${visualStyleMetrics.shadingBandCount} exceeds style policy maximum ${target.visualStylePolicy.shadingBandCountMax}.`,
+      });
+    }
+
+    if (
+      typeof target.visualStylePolicy.uiRectilinearityMin === "number" &&
+      visualStyleMetrics.uiRectilinearity < target.visualStylePolicy.uiRectilinearityMin
+    ) {
+      report.issues.push({
+        level: "error",
+        code: "style_policy_ui_rectilinearity_below_min",
+        targetId: target.id,
+        imagePath,
+        message: `UI rectilinearity ${visualStyleMetrics.uiRectilinearity.toFixed(4)} is below style policy minimum ${target.visualStylePolicy.uiRectilinearityMin.toFixed(4)}.`,
       });
     }
   }

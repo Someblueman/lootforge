@@ -251,6 +251,9 @@ describe("stage artifact contracts", () => {
               alphaHaloRisk: 0.02,
               alphaStrayNoise: 0.001,
               alphaEdgeSharpness: 0.94,
+              styleLineContrast: 0.18,
+              styleShadingBandCount: 8,
+              styleUiRectilinearity: 0.91,
             },
             issues: [],
           },
@@ -274,6 +277,11 @@ describe("stage artifact contracts", () => {
             kind: "sprite",
             out: "hero.png",
             promptSpec: { primary: "hero sprite" },
+            visualStylePolicy: {
+              lineContrastMin: 0.1,
+              shadingBandCountMax: 12,
+              uiRectilinearityMin: 0.8,
+            },
             generationPolicy: {
               size: "1024x1024",
               quality: "high",

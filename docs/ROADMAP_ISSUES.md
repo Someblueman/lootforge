@@ -49,6 +49,9 @@ Recent completion (2026-02-21):
 - Implemented additional 2D visual QA gates for topology and animation drift:
   - added wrap-grid topology modes (`self`, `one-to-one`, `many-to-many`) with explicit mismatch thresholds and eval diagnostics independent from seam metrics,
   - added spritesheet continuity hard-gates for identity drift and pose drift (`spritesheetIdentityDriftMax`, `spritesheetPoseDriftMax`) with deterministic pack-invariant metrics and violations.
+- Implemented machine-checkable style-bible visual policy checks:
+  - added manifest-level style constraints (`styleKits[].visualPolicy`) for line contrast, shading bands, and UI rectilinearity,
+  - enforced deterministic acceptance/eval diagnostics with explicit per-target metrics and rejection codes.
 
 ## P0 (Immediate: `0.3.0`)
 
@@ -57,7 +60,7 @@ Recent completion (2026-02-21):
 - **Release target:** `0.3.0` stretch / `0.4.0` bridge
 - **Why now:** Remaining visual QA gaps are still a source of production-quality drift.
 - **Acceptance criteria:**
-  - Visual style-bible policy checks are machine-checkable (line/shading/UI geometry) with explicit validate/eval diagnostics.
+  - Visual style-bible policy checks are machine-checkable (line/shading/UI geometry) with explicit validate/eval diagnostics. (implemented 2026-02-21)
   - Sprite identity and optional pose adherence checks can score/reject animation-frame drift. (implemented 2026-02-21)
   - Tile QA validates topology rules (self/one-to-one/many-to-many adjacency) separately from seam metrics. (implemented 2026-02-21)
   - Layered export and matting-assisted alpha QA are covered by deterministic artifact contracts and eval diagnostics.

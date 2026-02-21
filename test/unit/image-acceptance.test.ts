@@ -108,6 +108,72 @@ async function writeBoundaryArtifactSample(filePath: string): Promise<void> {
   await sharp(raw, { raw: { width, height, channels } }).png().toFile(filePath);
 }
 
+async function writeLowContrastStyleSample(filePath: string): Promise<void> {
+  const width = 64;
+  const height = 64;
+  const channels = 4;
+  const raw = Buffer.alloc(width * height * channels, 0);
+
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const index = (y * width + x) * channels;
+      raw[index] = 120;
+      raw[index + 1] = 120;
+      raw[index + 2] = 120;
+      raw[index + 3] = 255;
+    }
+  }
+
+  await sharp(raw, { raw: { width, height, channels } }).png().toFile(filePath);
+}
+
+async function writeShadingGradientSample(filePath: string): Promise<void> {
+  const width = 64;
+  const height = 64;
+  const channels = 4;
+  const raw = Buffer.alloc(width * height * channels, 0);
+
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const value = Math.floor((x / (width - 1)) * 255);
+      const index = (y * width + x) * channels;
+      raw[index] = value;
+      raw[index + 1] = value;
+      raw[index + 2] = value;
+      raw[index + 3] = 255;
+    }
+  }
+
+  await sharp(raw, { raw: { width, height, channels } }).png().toFile(filePath);
+}
+
+async function writeRoundUiSample(filePath: string): Promise<void> {
+  const width = 64;
+  const height = 64;
+  const channels = 4;
+  const raw = Buffer.alloc(width * height * channels, 0);
+  const centerX = width / 2;
+  const centerY = height / 2;
+  const radius = 18;
+
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const dx = x - centerX;
+      const dy = y - centerY;
+      if (dx * dx + dy * dy > radius * radius) {
+        continue;
+      }
+      const index = (y * width + x) * channels;
+      raw[index] = 40;
+      raw[index + 1] = 180;
+      raw[index + 2] = 220;
+      raw[index + 3] = 255;
+    }
+  }
+
+  await sharp(raw, { raw: { width, height, channels } }).png().toFile(filePath);
+}
+
 async function writeSpriteFrameSample(params: {
   filePath: string;
   offsetX?: number;
@@ -462,6 +528,121 @@ describe("image acceptance", () => {
     expect(item.issues.some((issue) => issue.code === "alpha_halo_risk_exceeded")).toBe(true);
     expect(item.issues.some((issue) => issue.code === "alpha_stray_noise_exceeded")).toBe(true);
     expect(item.issues.some((issue) => issue.code === "alpha_edge_sharpness_too_low")).toBe(true);
+  });
+
+  it("reports style-policy line contrast violations", async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "lootforge-style-policy-line-"));
+    await mkdir(tempDir, { recursive: true });
+    const imagePath = path.join(tempDir, "hero.png");
+    await writeLowContrastStyleSample(imagePath);
+
+    const item = await evaluateImageAcceptance(
+      makeTarget({
+        acceptance: {
+          size: "64x64",
+          alpha: false,
+          maxFileSizeKB: 64,
+        },
+        runtimeSpec: {
+          alphaRequired: false,
+        },
+        visualStylePolicy: {
+          lineContrastMin: 0.05,
+        },
+      }),
+      tempDir,
+    );
+
+    expect(item.metrics?.styleLineContrast).toBeDefined();
+    expect(item.issues.some((issue) => issue.code === "style_policy_line_contrast_below_min")).toBe(
+      true,
+    );
+  });
+
+  it("reports style-policy shading band violations", async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "lootforge-style-policy-shading-"));
+    await mkdir(tempDir, { recursive: true });
+    const imagePath = path.join(tempDir, "hero.png");
+    await writeShadingGradientSample(imagePath);
+
+    const item = await evaluateImageAcceptance(
+      makeTarget({
+        acceptance: {
+          size: "64x64",
+          alpha: false,
+          maxFileSizeKB: 64,
+        },
+        runtimeSpec: {
+          alphaRequired: false,
+        },
+        visualStylePolicy: {
+          shadingBandCountMax: 4,
+        },
+      }),
+      tempDir,
+    );
+
+    expect(item.metrics?.styleShadingBandCount).toBeGreaterThan(4);
+    expect(
+      item.issues.some((issue) => issue.code === "style_policy_shading_band_count_exceeded"),
+    ).toBe(true);
+  });
+
+  it("reports style-policy UI rectilinearity violations", async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "lootforge-style-policy-ui-"));
+    await mkdir(tempDir, { recursive: true });
+    const imagePath = path.join(tempDir, "hero.png");
+    await writeRoundUiSample(imagePath);
+
+    const item = await evaluateImageAcceptance(
+      makeTarget({
+        acceptance: {
+          size: "64x64",
+          alpha: false,
+          maxFileSizeKB: 64,
+        },
+        runtimeSpec: {
+          alphaRequired: false,
+        },
+        visualStylePolicy: {
+          uiRectilinearityMin: 0.9,
+        },
+      }),
+      tempDir,
+    );
+
+    expect(item.metrics?.styleUiRectilinearity).toBeLessThan(0.9);
+    expect(
+      item.issues.some((issue) => issue.code === "style_policy_ui_rectilinearity_below_min"),
+    ).toBe(true);
+  });
+
+  it("passes style-policy checks when constraints are satisfied", async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "lootforge-style-policy-pass-"));
+    await mkdir(tempDir, { recursive: true });
+    const imagePath = path.join(tempDir, "hero.png");
+    await writeUniformWrapGridSample(imagePath, 64, 64);
+
+    const item = await evaluateImageAcceptance(
+      makeTarget({
+        acceptance: {
+          size: "64x64",
+          alpha: false,
+          maxFileSizeKB: 64,
+        },
+        runtimeSpec: {
+          alphaRequired: false,
+        },
+        visualStylePolicy: {
+          lineContrastMin: 0,
+          shadingBandCountMax: 2,
+          uiRectilinearityMin: 0.99,
+        },
+      }),
+      tempDir,
+    );
+
+    expect(item.issues.some((issue) => issue.code.startsWith("style_policy_"))).toBe(false);
   });
 
   it("reports duplicate runtime output collisions at pack level", async () => {

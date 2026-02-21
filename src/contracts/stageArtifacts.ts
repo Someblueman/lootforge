@@ -142,6 +142,13 @@ const plannedTargetSchema = z.object({
   styleReferenceImages: z.array(nonEmptyString).optional(),
   loraPath: nonEmptyString.optional(),
   loraStrength: z.number().min(0).max(2).optional(),
+  visualStylePolicy: z
+    .object({
+      lineContrastMin: z.number().min(0).max(1).optional(),
+      shadingBandCountMax: z.number().int().min(1).max(256).optional(),
+      uiRectilinearityMin: z.number().min(0).max(1).optional(),
+    })
+    .optional(),
   consistencyGroup: nonEmptyString.optional(),
   consistencyGroupScoring: z
     .object({
@@ -449,6 +456,9 @@ const stageArtifactSchemas = {
             wrapGridTopologyMismatchRatio: z.number().optional(),
             wrapGridTopologyThreshold: z.number().optional(),
             wrapGridTopologyColorTolerance: z.number().optional(),
+            styleLineContrast: z.number().optional(),
+            styleShadingBandCount: z.number().optional(),
+            styleUiRectilinearity: z.number().optional(),
             paletteCompliance: z.number().optional(),
             distinctColors: z.number().optional(),
             alphaBoundaryPixels: z.number().optional(),

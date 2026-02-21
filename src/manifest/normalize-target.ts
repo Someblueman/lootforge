@@ -29,6 +29,7 @@ import {
   type ProviderName,
   type TargetKind,
   type TargetScoreWeights,
+  type VisualStylePolicy,
 } from "../providers/types.js";
 import { buildStructuredPrompt, normalizeGenerationPolicyForProvider } from "../providers/types.js";
 import { normalizeManifestAssetPath, normalizeTargetOutPath } from "../shared/paths.js";
@@ -263,6 +264,7 @@ export function normalizeTargetForGeneration(params: {
     scoringProfileById: params.scoringProfileById,
   });
   const consistencyGroupScoring = resolveConsistencyGroupScoring(params.evalProfile);
+  const visualStylePolicy = normalizeVisualStylePolicy(params.styleKit.visualPolicy);
   const dependsOn = mergeOrchestrationTargetRefs(
     params.template?.dependsOn,
     params.target.dependsOn,
@@ -288,6 +290,7 @@ export function normalizeTargetForGeneration(params: {
     ...(typeof params.styleKit.loraStrength === "number"
       ? { loraStrength: params.styleKit.loraStrength }
       : {}),
+    ...(visualStylePolicy ? { visualStylePolicy } : {}),
     consistencyGroup: params.target.consistencyGroup,
     ...(consistencyGroupScoring ? { consistencyGroupScoring } : {}),
     generationMode: params.target.generationMode ?? "text",
@@ -366,6 +369,28 @@ function resolveConsistencyGroupScoring(
     ...(typeof penaltyThreshold === "number" ? { penaltyThreshold } : {}),
     ...(typeof penaltyWeight === "number" ? { penaltyWeight } : {}),
   };
+}
+
+function normalizeVisualStylePolicy(
+  visualPolicy: ManifestV2["styleKits"][number]["visualPolicy"],
+): VisualStylePolicy | undefined {
+  if (!visualPolicy) {
+    return undefined;
+  }
+
+  const normalized: VisualStylePolicy = {
+    ...(typeof visualPolicy.lineContrastMin === "number"
+      ? { lineContrastMin: Math.max(0, Math.min(1, visualPolicy.lineContrastMin)) }
+      : {}),
+    ...(typeof visualPolicy.shadingBandCountMax === "number"
+      ? { shadingBandCountMax: Math.max(1, Math.round(visualPolicy.shadingBandCountMax)) }
+      : {}),
+    ...(typeof visualPolicy.uiRectilinearityMin === "number"
+      ? { uiRectilinearityMin: Math.max(0, Math.min(1, visualPolicy.uiRectilinearityMin)) }
+      : {}),
+  };
+
+  return Object.keys(normalized).length > 0 ? normalized : undefined;
 }
 
 export function expandSpritesheetTarget(params: {

@@ -30,6 +30,8 @@ Manifest policy coverage gate:
   - `negativeRulesPath?`
   - `loraPath?`
   - `loraStrength?` (`0..2`, requires `loraPath`)
+  - `visualPolicy?`: `{ lineContrastMin?, shadingBandCountMax?, uiRectilinearityMin? }`
+    - machine-checkable style-bible constraints applied during acceptance/eval
 - `consistencyGroups[]` (optional)
   - `id`
   - `description?`
@@ -158,6 +160,12 @@ Pack invariants enforced during acceptance/eval:
 - spritesheet sheet/frame family and atlas-group integrity checks
 - continuity metrics per animation (`maxSilhouetteDrift`, `maxAnchorDrift`, `maxIdentityDrift`, `maxPoseDrift`) with optional hard-gate thresholds
 - optional profile texture budget gate using estimated uncompressed bytes (`width * height * 4`)
+
+Style-bible visual policy checks (from `styleKits[].visualPolicy`) in acceptance/eval:
+
+- `lineContrastMin`: rejects low-contrast outputs when measured line contrast is below threshold
+- `shadingBandCountMax`: rejects outputs whose visible-pixel luma bands exceed threshold
+- `uiRectilinearityMin`: rejects non-rectilinear silhouettes when bounding-box fill ratio is too low
 
 ## Example (minimal sprite)
 

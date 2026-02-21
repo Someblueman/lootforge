@@ -474,6 +474,8 @@ describe("manifest normalization", () => {
                 raw: true,
                 styleRef: true,
                 pixel: true,
+                layerColor: true,
+                layerMatte: true,
               },
             },
           },
@@ -495,6 +497,8 @@ describe("manifest normalization", () => {
       raw: true,
       styleRef: true,
       pixel: true,
+      layerColor: true,
+      layerMatte: true,
     });
   });
 
@@ -558,6 +562,9 @@ describe("manifest normalization", () => {
             alphaHaloRiskMax: 0.05,
             alphaStrayNoiseMax: 0.01,
             alphaEdgeSharpnessMin: 0.8,
+            mattingHiddenRgbLeakMax: 0.02,
+            mattingMaskConsistencyMin: 0.7,
+            mattingSemiTransparencyRatioMax: 0.35,
             packTextureBudgetMB: 32,
             spritesheetSilhouetteDriftMax: 0.2,
             spritesheetAnchorDriftMax: 0.15,
@@ -572,6 +579,9 @@ describe("manifest normalization", () => {
     expect(artifacts.targets[0].alphaHaloRiskMax).toBe(0.05);
     expect(artifacts.targets[0].alphaStrayNoiseMax).toBe(0.01);
     expect(artifacts.targets[0].alphaEdgeSharpnessMin).toBe(0.8);
+    expect(artifacts.targets[0].mattingHiddenRgbLeakMax).toBe(0.02);
+    expect(artifacts.targets[0].mattingMaskConsistencyMin).toBe(0.7);
+    expect(artifacts.targets[0].mattingSemiTransparencyRatioMax).toBe(0.35);
     expect(artifacts.targets[0].packTextureBudgetMB).toBe(32);
     expect(artifacts.targets[0].spritesheetSilhouetteDriftMax).toBe(0.2);
     expect(artifacts.targets[0].spritesheetAnchorDriftMax).toBe(0.15);
@@ -592,6 +602,9 @@ describe("manifest normalization", () => {
             spritesheetAnchorDriftMax: -0.1,
             spritesheetIdentityDriftMax: 1.4,
             spritesheetPoseDriftMax: -0.2,
+            mattingHiddenRgbLeakMax: 1.2,
+            mattingMaskConsistencyMin: -0.1,
+            mattingSemiTransparencyRatioMax: -0.3,
           },
         },
       ],
@@ -611,7 +624,10 @@ describe("manifest normalization", () => {
           issue.path === "evaluationProfiles[0].hardGates.spritesheetSilhouetteDriftMax" ||
           issue.path === "evaluationProfiles[0].hardGates.spritesheetAnchorDriftMax" ||
           issue.path === "evaluationProfiles[0].hardGates.spritesheetIdentityDriftMax" ||
-          issue.path === "evaluationProfiles[0].hardGates.spritesheetPoseDriftMax",
+          issue.path === "evaluationProfiles[0].hardGates.spritesheetPoseDriftMax" ||
+          issue.path === "evaluationProfiles[0].hardGates.mattingHiddenRgbLeakMax" ||
+          issue.path === "evaluationProfiles[0].hardGates.mattingMaskConsistencyMin" ||
+          issue.path === "evaluationProfiles[0].hardGates.mattingSemiTransparencyRatioMax",
       ),
     ).toBe(true);
   });

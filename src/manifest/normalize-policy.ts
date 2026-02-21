@@ -237,15 +237,21 @@ export function normalizeEmitVariantsOperation(operation: {
   raw?: boolean;
   pixel?: boolean;
   styleRef?: boolean;
+  layerColor?: boolean;
+  layerMatte?: boolean;
 }): {
   raw?: boolean;
   pixel?: boolean;
   styleRef?: boolean;
+  layerColor?: boolean;
+  layerMatte?: boolean;
 } {
   return {
     ...(typeof operation.raw === "boolean" ? { raw: operation.raw } : {}),
     ...(typeof operation.pixel === "boolean" ? { pixel: operation.pixel } : {}),
     ...(typeof operation.styleRef === "boolean" ? { styleRef: operation.styleRef } : {}),
+    ...(typeof operation.layerColor === "boolean" ? { layerColor: operation.layerColor } : {}),
+    ...(typeof operation.layerMatte === "boolean" ? { layerMatte: operation.layerMatte } : {}),
   };
 }
 

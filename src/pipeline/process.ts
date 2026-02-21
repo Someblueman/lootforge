@@ -559,6 +559,44 @@ async function processSingleTarget(params: {
     variantCount += 1;
   }
 
+  if (emitVariants?.layerColor === true) {
+    const layerColorRaw = Buffer.from(mainRaw);
+    for (let index = 0; index < layerColorRaw.length; index += mainRawInfo.channels) {
+      const alpha = mainRawInfo.channels >= 4 ? layerColorRaw[index + 3] : 255;
+      if (alpha === 0) {
+        layerColorRaw[index] = 0;
+        layerColorRaw[index + 1] = 0;
+        layerColorRaw[index + 2] = 0;
+      }
+      if (mainRawInfo.channels >= 4) {
+        layerColorRaw[index + 3] = 255;
+      }
+    }
+
+    const layerColorBuffer = await sharp(layerColorRaw, { raw: mainRawInfo }).png().toBuffer();
+    await writeDerivedVariant({
+      buffer: layerColorBuffer,
+      processedPath: withVariantSuffix(params.processedImagePath, "layer_color"),
+      legacyPath: withVariantSuffix(params.legacyImagePath, "layer_color"),
+      mirrorLegacy: params.mirrorLegacy,
+    });
+    variantCount += 1;
+  }
+
+  if (emitVariants?.layerMatte === true) {
+    const layerMatteBuffer = await sharp(mainRaw, { raw: mainRawInfo })
+      .extractChannel(mainRawInfo.channels >= 4 ? 3 : 0)
+      .png()
+      .toBuffer();
+    await writeDerivedVariant({
+      buffer: layerMatteBuffer,
+      processedPath: withVariantSuffix(params.processedImagePath, "layer_matte"),
+      legacyPath: withVariantSuffix(params.legacyImagePath, "layer_matte"),
+      mirrorLegacy: params.mirrorLegacy,
+    });
+    variantCount += 1;
+  }
+
   const variants = postProcess.operations?.resizeVariants?.variants ?? [];
   for (const variant of variants) {
     const variantPath = withVariantSuffix(params.processedImagePath, variant.name);

@@ -254,6 +254,10 @@ describe("stage artifact contracts", () => {
               styleLineContrast: 0.18,
               styleShadingBandCount: 8,
               styleUiRectilinearity: 0.91,
+              mattingMaskCoverage: 0.25,
+              mattingSemiTransparencyRatio: 0.03,
+              mattingMaskConsistency: 0.88,
+              mattingHiddenRgbLeak: 0.01,
             },
             issues: [],
           },
@@ -282,6 +286,9 @@ describe("stage artifact contracts", () => {
               shadingBandCountMax: 12,
               uiRectilinearityMin: 0.8,
             },
+            mattingHiddenRgbLeakMax: 0.02,
+            mattingMaskConsistencyMin: 0.75,
+            mattingSemiTransparencyRatioMax: 0.2,
             generationPolicy: {
               size: "1024x1024",
               quality: "high",
@@ -307,6 +314,8 @@ describe("stage artifact contracts", () => {
                   raw: true,
                   styleRef: true,
                   pixel: true,
+                  layerColor: true,
+                  layerMatte: true,
                 },
               },
             },
@@ -317,6 +326,8 @@ describe("stage artifact contracts", () => {
     );
 
     expect(result.targets[0]?.postProcess?.operations?.emitVariants?.styleRef).toBe(true);
+    expect(result.targets[0]?.postProcess?.operations?.emitVariants?.layerColor).toBe(true);
+    expect(result.targets[0]?.postProcess?.operations?.emitVariants?.layerMatte).toBe(true);
     expect(result.targets[0]?.postProcess?.operations?.smartCrop?.mode).toBe("alpha-bounds");
   });
 

@@ -83,6 +83,9 @@ export interface ManifestEvaluationProfile {
     alphaHaloRiskMax?: number;
     alphaStrayNoiseMax?: number;
     alphaEdgeSharpnessMin?: number;
+    mattingHiddenRgbLeakMax?: number;
+    mattingMaskConsistencyMin?: number;
+    mattingSemiTransparencyRatioMax?: number;
     packTextureBudgetMB?: number;
     spritesheetSilhouetteDriftMax?: number;
     spritesheetAnchorDriftMax?: number;
@@ -158,6 +161,8 @@ export interface ManifestPostProcessOperations {
     raw?: boolean;
     pixel?: boolean;
     styleRef?: boolean;
+    layerColor?: boolean;
+    layerMatte?: boolean;
   };
 }
 

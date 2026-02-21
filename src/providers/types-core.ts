@@ -184,6 +184,8 @@ export interface VariantOutputsOperation {
   raw?: boolean;
   pixel?: boolean;
   styleRef?: boolean;
+  layerColor?: boolean;
+  layerMatte?: boolean;
 }
 
 export interface PostProcessOperations {
@@ -303,6 +305,9 @@ export interface PlannedTarget {
   alphaHaloRiskMax?: number;
   alphaStrayNoiseMax?: number;
   alphaEdgeSharpnessMin?: number;
+  mattingHiddenRgbLeakMax?: number;
+  mattingMaskConsistencyMin?: number;
+  mattingSemiTransparencyRatioMax?: number;
   packTextureBudgetMB?: number;
   spritesheetSilhouetteDriftMax?: number;
   spritesheetAnchorDriftMax?: number;

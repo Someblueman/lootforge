@@ -43,7 +43,7 @@ Manifest policy coverage gate:
   - `styleReferenceFrom[]?` (target-id style-reference chain policy)
 - `evaluationProfiles[]` (required, at least one)
   - `id`
-  - `hardGates?`: `{ requireAlpha?, maxFileSizeKB?, seamThreshold?, seamStripPx?, paletteComplianceMin?, alphaHaloRiskMax?, alphaStrayNoiseMax?, alphaEdgeSharpnessMin?, packTextureBudgetMB?, spritesheetSilhouetteDriftMax?, spritesheetAnchorDriftMax?, spritesheetIdentityDriftMax?, spritesheetPoseDriftMax? }`
+  - `hardGates?`: `{ requireAlpha?, maxFileSizeKB?, seamThreshold?, seamStripPx?, paletteComplianceMin?, alphaHaloRiskMax?, alphaStrayNoiseMax?, alphaEdgeSharpnessMin?, mattingHiddenRgbLeakMax?, mattingMaskConsistencyMin?, mattingSemiTransparencyRatioMax?, packTextureBudgetMB?, spritesheetSilhouetteDriftMax?, spritesheetAnchorDriftMax?, spritesheetIdentityDriftMax?, spritesheetPoseDriftMax? }`
   - `consistencyGroupScoring?`: `{ warningThreshold?, penaltyThreshold?, penaltyWeight? }`
     - `warningThreshold`: normalized drift score threshold for group-level warning signals
     - `penaltyThreshold`: normalized drift score threshold where ranking penalties activate
@@ -107,6 +107,7 @@ Generation + processing:
     - favors nearest-neighbor semantics during resize when enabled
   - `postProcess.operations.emitVariants?`: `{ raw?, pixel?, styleRef? }`
     - writes explicit `__raw`, `__pixel`, and `__style_ref` processed artifacts when enabled
+    - layered export toggles: `layerColor?`, `layerMatte?` write `__layer_color` + `__layer_matte` artifacts
 - `acceptance`
 - `runtimeSpec`
 - `provider`, `model`, `edit`, `auxiliaryMaps`
@@ -119,6 +120,10 @@ Generation + processing:
   - `alphaHaloRiskMax` (`0..1`, lower is stricter)
   - `alphaStrayNoiseMax` (`0..1`, lower is stricter)
   - `alphaEdgeSharpnessMin` (`0..1`, higher is stricter)
+- matting-assisted alpha QA hard gates can be configured in `evaluationProfiles[].hardGates`:
+  - `mattingHiddenRgbLeakMax` (`0..1`, lower is stricter)
+  - `mattingMaskConsistencyMin` (`0..1`, higher is stricter)
+  - `mattingSemiTransparencyRatioMax` (`0..1`, lower is stricter)
 - score weighting defaults and overrides:
   - LootForge applies deterministic built-in score presets by target kind.
   - If a matching `scoringProfiles[]` entry is found (by `targets[].scoringProfile` or `evaluationProfileId`), profile weights override the built-in kind preset.

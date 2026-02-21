@@ -35,6 +35,10 @@ export interface ImageAcceptanceMetrics {
   styleLineContrast?: number;
   styleShadingBandCount?: number;
   styleUiRectilinearity?: number;
+  mattingMaskCoverage?: number;
+  mattingSemiTransparencyRatio?: number;
+  mattingMaskConsistency?: number;
+  mattingHiddenRgbLeak?: number;
   paletteCompliance?: number;
   distinctColors?: number;
   alphaBoundaryPixels?: number;
@@ -94,6 +98,13 @@ interface VisualStyleMetrics {
   lineContrast: number;
   shadingBandCount: number;
   uiRectilinearity: number;
+}
+
+interface MattingQualityMetrics {
+  maskCoverage: number;
+  semiTransparencyRatio: number;
+  maskConsistency: number;
+  hiddenRgbLeak: number;
 }
 
 async function inspectImage(imagePath: string): Promise<InspectedImage> {
@@ -521,6 +532,79 @@ function computeVisualStyleMetrics(inspected: InspectedImage): VisualStyleMetric
   };
 }
 
+function computeMattingQualityMetrics(inspected: InspectedImage): MattingQualityMetrics {
+  const totalPixels = Math.max(1, inspected.width * inspected.height);
+  let visiblePixels = 0;
+  let semiTransparentPixels = 0;
+  let hiddenLeakSum = 0;
+  let hiddenLeakCount = 0;
+  let semiOnOpaqueBoundary = 0;
+
+  const alphaAt = (x: number, y: number): number => {
+    const index = (y * inspected.width + x) * inspected.channels;
+    return inspected.channels >= 4 ? inspected.raw[index + 3] : 255;
+  };
+
+  for (let y = 0; y < inspected.height; y += 1) {
+    for (let x = 0; x < inspected.width; x += 1) {
+      const index = (y * inspected.width + x) * inspected.channels;
+      const alpha = inspected.channels >= 4 ? inspected.raw[index + 3] : 255;
+      if (alpha === 0) {
+        hiddenLeakSum +=
+          Math.max(inspected.raw[index], inspected.raw[index + 1], inspected.raw[index + 2]) / 255;
+        hiddenLeakCount += 1;
+        continue;
+      }
+
+      visiblePixels += 1;
+      if (alpha < 255) {
+        semiTransparentPixels += 1;
+      }
+    }
+  }
+
+  if (semiTransparentPixels > 0) {
+    for (let y = 0; y < inspected.height; y += 1) {
+      for (let x = 0; x < inspected.width; x += 1) {
+        const alpha = alphaAt(x, y);
+        if (alpha <= 0 || alpha >= 255) {
+          continue;
+        }
+
+        let touchesOpaque = false;
+        for (let dy = -1; dy <= 1 && !touchesOpaque; dy += 1) {
+          for (let dx = -1; dx <= 1; dx += 1) {
+            if (dx === 0 && dy === 0) {
+              continue;
+            }
+            const nx = x + dx;
+            const ny = y + dy;
+            if (nx < 0 || ny < 0 || nx >= inspected.width || ny >= inspected.height) {
+              continue;
+            }
+            if (alphaAt(nx, ny) === 255) {
+              touchesOpaque = true;
+              break;
+            }
+          }
+        }
+
+        if (touchesOpaque) {
+          semiOnOpaqueBoundary += 1;
+        }
+      }
+    }
+  }
+
+  return {
+    maskCoverage: visiblePixels / totalPixels,
+    semiTransparencyRatio:
+      visiblePixels > 0 ? semiTransparentPixels / Math.max(1, visiblePixels) : 0,
+    maskConsistency: semiTransparentPixels > 0 ? semiOnOpaqueBoundary / semiTransparentPixels : 1,
+    hiddenRgbLeak: hiddenLeakCount > 0 ? hiddenLeakSum / hiddenLeakCount : 0,
+  };
+}
+
 type Edge = "left" | "right" | "top" | "bottom";
 
 function compareEdgeMismatchRatio(params: {
@@ -936,6 +1020,58 @@ export async function evaluateImageAcceptance(
         targetId: target.id,
         imagePath,
         message: `UI rectilinearity ${visualStyleMetrics.uiRectilinearity.toFixed(4)} is below style policy minimum ${target.visualStylePolicy.uiRectilinearityMin.toFixed(4)}.`,
+      });
+    }
+  }
+
+  if (inspected.hasAlphaChannel) {
+    const mattingMetrics = computeMattingQualityMetrics(inspected);
+    report.metrics = {
+      ...report.metrics,
+      mattingMaskCoverage: mattingMetrics.maskCoverage,
+      mattingSemiTransparencyRatio: mattingMetrics.semiTransparencyRatio,
+      mattingMaskConsistency: mattingMetrics.maskConsistency,
+      mattingHiddenRgbLeak: mattingMetrics.hiddenRgbLeak,
+    };
+
+    if (
+      typeof target.mattingHiddenRgbLeakMax === "number" &&
+      mattingMetrics.hiddenRgbLeak > target.mattingHiddenRgbLeakMax
+    ) {
+      report.issues.push({
+        level: "error",
+        code: "matting_hidden_rgb_leak_exceeded",
+        targetId: target.id,
+        imagePath,
+        message: `Matting hidden RGB leak ${mattingMetrics.hiddenRgbLeak.toFixed(4)} exceeds threshold ${target.mattingHiddenRgbLeakMax.toFixed(4)}.`,
+      });
+    }
+
+    if (
+      typeof target.mattingMaskConsistencyMin === "number" &&
+      mattingMetrics.maskConsistency < target.mattingMaskConsistencyMin
+    ) {
+      report.issues.push({
+        level: "error",
+        code: "matting_mask_consistency_too_low",
+        targetId: target.id,
+        imagePath,
+        message: `Matting mask consistency ${mattingMetrics.maskConsistency.toFixed(4)} is below threshold ${target.mattingMaskConsistencyMin.toFixed(4)}.`,
+      });
+    }
+
+    if (
+      typeof target.mattingSemiTransparencyRatioMax === "number" &&
+      mattingMetrics.semiTransparencyRatio > target.mattingSemiTransparencyRatioMax
+    ) {
+      report.issues.push({
+        level: "error",
+        code: "matting_semi_transparency_ratio_exceeded",
+        targetId: target.id,
+        imagePath,
+        message: `Matting semi-transparency ratio ${mattingMetrics.semiTransparencyRatio.toFixed(
+          4,
+        )} exceeds threshold ${target.mattingSemiTransparencyRatioMax.toFixed(4)}.`,
       });
     }
   }

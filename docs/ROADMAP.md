@@ -328,6 +328,9 @@ Completed 2026-02-20 in this release track:
 - Add machine-checkable style-bible visual policy checks:
   - added manifest style-policy contract (`styleKits[].visualPolicy`) for line contrast, shading complexity, and UI rectilinearity constraints,
   - enforced deterministic acceptance/eval diagnostics with explicit metrics and hard rejection codes (`style_policy_*`).
+- Add layered export + matting-assisted alpha QA pipeline:
+  - added first-class layered artifacts (`__layer_color`, `__layer_matte`) for sprite/UI/VFX workflows with deterministic export contracts,
+  - added matting-derived transparency diagnostics (`maskCoverage`, `semiTransparencyRatio`, `maskConsistency`, `hiddenRgbLeak`) with optional hard-gate thresholds in acceptance/eval artifacts.
 
 Remaining queued items:
 
@@ -337,9 +340,6 @@ Remaining queued items:
   - extend beyond current baseline thresholds with richer style-assertion primitives when needed (for example, per-kind policy profiles).
 - Add sprite identity + pose adherence QA modules:
   - extend beyond current drift thresholds with optional target-specific pose directives when prompts require strict choreography.
-- Add layered export + matting-assisted alpha QA pipeline:
-  - add first-class layered artifacts for sprite/UI/VFX workflows with deterministic export contracts,
-  - add matting-derived transparency QA checks (halo/fringe/mask consistency) in eval/review diagnostics.
 
 ## Future (After Upcoming)
 

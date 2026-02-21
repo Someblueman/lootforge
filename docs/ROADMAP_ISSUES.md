@@ -52,6 +52,9 @@ Recent completion (2026-02-21):
 - Implemented machine-checkable style-bible visual policy checks:
   - added manifest-level style constraints (`styleKits[].visualPolicy`) for line contrast, shading bands, and UI rectilinearity,
   - enforced deterministic acceptance/eval diagnostics with explicit per-target metrics and rejection codes.
+- Implemented layered export and matting-assisted alpha QA coverage:
+  - added deterministic layered variant exports (`__layer_color`, `__layer_matte`) with first-class manifest toggles,
+  - added matting diagnostics (`maskCoverage`, `semiTransparencyRatio`, `maskConsistency`, `hiddenRgbLeak`) and optional hard-gate thresholds in acceptance/eval artifacts.
 
 ## P0 (Immediate: `0.3.0`)
 
@@ -63,7 +66,7 @@ Recent completion (2026-02-21):
   - Visual style-bible policy checks are machine-checkable (line/shading/UI geometry) with explicit validate/eval diagnostics. (implemented 2026-02-21)
   - Sprite identity and optional pose adherence checks can score/reject animation-frame drift. (implemented 2026-02-21)
   - Tile QA validates topology rules (self/one-to-one/many-to-many adjacency) separately from seam metrics. (implemented 2026-02-21)
-  - Layered export and matting-assisted alpha QA are covered by deterministic artifact contracts and eval diagnostics.
+  - Layered export and matting-assisted alpha QA are covered by deterministic artifact contracts and eval diagnostics. (implemented 2026-02-21)
 
 ## P1 (Next: `0.4.0`)
 

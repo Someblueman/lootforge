@@ -390,7 +390,7 @@ describe("process -> atlas -> package integration", () => {
     ).toBe(true);
   });
 
-  test("emits raw/style_ref/pixel variants for smart-crop and pixel-perfect processing", async () => {
+  test("emits raw/style_ref/pixel/layer variants for smart-crop and pixel-perfect processing", async () => {
     const tempRoot = await mkdtemp(path.join(os.tmpdir(), "lootforge-process-variant-outputs-"));
     const outDir = path.join(tempRoot, "work");
     const indexPath = path.join(outDir, "jobs", "targets-index.json");
@@ -427,6 +427,8 @@ describe("process -> atlas -> package integration", () => {
                     raw: true,
                     styleRef: true,
                     pixel: true,
+                    layerColor: true,
+                    layerMatte: true,
                   },
                 },
               },
@@ -475,7 +477,7 @@ describe("process -> atlas -> package integration", () => {
       mirrorLegacyImages: false,
     });
 
-    expect(result.variantCount).toBe(3);
+    expect(result.variantCount).toBe(5);
 
     const rawVariantPath = path.join(
       outDir,
@@ -501,19 +503,43 @@ describe("process -> atlas -> package integration", () => {
       "images",
       "badge__pixel.png",
     );
+    const layerColorVariantPath = path.join(
+      outDir,
+      "assets",
+      "imagegen",
+      "processed",
+      "images",
+      "badge__layer_color.png",
+    );
+    const layerMatteVariantPath = path.join(
+      outDir,
+      "assets",
+      "imagegen",
+      "processed",
+      "images",
+      "badge__layer_matte.png",
+    );
 
     expect(await exists(rawVariantPath)).toBe(true);
     expect(await exists(styleRefVariantPath)).toBe(true);
     expect(await exists(pixelVariantPath)).toBe(true);
+    expect(await exists(layerColorVariantPath)).toBe(true);
+    expect(await exists(layerMatteVariantPath)).toBe(true);
 
     const rawMetadata = await sharp(rawVariantPath).metadata();
     const styleMetadata = await sharp(styleRefVariantPath).metadata();
     const pixelMetadata = await sharp(pixelVariantPath).metadata();
+    const layerColorMetadata = await sharp(layerColorVariantPath).metadata();
+    const layerMatteMetadata = await sharp(layerMatteVariantPath).metadata();
     expect(rawMetadata.width).toBe(64);
     expect(rawMetadata.height).toBe(32);
     expect(styleMetadata.width).toBe(16);
     expect(styleMetadata.height).toBe(16);
     expect(pixelMetadata.width).toBe(16);
     expect(pixelMetadata.height).toBe(16);
+    expect(layerColorMetadata.width).toBe(16);
+    expect(layerColorMetadata.height).toBe(16);
+    expect(layerMatteMetadata.width).toBe(16);
+    expect(layerMatteMetadata.height).toBe(16);
   });
 });

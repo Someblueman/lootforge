@@ -116,6 +116,8 @@ export const ManifestPostProcessOperationEmitVariantsSchema = z.object({
   raw: z.boolean().optional(),
   pixel: z.boolean().optional(),
   styleRef: z.boolean().optional(),
+  layerColor: z.boolean().optional(),
+  layerMatte: z.boolean().optional(),
 });
 
 export const ManifestPostProcessOperationsSchema = z.object({
@@ -366,6 +368,9 @@ export const ManifestEvaluationProfileSchema = z.object({
       alphaHaloRiskMax: z.number().min(0).max(1).optional(),
       alphaStrayNoiseMax: z.number().min(0).max(1).optional(),
       alphaEdgeSharpnessMin: z.number().min(0).max(1).optional(),
+      mattingHiddenRgbLeakMax: z.number().min(0).max(1).optional(),
+      mattingMaskConsistencyMin: z.number().min(0).max(1).optional(),
+      mattingSemiTransparencyRatioMax: z.number().min(0).max(1).optional(),
       packTextureBudgetMB: z.number().positive().optional(),
       spritesheetSilhouetteDriftMax: z.number().min(0).max(1).optional(),
       spritesheetAnchorDriftMax: z.number().min(0).max(1).optional(),

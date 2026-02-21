@@ -174,6 +174,51 @@ async function writeRoundUiSample(filePath: string): Promise<void> {
   await sharp(raw, { raw: { width, height, channels } }).png().toFile(filePath);
 }
 
+async function writeMattingArtifactSample(filePath: string): Promise<void> {
+  const width = 64;
+  const height = 64;
+  const channels = 4;
+  const raw = Buffer.alloc(width * height * channels, 0);
+
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const index = (y * width + x) * channels;
+      raw[index] = 120;
+      raw[index + 1] = 120;
+      raw[index + 2] = 120;
+      raw[index + 3] = 0;
+    }
+  }
+
+  for (let y = 20; y < 44; y += 1) {
+    for (let x = 20; x < 44; x += 1) {
+      const index = (y * width + x) * channels;
+      raw[index] = 240;
+      raw[index + 1] = 80;
+      raw[index + 2] = 40;
+      raw[index + 3] = 255;
+    }
+  }
+
+  // Isolated semi-transparent pixels away from opaque edges reduce mask consistency.
+  for (const [x, y] of [
+    [5, 5],
+    [58, 5],
+    [5, 58],
+    [58, 58],
+    [10, 50],
+    [50, 10],
+  ] as const) {
+    const index = (y * width + x) * channels;
+    raw[index] = 255;
+    raw[index + 1] = 255;
+    raw[index + 2] = 255;
+    raw[index + 3] = 128;
+  }
+
+  await sharp(raw, { raw: { width, height, channels } }).png().toFile(filePath);
+}
+
 async function writeSpriteFrameSample(params: {
   filePath: string;
   offsetX?: number;
@@ -528,6 +573,36 @@ describe("image acceptance", () => {
     expect(item.issues.some((issue) => issue.code === "alpha_halo_risk_exceeded")).toBe(true);
     expect(item.issues.some((issue) => issue.code === "alpha_stray_noise_exceeded")).toBe(true);
     expect(item.issues.some((issue) => issue.code === "alpha_edge_sharpness_too_low")).toBe(true);
+  });
+
+  it("reports matting metrics and hard-gate violations", async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "lootforge-matting-metrics-"));
+    await mkdir(tempDir, { recursive: true });
+    const imagePath = path.join(tempDir, "hero.png");
+    await writeMattingArtifactSample(imagePath);
+
+    const item = await evaluateImageAcceptance(
+      makeTarget({
+        mattingHiddenRgbLeakMax: 0.05,
+        mattingMaskConsistencyMin: 0.8,
+        mattingSemiTransparencyRatioMax: 0.01,
+      }),
+      tempDir,
+    );
+
+    expect(item.metrics?.mattingMaskCoverage).toBeGreaterThan(0);
+    expect(item.metrics?.mattingSemiTransparencyRatio).toBeGreaterThan(0);
+    expect(item.metrics?.mattingMaskConsistency).toBeLessThan(0.8);
+    expect(item.metrics?.mattingHiddenRgbLeak).toBeGreaterThan(0.05);
+    expect(item.issues.some((issue) => issue.code === "matting_hidden_rgb_leak_exceeded")).toBe(
+      true,
+    );
+    expect(item.issues.some((issue) => issue.code === "matting_mask_consistency_too_low")).toBe(
+      true,
+    );
+    expect(
+      item.issues.some((issue) => issue.code === "matting_semi_transparency_ratio_exceeded"),
+    ).toBe(true);
   });
 
   it("reports style-policy line contrast violations", async () => {
